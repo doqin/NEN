@@ -1,0 +1,5 @@
+﻿thủ_tục Chính() bắt_đầu
+	stdlib.in("Xin chào!");
+	stdlib.in("Tạm biệt!");
+	quay_về;
+kết_thúc
