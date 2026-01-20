@@ -1,0 +1,8 @@
+﻿
+lớp Chương_Trình
+    phương_thức Chính() -> rỗng
+    kết_thúc
+kết_thúc
+
+lớp Phụ
+kết_thúc

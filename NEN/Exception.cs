@@ -1,0 +1,30 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace NEN
+{
+    internal abstract class NENException : Exception
+    {
+        public NENException() { }
+        public NENException(string[] contentLines, string message, int line, int column) : base(CreateException(contentLines, message, line, column)) { }
+
+        private static string CreateException(string[] contentLines, string message, int line, int column)
+        {
+            return $"Dòng {line} Cột {column} | {message}\n{contentLines[line - 1]}\n" + new string('~', column - 1) + '^';
+        }
+    }
+    internal class ExpectedException : NENException 
+    {
+        public ExpectedException() { }
+        public ExpectedException(string[] contentLines, string expected, int line, int column) : base(contentLines, $"Mong đợi {expected} tại vị trí này", line, column) { }
+    }
+
+    internal class UnexpectedException : NENException
+    {
+        public UnexpectedException() { }
+        public UnexpectedException(string[] contentLines, string unexpected, int line, int column) : base(contentLines, $"Không mong đợi '{unexpected}' tại vị trí này", line, column) { }
+    }
+}

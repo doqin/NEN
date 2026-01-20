@@ -5,8 +5,4 @@ using System.Text;
 
 Console.OutputEncoding = Encoding.UTF8;
 
-string[] tokens = Scanner.Tokenize("Example sources\\Test.nen");
-foreach (string token in tokens)
-{
-    Console.WriteLine(token);
-}
+Test.TestParser();

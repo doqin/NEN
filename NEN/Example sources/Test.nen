@@ -1,5 +1,20 @@
-﻿thủ_tục Chính() bắt_đầu
-	stdlib.in("Xin chào!");
-	stdlib.in("Tạm biệt!");
-	quay_về;
+﻿nhập System;
+
+// Đây là một ví dụ đơn giản về môt chương trình của N.Ề.N.
+
+/*
+Và đây là 
+một bình luận 
+nhiều 
+dòng!!!
+*/
+
+lớp Chương_Trình
+	phương_thức Chính() -> rỗng
+		biến a = 5-3 + 1 * 10 /2;
+		hằng b = 10;
+		Console.WriteLine("Xin chào!");
+		Console.WriteLine("Tạm biệt!");
+		quay_về;
+	kết_thúc
 kết_thúc

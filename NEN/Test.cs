@@ -12,8 +12,8 @@ namespace NEN
         public static void Test1()
         {
             {
-                AssemblyName aName = new AssemblyName("Common");
-                PersistedAssemblyBuilder ab = new PersistedAssemblyBuilder(aName, typeof(object).Assembly);
+                AssemblyName aName = new("Common");
+                PersistedAssemblyBuilder ab = new(aName, typeof(object).Assembly);
                 ModuleBuilder mb = ab.DefineDynamicModule(aName.Name ?? "Common");
                 TypeBuilder tb = mb.DefineType(
                     "Common",
@@ -174,6 +174,41 @@ namespace NEN
 
                 Console.WriteLine("Compilation Complete. Saved Test.dll");
                 Console.WriteLine("Run with: dotnet Test.dll");
+            }
+        }
+
+        public static void TestLexer()
+        {
+            (string[] lines, Types.Token[] tokens) = Lexer.Tokenize("Example sources\\Test.nen");
+            PrintTokens(tokens);
+        }
+
+        private static void PrintTokens(Types.Token[] tokens)
+        {
+            Console.WriteLine("Lexer result:");
+            int valuePadding = tokens.Select(token => token.Value.Length).Max();
+            var topBar = $"{"Value".PadRight(valuePadding)} | {"Type",-10} | {"Line",-4} | {"Column",-4}";
+            var topBarLine = new string('-', topBar.Length);
+            Console.WriteLine($"{topBar}\n{topBarLine}");
+            foreach (Types.Token token in tokens)
+            {
+                Console.WriteLine($"{token.Value.PadRight(valuePadding)} | {token.Type,-10} | {token.Line,-4} | {token.Column,-4}");
+            }
+        }
+
+        public static void TestParser()
+        {
+            (string[] lines, Types.Token[] tokens) = Lexer.Tokenize("Example sources\\ClassTest.nen");
+            PrintTokens(tokens);
+            try
+            {
+                var parser = new Parser("ClassTest", lines, tokens);
+                var module = parser.Parse();
+                Console.WriteLine($"Parser result:\n{module}");
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
             }
         }
     }
