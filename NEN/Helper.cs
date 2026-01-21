@@ -4,12 +4,12 @@ namespace NEN
 {
     internal class Helper
     {
-        public static string GetTreeString<T>(string head, T[] nodes)
+        public static string GetTreeString<T>(string? head, T[] nodes)
         {
-            var str = $"{head}\n";
+            var str = string.IsNullOrEmpty(head) ? "" : $"{head}\n";
             foreach (var (n, i) in nodes.Select((c, i) => (c, i)))
             {
-                str += $"|\n";
+                str += string.IsNullOrEmpty(head) && i == 0 ? "" : $"|\n";
                 var strLines = (n?.ToString() ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
                 foreach (var (line, j) in strLines.Select((line, j) => (line, j)))
                 {

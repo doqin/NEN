@@ -8,16 +8,25 @@ namespace NEN
 {
     namespace Types
     {
+        [Flags]
         internal enum TokenType
         {
-            Identifier, // variables
-            Keyword, // reserved words
-            Literal, // numeric, logical, textual and reference literals (e.g. true, 6.02e23, "music")
-            Operator, // symbols that operate on arguments and produce results. (e.g. +, <, =)
-            Punctuator, // punctuation characters and paired delimiters. (e.g. }, (, ;)
-            Comment,
-            Unknown // for further analysis
+            Identifier = 1 << 0, // variables
+            Keyword = 1 << 1, // reserved words
+            Literal = 1 << 2, // numeric, logical, textual and reference literals (e.g. true, 6.02e23, "music")
+            Operator = 1 << 3, // symbols that operate on arguments and produce results. (e.g. +, <, =)
+            Punctuator = 1 << 4, // punctuation characters and paired delimiters. (e.g. }, (, ;)
+            Comment = 1 << 5,
+            Unknown = 0 // for further analysis
         };
+
+        internal class Operator
+        {
+            public static readonly string Plus = "+";
+            public static readonly string Minus = "-";
+            public static readonly string Multiply = "*";
+            public static readonly string Divide = "/";
+        }
 
         internal class Token
         {
@@ -40,13 +49,13 @@ namespace NEN
 
         internal abstract class AST
         {
-            public required string Name { get; set; }
             public required int Line {  set; get; }
             public required int Column { set; get; }
         }
 
         internal class Class : AST
         {
+            public required string Name { get; set; }
             public Method[] Methods { get; set; } = [];
 
             public override string ToString()
@@ -57,6 +66,7 @@ namespace NEN
 
         internal class Method : AST
         {
+            public required string Name { get; set; }
             public Variable[] Parameters { get; set; } = [];
             public Statement[] Statements { get; set; } = [];
             public required string ReturnType { get; set; }
@@ -69,11 +79,52 @@ namespace NEN
 
         internal class Variable : AST // Used for both attributes and parameters
         {
+            public required string Name { get; set; }
             public required string Type { get; set; }
+            public override string ToString()
+            {
+                return $"{Name} ({Type})";
+            }
         }
 
         internal abstract class Statement : AST { }
 
-        internal abstract class Expression : AST { }
+        internal class VariableDeclarationStatement : Statement
+        {
+            public required Variable Variable { set; get; }
+            public Expression? InitialValue { set; get; }
+            public override string ToString()
+            {
+                if (InitialValue != null)
+                {
+                    return Helper.GetTreeString($"Biến: {Variable} gán", [InitialValue]);
+                }
+                return $"Biến: {Variable}";
+            }
+        }
+
+        internal abstract class Expression : AST { 
+            public string? Type { get; set; }
+        }
+
+        internal class BinaryExpression : Expression
+        {
+            public required Expression Left;
+            public required string Operator;
+            public required Expression Right;
+            public override string ToString()
+            {
+                return Helper.GetTreeString<object>(null, [Left, Operator, Right]);
+            }
+        }
+
+        internal class LiteralExpression : Expression
+        {
+            public required string Value { get; set; }
+            public override string ToString()
+            {
+                return Value;
+            }
+        }
     }
 }

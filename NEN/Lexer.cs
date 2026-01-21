@@ -8,7 +8,7 @@ namespace NEN
         public static (string[], Token[]) Tokenize(string filePath)
         {
             var content = File.ReadAllText(filePath);
-            content = content.Replace("\t", "    ");
+            //content = content.Replace("\t", "    ");
             var lines = content.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
             var regex = LexerRegex();
             List<Token> tokens = [];
@@ -56,7 +56,7 @@ namespace NEN
         private static bool AnalyseKeyword(ref Token token)
         {
             string[] keywords = [
-                "lớp", "phương_thức", "quay_lại", "trả_về", "kết_thúc", "nhập", "biến", "hằng"
+                "lớp", "phương_thức", "quay_lại", "trả_về", "kết_thúc", "nhập", "biến", "hằng", "gán", "thuộc"
             ];
             if (keywords.Contains(token.Value))
             {
