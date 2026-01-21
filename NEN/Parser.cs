@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -13,7 +14,7 @@ namespace NEN
         private readonly Token[] tokens = tokens;
         private int index = 0;
         private readonly string[] content = contentLines;
-        public Module Parse()
+        public Types.Module Parse()
         {
             List<Class> classes = [];
             while (index < tokens.Length)
@@ -35,7 +36,7 @@ namespace NEN
                         throw new ExpectedException(content, "lớp", token.Line, token.Column);
                 }
             }
-            return new Module { Name = moduleName, Classes = [.. classes] };
+            return new Types.Module { Name = moduleName, Classes = [.. classes] };
         }
 
         private Class ParseClass()
@@ -48,6 +49,9 @@ namespace NEN
                 var token = Consume();
                 switch (token!.Value)
                 {
+                    case "@":
+                        methods.Add(ParseMarker());
+                        break;
                     case "phương_thức":
                         methods.Add(ParseMethod());
                         break;
@@ -61,7 +65,41 @@ namespace NEN
             return new Class { Name = classIdentifier!.Value, Methods = [.. methods], Line = line, Column = column };
         }
 
-        private Method ParseMethod()
+        private static string[] markers = [
+            "Chính", "Tĩnh"    
+        ];
+
+        private Method ParseMarker(MethodAttributes methodAttributes = MethodAttributes.Public, bool isEntryPoint = false)
+        {
+            var (line, column) = GetCurrentPosition();
+            var annotationIdentifier = ConsumeOrThrow(TokenType.Identifier, "thuộc tính phương thức");
+            if (!markers.Contains(annotationIdentifier.Value)) throw new ExpectedException(content, "thuộc tính phương thức", line, column);
+            switch(annotationIdentifier.Value)
+            {
+                case "Chính":
+                    if (isEntryPoint == true) throw new RedefinedException(content, "@Chính", line, column);
+                    isEntryPoint = true;
+                    break;
+                case "Tĩnh":
+                    if (methodAttributes.HasFlag(MethodAttributes.Static)) throw new RedefinedException(content, "@Tĩnh", line, column);
+                    methodAttributes |= MethodAttributes.Static; 
+                    break;
+                default:
+                    throw new NotImplementedException();
+            }
+            var token = ConsumeOrThrow(TokenType.Keyword | TokenType.Marker, "phương_thức");
+            switch(token.Value)
+            {
+                case "@":
+                    return ParseMarker(methodAttributes, isEntryPoint);
+                case "phương_thức":
+                    return ParseMethod(methodAttributes, isEntryPoint);
+                default:
+                    throw new ExpectedException(content, "phương_thức", GetCurrentLine(), GetCurrentColumn());
+            }
+        }
+
+        private Method ParseMethod(MethodAttributes methodAttributes = MethodAttributes.Public, bool isEntryPoint = false)
         {
             var (line, column) = GetCurrentPosition();
             var methodIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên phương thức");
@@ -70,7 +108,7 @@ namespace NEN
             List<Variable> parameters = [];
             ConsumeOrThrow(TokenType.Punctuator, ")");
             ConsumeOrThrow(TokenType.Operator, "->");
-            var returnTypeIdentifier = ConsumeOrThrow(TokenType.Identifier, "kiểu trả về");
+            var returnTypeIdentifier = ParseType();
             List<Statement> statements = [];
             while (Current() != null && Current()!.Value != "kết_thúc")
             {
@@ -79,7 +117,7 @@ namespace NEN
             }
             if (Current() == null) OutOfTokenHelper("kết_thúc");
             Consume();
-            return new Method { Name = methodIdentifier.Value, ReturnType = returnTypeIdentifier.Value, Statements = [.. statements], Line = line, Column = column };
+            return new Method { IsEntryPoint = isEntryPoint, Attributes = methodAttributes, Name = methodIdentifier.Value, ReturnType = returnTypeIdentifier, Statements = [.. statements], Line = line, Column = column };
         }
 
         private Statement ParseStatement()
@@ -100,7 +138,7 @@ namespace NEN
         {
             var variableIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên biến");
             ConsumeOrThrow(TokenType.Keyword, "thuộc");
-            var typeIdentifier = ConsumeOrThrow(TokenType.Identifier, "kiểu dữ liệu");
+            var typeIdentifier = ParseType();
             Expression? initialValue = null;
             if (Current()?.Value == "gán")
             {
@@ -112,7 +150,7 @@ namespace NEN
                 Variable = new Variable
                 {
                     Name = variableIdentifier.Value,
-                    Type = typeIdentifier.Value,
+                    Type = typeIdentifier,
                     Line = variableIdentifier.Line,
                     Column = variableIdentifier.Column
                 },
@@ -120,6 +158,21 @@ namespace NEN
                 Line = line,
                 Column = column
             };
+        }
+
+        private Types.Type ParseType()
+        {
+            var (line, column) = GetCurrentPosition();
+            string typeIdentifier = "";
+            do
+            {
+                var token = ConsumeOrThrow(TokenType.Identifier, "kiểu dữ liệu");
+                typeIdentifier += token.Value;
+                if (Current()?.Value != ".") break;
+                ConsumeOrThrow(TokenType.Punctuator, ".");
+                typeIdentifier += ".";
+            } while (true);
+            return new Types.Type { Name = typeIdentifier, Line = line, Column = column };
         }
 
         private Expression ParseExpression(int minPrecedence)

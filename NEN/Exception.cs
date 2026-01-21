@@ -27,4 +27,28 @@ namespace NEN
         public UnexpectedException() { }
         public UnexpectedException(string[] contentLines, string unexpected, int line, int column) : base(contentLines, $"Không mong đợi '{unexpected}' tại vị trí này", line, column) { }
     }
+
+    internal class RedefinedException : NENException
+    {
+        public RedefinedException() { }
+        public RedefinedException(string[] contentLines, string redefined, int line, int column) : base(contentLines, $"'{redefined}' đã được định nghĩa rồi", line, column) { }
+    }
+
+    internal class MultipleEntryPointException : NENException
+    {
+        public MultipleEntryPointException() { }
+        public MultipleEntryPointException(string[] contentLines, int line, int column) : base(contentLines, "Hàm chính được định nghĩa nhiều lần", line, column) { }
+    }
+
+    internal class UnresolvedTypeException : NENException
+    {
+        public UnresolvedTypeException() { }
+        public UnresolvedTypeException(string[] contentLines, string unresolvedType, int line, int column) : base(contentLines, $"Không thể tìm thấy định nghĩa của '{unresolvedType}'", line, column) { } 
+    }
+
+    internal class UnresolvedIdentifierException : NENException
+    {
+        public UnresolvedIdentifierException() { }
+        public UnresolvedIdentifierException(string[] contentLines, string unresolvedIdentifier, int line, int column) : base(contentLines, $"Không thể nhận diện được ký hiệu '{unresolvedIdentifier}'", line, column) { }
+    }
 }

@@ -83,7 +83,7 @@ namespace NEN
             }
         }
 
-        [GeneratedRegex(@"(?<comment>//.*)|(?<comment>(/\*|\*/))|(?<literal>""[^""]+"")|(?<operator>\->)|(?<operator>[+\-*\/=<>])|(?<punctuator>[,.();])|(?<unknown>[^\s,.();+\-*\/=<>]+)")]
+        [GeneratedRegex(@"(?<comment>//.*)|(?<comment>(/\*|\*/))|(?<literal>""[^""]+"")|(?<operator>\->)|(?<marker>@)|(?<operator>[+\-*\/=<>])|(?<punctuator>[,.();])|(?<unknown>[^\s,.();+\-*\/=<>@]+)")]
         private static partial Regex LexerRegex();
         private static Types.TokenType GetMatchType(Match match)
         {
@@ -91,6 +91,7 @@ namespace NEN
             if (match.Groups["literal"].Success) return Types.TokenType.Literal;
             if (match.Groups["punctuator"].Success) return Types.TokenType.Punctuator;
             if (match.Groups["operator"].Success) return Types.TokenType.Operator;
+            if (match.Groups["marker"].Success) return Types.TokenType.Marker;
             return Types.TokenType.Unknown;
         }
     }

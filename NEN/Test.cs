@@ -185,7 +185,7 @@ namespace NEN
 
         private static void PrintTokens(Types.Token[] tokens)
         {
-            Console.WriteLine("Lexer result:");
+            Console.WriteLine("Kết quả Lexer:");
             int valuePadding = tokens.Select(token => token.Value.Length).Max();
             var topBar = $"{"Value".PadRight(valuePadding)} | {"Type",-10} | {"Line",-4} | {"Column",-4}";
             var topBarLine = new string('-', topBar.Length);
@@ -209,6 +209,30 @@ namespace NEN
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+            }
+        }
+
+        public static void TestAssembler()
+        {
+            (string[] lines, Types.Token[] tokens) = Lexer.Tokenize("Example sources\\ClassTest.nen");
+            PrintTokens(tokens);
+            try
+            {
+                var parser = new Parser("ClassTest", lines, tokens);
+                var module = parser.Parse();
+                Console.WriteLine($"Kết quả Parser:\n{module}");
+                var assembler = new Assembler("ClassTest", lines, module, []);
+                assembler.Assemble();
+                Console.WriteLine($"Hoàn thành biên dịch! OK");
+            }
+            catch (NENException e)
+            {
+                Console.WriteLine(e.Message);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+                Console.WriteLine(e.StackTrace);
             }
         }
     }

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -17,6 +18,7 @@ namespace NEN
             Operator = 1 << 3, // symbols that operate on arguments and produce results. (e.g. +, <, =)
             Punctuator = 1 << 4, // punctuation characters and paired delimiters. (e.g. }, (, ;)
             Comment = 1 << 5,
+            Marker = 1 << 6,
             Unknown = 0 // for further analysis
         };
 
@@ -66,25 +68,33 @@ namespace NEN
 
         internal class Method : AST
         {
+            public bool IsEntryPoint { get; set; } = false;
+            public MethodAttributes Attributes { get; set; } = MethodAttributes.Public;
             public required string Name { get; set; }
             public Variable[] Parameters { get; set; } = [];
             public Statement[] Statements { get; set; } = [];
-            public required string ReturnType { get; set; }
+            public required Type ReturnType { get; set; }
 
             public override string ToString()
             {
-                return Helper.GetTreeString<AST>($"Phương thức: {Name} -> {ReturnType}", [.. Parameters, .. Statements]);
+                string isEntryPoint = IsEntryPoint ? "(Hàm chính)" : "";
+                return Helper.GetTreeString<AST>($"Phương thức: {isEntryPoint} ({Attributes.ToString()}) {Name} -> {ReturnType}", [.. Parameters, .. Statements]);
             }
         }
 
         internal class Variable : AST // Used for both attributes and parameters
         {
             public required string Name { get; set; }
-            public required string Type { get; set; }
+            public required Type Type { get; set; }
             public override string ToString()
             {
                 return $"{Name} ({Type})";
             }
+        }
+
+        internal class Type : AST
+        {
+            public required string Name { get; set; }
         }
 
         internal abstract class Statement : AST { }
@@ -104,7 +114,7 @@ namespace NEN
         }
 
         internal abstract class Expression : AST { 
-            public string? Type { get; set; }
+            public Type? Type { get; set; }
         }
 
         internal class BinaryExpression : Expression

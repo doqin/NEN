@@ -1,12 +1,19 @@
 ﻿
 lớp Chương_Trình
-    phương_thức Chính() -> rỗng
-        biến a thuộc chuỗi gán "Xin chào";
-        biến b thuộc số;
-        biến c thuộc số gán 1 + 2 + 3;
-        biến d thuộc số gán 1 * 3 * 10 + 3 * 4;
+    @Chính @Tĩnh
+    phương_thức Chính() -> System.Void
+        biến str thuộc System.String gán "Xin chào";
+        biến str2 thuộc System.String gán "OK";
+        /*
+        biến b thuộc System.Int32;
+        biến c thuộc System.Int32 gán 1 + 2 + 3;
+        biến d thuộc System.Int32 gán 1 * 3 * 10 + 3 * 4;
+        */
     kết_thúc
 kết_thúc
 
 lớp Phụ
+    phương_thức Test() -> System.Void
+        biến str thuộc System.String gán "Lmao";
+    kết_thúc
 kết_thúc
