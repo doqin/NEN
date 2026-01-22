@@ -8,6 +8,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="ClassTest.dll" />
+    <None Remove="ClassTest.pdb" />
+    <None Remove="ClassTest.runtimeconfig.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="System.Reflection.MetadataLoadContext" Version="10.0.2" />
   </ItemGroup>
 
