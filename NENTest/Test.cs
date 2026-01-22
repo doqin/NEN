@@ -12,6 +12,73 @@ Console.OutputEncoding = Encoding.UTF8;
 
 namespace NENTest
 {
+
+    [TestClass]
+    public sealed class NENTest
+    {
+        [TestMethod]
+        public void LexerTest()
+        {
+            string fileName = "LexerTest";
+            (string[] lines, NEN.Types.Token[] tokens) = NEN.Lexer.Tokenize($"Example sources\\{fileName}.nen");
+            PrintTokens(tokens);
+        }
+
+        [TestMethod]
+        public void ParserTest()
+        {
+            string fileName = "ParserTest";
+            (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
+            PrintTokens(tokens);
+            var parser = new Parser(fileName, lines, tokens);
+            var module = parser.Parse();
+            Console.WriteLine($"Parser result:\n{module}");
+        }
+
+        [TestMethod]
+        public void StaticAnalyzerTest()
+        {
+            string fileName = "ParserTest";
+            (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
+            PrintTokens(tokens);
+            var parser = new Parser(fileName, lines, tokens);
+            var module = parser.Parse();
+            Console.WriteLine($"Parser result:\n{module}");
+            var analyzer = new StaticAnalyzer(lines);
+            analyzer.Analyze(ref module);
+            Console.WriteLine($"Static Analyzer result:\n{module}");
+        }
+
+        [TestMethod]
+        public void AssemblerTest()
+        {
+            string fileName = "AssemblerTest";
+            (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
+            PrintTokens(tokens);
+            var parser = new Parser(fileName, lines, tokens);
+            var module = parser.Parse();
+            Console.WriteLine($"Kết quả Parser:\n{module}");
+            var analyzer = new StaticAnalyzer(lines);
+            analyzer.Analyze(ref module);
+            var assembler = new Assembler(fileName, lines, module, []);
+            assembler.Assemble();
+            Console.WriteLine($"Hoàn thành biên dịch! OK");
+        }
+
+        private static void PrintTokens(NEN.Types.Token[] tokens)
+        {
+            Console.WriteLine("Kết quả Lexer:");
+            int valuePadding = tokens.Select(token => token.Value.Length).Max();
+            var topBar = $"{"Value".PadRight(valuePadding)} | {"Type",-10} | {"Line",-4} | {"Column",-4}";
+            var topBarLine = new string('-', topBar.Length);
+            Console.WriteLine($"{topBar}\n{topBarLine}");
+            foreach (NEN.Types.Token token in tokens)
+            {
+                Console.WriteLine($"{token.Value.PadRight(valuePadding)} | {token.Type,-10} | {token.Line,-4} | {token.Column,-4}");
+            }
+        }
+    }
+
     [TestClass]
     public sealed class ILTest
     {
@@ -299,57 +366,6 @@ namespace NENTest
 
             Console.WriteLine("Compilation Complete. Saved Test.dll");
             Console.WriteLine("Run with: dotnet Test.dll");
-        }
-    }
-
-    [TestClass]
-    public sealed class NENTest
-    {
-        [TestMethod]
-        public void LexerTest()
-        {
-            string fileName = "LexerTest";
-            (string[] lines, NEN.Types.Token[] tokens) = NEN.Lexer.Tokenize($"Example sources\\{fileName}.nen");
-            PrintTokens(tokens);
-        }
-
-        [TestMethod]
-        public void ParserTest()
-        {
-            string fileName = "ParserTest";
-            (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
-            PrintTokens(tokens);
-            var parser = new Parser(fileName, lines, tokens);
-            var module = parser.Parse();
-            Console.WriteLine($"Parser result:\n{module}");
-        }
-
-        [TestMethod]
-        public void AssemblerTest()
-        {
-            string fileName = "AssemblerTest";
-            (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
-            PrintTokens(tokens);
-            var parser = new Parser(fileName, lines, tokens);
-            var module = parser.Parse();
-            Console.WriteLine($"Kết quả Parser:\n{module}");
-            StaticAnalyzer.Analyze(ref module);
-            var assembler = new Assembler(fileName, lines, module, []);
-            assembler.Assemble();
-            Console.WriteLine($"Hoàn thành biên dịch! OK");
-        }
-
-        private static void PrintTokens(NEN.Types.Token[] tokens)
-        {
-            Console.WriteLine("Kết quả Lexer:");
-            int valuePadding = tokens.Select(token => token.Value.Length).Max();
-            var topBar = $"{"Value".PadRight(valuePadding)} | {"Type",-10} | {"Line",-4} | {"Column",-4}";
-            var topBarLine = new string('-', topBar.Length);
-            Console.WriteLine($"{topBar}\n{topBarLine}");
-            foreach (NEN.Types.Token token in tokens)
-            {
-                Console.WriteLine($"{token.Value.PadRight(valuePadding)} | {token.Type,-10} | {token.Line,-4} | {token.Column,-4}");
-            }
         }
     }
 }

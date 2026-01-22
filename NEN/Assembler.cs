@@ -217,18 +217,55 @@ namespace NEN
             switch (expression)
             {
                 case LiteralExpression literalExpression:
-                    AssembleLiteralExpression(ref ilGenerator, ref localSymbolTable, literalExpression);
+                    AssembleLiteralExpression(ref ilGenerator, literalExpression);
+                    break;
+                case BinaryExpression binaryExpression:
+                    AssembleBinaryExpression(ref ilGenerator, ref localSymbolTable, binaryExpression);
                     break;
                 default:
                     throw new NotImplementedException();
             }
         }
 
-        private void AssembleLiteralExpression(ref ILGenerator ilGenerator, ref SymbolTable localSymbolTable, LiteralExpression literalExpression)
+        private void AssembleBinaryExpression(ref ILGenerator ilGenerator, ref SymbolTable localSymbolTable, BinaryExpression binaryExpression)
         {
-            if (literalExpression.Type!.Name == Types.Type.String)
+            AssembleExpression(ref ilGenerator, ref localSymbolTable, binaryExpression.Left);
+            AssembleExpression(ref ilGenerator, ref localSymbolTable, binaryExpression.Right);
+            if (binaryExpression.Operator == Operator.Plus)
+            {
+                ilGenerator.Emit(OpCodes.Add);
+            }
+            else if (binaryExpression.Operator == Operator.Minus)
+            {
+                ilGenerator.Emit(OpCodes.Sub);
+            }
+            else if (binaryExpression.Operator == Operator.Multiply)
+            {
+                ilGenerator.Emit(OpCodes.Mul);
+            }
+            else if (binaryExpression.Operator == Operator.Divide)
+            {
+                ilGenerator.Emit(OpCodes.Div);
+            }
+            else
+            {
+                throw new NotImplementedException();
+            }
+        }
+
+        private void AssembleLiteralExpression(ref ILGenerator ilGenerator, LiteralExpression literalExpression)
+        {
+            if (literalExpression.Type!.Name == PrimitiveType.String)
             {
                 ilGenerator.Emit(OpCodes.Ldstr, literalExpression.Value);
+            }
+            else if (literalExpression.Type!.Name == PrimitiveType.Int64)
+            {
+                ilGenerator.Emit(OpCodes.Ldc_I8, Int64.Parse(literalExpression.Value));
+            }
+            else if (literalExpression.Type!.Name == PrimitiveType.Int32)
+            {
+                ilGenerator.Emit(OpCodes.Ldc_I4, Int32.Parse(literalExpression.Value));
             }
             else
             {

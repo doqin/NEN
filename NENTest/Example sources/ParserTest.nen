@@ -7,6 +7,7 @@ lớp Chương_Trình
         biến b thuộc System.Int32;
         biến c thuộc System.Int32 gán 1 + 2 + 3;
         biến d thuộc System.Int32 gán 1 * 3 * 10 + 3 * 4;
+        biến e thuộc System.Int64 gán 2L *32L / 4L;
     kết_thúc
 kết_thúc
 

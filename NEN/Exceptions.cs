@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Data.Common;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -13,6 +15,7 @@ namespace NEN
         {
             public NENException() { }
             public NENException(string[] contentLines, string message, int line, int column) : base(CreateException(contentLines, message, line, column)) { }
+            public NENException(string message, string content, int line, int column) : base($"Dòng {line} cột {column} | {message}\n{content}") { }
 
             private static string CreateException(string[] contentLines, string message, int line, int column)
             {
@@ -53,6 +56,17 @@ namespace NEN
         {
             public UnresolvedIdentifierException() { }
             public UnresolvedIdentifierException(string[] contentLines, string unresolvedIdentifier, int line, int column) : base(contentLines, $"Không thể nhận diện được ký hiệu '{unresolvedIdentifier}'", line, column) { }
+        }
+
+        public class TypeDiscrepancyException : NENException
+        {
+            public TypeDiscrepancyException() { }
+            public TypeDiscrepancyException(string[] contentLines, Types.Type left, Types.Type right, int line, int column) : base($"Kiểu dữ liệu không hợp lệ ({left.Name} <-> {right.Name})", CreateContent(contentLines, left, right), line, column) { }
+
+            private static string CreateContent(string[] contentLines, Types.Type left, Types.Type right)
+            {
+                return $"{contentLines[left.Line - 1]}\n" + new string('~', left.Column - 1) + "^\n" + $"{contentLines[right.Line - 1]}\n" + new string('~', right.Column - 1) + '^';
+            }
         }
     } 
 

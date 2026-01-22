@@ -83,7 +83,7 @@ namespace NEN
             }
         }
 
-        [GeneratedRegex(@"(?<comment>//.*)|(?<comment>(/\*|\*/))|(?<literal>""[^""]+"")|(?<operator>\->)|(?<marker>@)|(?<operator>[+\-*\/=<>])|(?<punctuator>[,.();])|(?<unknown>[^\s,.();+\-*\/=<>@]+)")]
+        [GeneratedRegex(@"(?<comment>//.*)|(?<comment>(/\*|\*/))|(?<literal>[0-9]+L)|(?<literal>[0-9]+)|(?<literal>""[^""]+"")|(?<operator>\->)|(?<marker>@)|(?<operator>[+\-*\/=<>])|(?<punctuator>[,.();])|(?<unknown>[^\s,.();+\-*\/=<>@]+)")]
         private static partial Regex LexerRegex();
         private static Types.TokenType GetMatchType(Match match)
         {

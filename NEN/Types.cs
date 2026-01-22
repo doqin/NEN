@@ -77,8 +77,8 @@ namespace NEN
 
             public override string ToString()
             {
-                string isEntryPoint = IsEntryPoint ? "(Hàm chính)" : "";
-                return Helper.GetTreeString<AST>($"Phương thức: {isEntryPoint} ({Attributes.ToString()}) {Name} -> {ReturnType}", [.. Parameters, .. Statements]);
+                string isEntryPoint = IsEntryPoint ? "(Hàm chính) " : "";
+                return Helper.GetTreeString<AST>($"Phương thức: {isEntryPoint}({Attributes.ToString()}) {Name} -> {ReturnType}", [.. Parameters, .. Statements]);
             }
         }
 
@@ -92,10 +92,15 @@ namespace NEN
             }
         }
 
+        public static class PrimitiveType
+        {
+            public static readonly string Int32 = "System.Int32";
+            public static readonly string Int64 = "System.Int64";
+            public static readonly string String = "String";
+        }
+
         public class Type : AST
         {
-            public static string Int32 = "System.Int32";
-            public static string String = "String";
             public required string Name { get; set; }
             public override string ToString()
             {
@@ -113,9 +118,9 @@ namespace NEN
             {
                 if (InitialValue != null)
                 {
-                    return Helper.GetTreeString($"Biến: {Variable} gán", [InitialValue]);
+                    return Helper.GetTreeString($"Khai báo biến: {Variable} gán", [InitialValue]);
                 }
-                return $"Biến: {Variable}";
+                return $"Khai báo biến: {Variable}";
             }
         }
 
@@ -130,6 +135,13 @@ namespace NEN
             public required Expression Right;
             public override string ToString()
             {
+                if (Type != null)
+                {
+                    var str = Helper.GetTreeString<object>(null, [Left, Operator, Right]);
+                    var lines = str.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+                    lines[0] = $"{lines[0]} -> {Type}";
+                    return string.Join("\n", lines);
+                }
                 return Helper.GetTreeString<object>(null, [Left, Operator, Right]);
             }
         }
@@ -139,6 +151,10 @@ namespace NEN
             public required string Value { get; set; }
             public override string ToString()
             {
+                if (Type != null)
+                {
+                    return $"{Value} ({Type})";
+                }
                 return Value;
             }
         }
