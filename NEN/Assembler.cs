@@ -1,4 +1,5 @@
 ﻿using NEN.Types;
+using NEN.Exceptions;
 using System;
 using System.Diagnostics.SymbolStore;
 using System.Reflection;
@@ -9,7 +10,7 @@ using System.Reflection.PortableExecutable;
 
 namespace NEN
 {
-    internal class Assembler
+    public class Assembler
     {
         private class SymbolTable
         {
@@ -225,12 +226,9 @@ namespace NEN
 
         private void AssembleLiteralExpression(ref ILGenerator ilGenerator, ref SymbolTable localSymbolTable, LiteralExpression literalExpression)
         {
-            if (literalExpression.Value.StartsWith('"') && literalExpression.Value.EndsWith('"'))
+            if (literalExpression.Type!.Name == Types.Type.String)
             {
-                var value = literalExpression.Value;
-                value = value.Remove(value.Length - 1, 1);
-                value = value.Remove(0, 1);
-                ilGenerator.Emit(OpCodes.Ldstr, value);
+                ilGenerator.Emit(OpCodes.Ldstr, literalExpression.Value);
             }
             else
             {

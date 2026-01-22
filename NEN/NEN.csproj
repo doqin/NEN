@@ -17,16 +17,4 @@
     <PackageReference Include="System.Reflection.MetadataLoadContext" Version="10.0.2" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Update="Example sources\ClassTest.nen">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="Example sources\MethodTest.nen">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="Example sources\Test.nen">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-
 </Project>

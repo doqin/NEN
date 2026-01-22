@@ -4,5 +4,3 @@ using NEN;
 using System.Text;
 
 Console.OutputEncoding = Encoding.UTF8;
-
-Test.TestAssembler();

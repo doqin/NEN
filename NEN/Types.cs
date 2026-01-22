@@ -10,7 +10,7 @@ namespace NEN
     namespace Types
     {
         [Flags]
-        internal enum TokenType
+        public enum TokenType
         {
             Identifier = 1 << 0, // variables
             Keyword = 1 << 1, // reserved words
@@ -22,7 +22,7 @@ namespace NEN
             Unknown = 0 // for further analysis
         };
 
-        internal class Operator
+        public class Operator
         {
             public static readonly string Plus = "+";
             public static readonly string Minus = "-";
@@ -30,7 +30,7 @@ namespace NEN
             public static readonly string Divide = "/";
         }
 
-        internal class Token
+        public class Token
         {
             public required TokenType Type { get; set; }
             public required string Value { get; set; }
@@ -38,7 +38,7 @@ namespace NEN
             public required int Column { get; set; }
         }
 
-        internal class Module
+        public class Module
         {
             public required string Name { get; set; }
             public Class[] Classes { get; set; } = [];
@@ -49,13 +49,13 @@ namespace NEN
             }
         }
 
-        internal abstract class AST
+        public abstract class AST
         {
             public required int Line {  set; get; }
             public required int Column { set; get; }
         }
 
-        internal class Class : AST
+        public class Class : AST
         {
             public required string Name { get; set; }
             public Method[] Methods { get; set; } = [];
@@ -66,7 +66,7 @@ namespace NEN
             }
         }
 
-        internal class Method : AST
+        public class Method : AST
         {
             public bool IsEntryPoint { get; set; } = false;
             public MethodAttributes Attributes { get; set; } = MethodAttributes.Public;
@@ -82,7 +82,7 @@ namespace NEN
             }
         }
 
-        internal class Variable : AST // Used for both attributes and parameters
+        public class Variable : AST // Used for both attributes and parameters
         {
             public required string Name { get; set; }
             public required Type Type { get; set; }
@@ -92,14 +92,20 @@ namespace NEN
             }
         }
 
-        internal class Type : AST
+        public class Type : AST
         {
+            public static string Int32 = "System.Int32";
+            public static string String = "String";
             public required string Name { get; set; }
+            public override string ToString()
+            {
+                return Name;
+            }
         }
 
-        internal abstract class Statement : AST { }
+        public abstract class Statement : AST { }
 
-        internal class VariableDeclarationStatement : Statement
+        public class VariableDeclarationStatement : Statement
         {
             public required Variable Variable { set; get; }
             public Expression? InitialValue { set; get; }
@@ -113,11 +119,11 @@ namespace NEN
             }
         }
 
-        internal abstract class Expression : AST { 
+        public abstract class Expression : AST { 
             public Type? Type { get; set; }
         }
 
-        internal class BinaryExpression : Expression
+        public class BinaryExpression : Expression
         {
             public required Expression Left;
             public required string Operator;
@@ -128,7 +134,7 @@ namespace NEN
             }
         }
 
-        internal class LiteralExpression : Expression
+        public class LiteralExpression : Expression
         {
             public required string Value { get; set; }
             public override string ToString()

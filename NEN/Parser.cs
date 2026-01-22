@@ -1,4 +1,5 @@
 ﻿using NEN.Types;
+using NEN.Exceptions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace NEN
 {
-    internal class Parser(string moduleName, string[] contentLines, Token[] tokens)
+    public class Parser(string moduleName, string[] contentLines, Token[] tokens)
     {
         private readonly string moduleName = moduleName;
         private readonly Token[] tokens = tokens;

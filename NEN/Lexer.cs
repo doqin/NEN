@@ -3,7 +3,7 @@ using NEN.Types;
 
 namespace NEN
 {
-    internal partial class Lexer
+    public partial class Lexer
     {
         public static (string[], Token[]) Tokenize(string filePath)
         {
@@ -106,7 +106,7 @@ namespace NEN
             if (index < 0 || index >= list.Count)
                 throw new ArgumentOutOfRangeException(nameof(index));
 
-            // Access the internal array via CollectionsMarshal
+            // Access the public array via CollectionsMarshal
             return ref System.Runtime.InteropServices.CollectionsMarshal.AsSpan(list)[index];
         }
     }

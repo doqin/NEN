@@ -1,15 +1,22 @@
-﻿using System.Diagnostics.SymbolStore;
+﻿using NEN;
+using System.Diagnostics.Metrics;
+using System.Diagnostics.SymbolStore;
+using System.IO.Enumeration;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
+using System.Text;
+Console.OutputEncoding = Encoding.UTF8;
 
-namespace NEN
+namespace NENTest
 {
-    internal class Test
+    [TestClass]
+    public sealed class ILTest
     {
-        public static void Test1()
+        [TestMethod]
+        public void GeneralTest()
         {
             {
                 AssemblyName aName = new("Common");
@@ -177,62 +184,171 @@ namespace NEN
             }
         }
 
-        public static void TestLexer()
+        [TestMethod]
+        public void ConversionTest()
         {
-            (string[] lines, Types.Token[] tokens) = Lexer.Tokenize("Example sources\\Test.nen");
+            AssemblyName aName = new("Test");
+            string runtimePath = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
+            PathAssemblyResolver resolver = new(Directory.GetFiles(runtimePath, "*.dll"));
+            using MetadataLoadContext context = new(resolver);
+            Assembly? coreAssembly = context.CoreAssembly;
+            PersistedAssemblyBuilder ab = new(aName, coreAssembly ?? typeof(object).Assembly);
+
+            // Set target framework attribute using runtime types for CustomAttributeBuilder
+            ConstructorInfo targetFrameworkConstructor = typeof(System.Runtime.Versioning.TargetFrameworkAttribute).GetConstructor([typeof(string)])!;
+            PropertyInfo frameworkDisplayNameProperty = typeof(System.Runtime.Versioning.TargetFrameworkAttribute).GetProperty("FrameworkDisplayName")!;
+
+            CustomAttributeBuilder targetFrameworkAttribute = new(
+                targetFrameworkConstructor,
+                [".NETCoreApp,Version=v9.0"],
+                [frameworkDisplayNameProperty],
+                [".NET 9.0"]
+            );
+            ab.SetCustomAttribute(targetFrameworkAttribute);
+
+            ModuleBuilder mb = ab.DefineDynamicModule(aName.Name ?? "Test");
+
+            // Get types from MetadataLoadContext for IL generation
+            Type consoleType = context.LoadFromAssemblyName("System.Console").GetType("System.Console")!;
+            Type voidType = coreAssembly!.GetType("System.Void")!;
+            Type stringType = coreAssembly!.GetType("System.String")!;
+            Type int32Type = coreAssembly!.GetType("System.Int32")!;
+            Type int64Type = coreAssembly!.GetType("System.Int64")!;
+            Type objectType = coreAssembly!.GetType("System.Object")!;
+            Type variadicType = coreAssembly!.GetType("System.Object[]")!;
+            Type objectNullableType = coreAssembly!.GetType("System.Object?")!;
+
+            TypeBuilder tb = mb.DefineType(
+                "Program",
+                TypeAttributes.Public | TypeAttributes.Class
+            );
+
+            MethodBuilder mainMethod = tb.DefineMethod(
+                "Main",
+                MethodAttributes.Public | MethodAttributes.Static,
+                voidType,
+                null
+            );
+            ISymbolDocumentWriter srcDoc = mb.DefineDocument("Test.nen");
+
+            ILGenerator il = mainMethod.GetILGenerator();
+            MethodInfo writeLine = consoleType.GetMethod("WriteLine", [int32Type])!;
+            il.Emit(OpCodes.Ldc_I4, 2);
+            il.Emit(OpCodes.Ldc_I4, 5);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Conv_I8);
+            var local1 = il.DeclareLocal(int64Type);
+            il.Emit(OpCodes.Stloc, 0);
+            il.Emit(OpCodes.Ldc_I4, 2);
+            var local2 = il.DeclareLocal(int64Type);
+            il.Emit(OpCodes.Conv_I8);
+            il.Emit(OpCodes.Stloc, 1);
+            // il.Emit(OpCodes.Call, writeLine);
+            il.Emit(OpCodes.Ret);
+            tb.CreateType();
+
+            MetadataBuilder metadataBuilder = ab.GenerateMetadata(out BlobBuilder ilStream, out BlobBuilder fieldData, out MetadataBuilder pdbBuilder);
+            PEHeaderBuilder peHeader = new(imageCharacteristics: Characteristics.ExecutableImage | Characteristics.Dll);
+
+            // Build the PDB
+            BlobBuilder portablePdbBlob = new();
+            PortablePdbBuilder portablePdbBuilder = new(
+                pdbBuilder,
+                metadataBuilder.GetRowCounts(),
+                MetadataTokens.MethodDefinitionHandle(mainMethod.MetadataToken)
+            );
+            BlobContentId pdbContentId = portablePdbBuilder.Serialize(portablePdbBlob);
+
+            // Save standalone PDB file
+            using FileStream pdbStream = new("Test.pdb", FileMode.Create, FileAccess.Write);
+            portablePdbBlob.WriteContentTo(pdbStream);
+
+            // Add debug directory with embedded PDB
+            DebugDirectoryBuilder debugDirectoryBuilder = new();
+            debugDirectoryBuilder.AddCodeViewEntry("Test.pdb", pdbContentId, portablePdbBuilder.FormatVersion);
+            //debugDirectoryBuilder.AddEmbeddedPortablePdbEntry(portablePdbBlob, portablePdbBuilder.FormatVersion);
+
+            ManagedPEBuilder peBuilder = new(
+                header: peHeader,
+                metadataRootBuilder: new MetadataRootBuilder(metadataBuilder),
+                ilStream: ilStream,
+                mappedFieldData: fieldData,
+                debugDirectoryBuilder: debugDirectoryBuilder,
+                entryPoint: MetadataTokens.MethodDefinitionHandle(mainMethod.MetadataToken)
+            );
+
+            BlobBuilder peBlob = new();
+            peBuilder.Serialize(peBlob);
+
+            using FileStream fileStream = new("Test.dll", FileMode.Create, FileAccess.Write);
+            peBlob.WriteContentTo(fileStream);
+
+            string configName = "Test.runtimeconfig.json";
+            string jsonContent = """
+                {
+                    "runtimeOptions": {
+                        "tfm": "net9.0",
+                        "framework": {
+                            "name": "Microsoft.NETCore.App",
+                            "version": "9.0.0"
+                        }
+                    }
+                }
+                """;
+            File.WriteAllText(configName, jsonContent);
+
+            Console.WriteLine("Compilation Complete. Saved Test.dll");
+            Console.WriteLine("Run with: dotnet Test.dll");
+        }
+    }
+
+    [TestClass]
+    public sealed class NENTest
+    {
+        [TestMethod]
+        public void LexerTest()
+        {
+            string fileName = "LexerTest";
+            (string[] lines, NEN.Types.Token[] tokens) = NEN.Lexer.Tokenize($"Example sources\\{fileName}.nen");
             PrintTokens(tokens);
         }
 
-        private static void PrintTokens(Types.Token[] tokens)
+        [TestMethod]
+        public void ParserTest()
+        {
+            string fileName = "ParserTest";
+            (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
+            PrintTokens(tokens);
+            var parser = new Parser(fileName, lines, tokens);
+            var module = parser.Parse();
+            Console.WriteLine($"Parser result:\n{module}");
+        }
+
+        [TestMethod]
+        public void AssemblerTest()
+        {
+            string fileName = "AssemblerTest";
+            (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
+            PrintTokens(tokens);
+            var parser = new Parser(fileName, lines, tokens);
+            var module = parser.Parse();
+            Console.WriteLine($"Kết quả Parser:\n{module}");
+            StaticAnalyzer.Analyze(ref module);
+            var assembler = new Assembler(fileName, lines, module, []);
+            assembler.Assemble();
+            Console.WriteLine($"Hoàn thành biên dịch! OK");
+        }
+
+        private static void PrintTokens(NEN.Types.Token[] tokens)
         {
             Console.WriteLine("Kết quả Lexer:");
             int valuePadding = tokens.Select(token => token.Value.Length).Max();
             var topBar = $"{"Value".PadRight(valuePadding)} | {"Type",-10} | {"Line",-4} | {"Column",-4}";
             var topBarLine = new string('-', topBar.Length);
             Console.WriteLine($"{topBar}\n{topBarLine}");
-            foreach (Types.Token token in tokens)
+            foreach (NEN.Types.Token token in tokens)
             {
                 Console.WriteLine($"{token.Value.PadRight(valuePadding)} | {token.Type,-10} | {token.Line,-4} | {token.Column,-4}");
-            }
-        }
-
-        public static void TestParser()
-        {
-            (string[] lines, Types.Token[] tokens) = Lexer.Tokenize("Example sources\\ClassTest.nen");
-            PrintTokens(tokens);
-            try
-            {
-                var parser = new Parser("ClassTest", lines, tokens);
-                var module = parser.Parse();
-                Console.WriteLine($"Parser result:\n{module}");
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e.Message);
-            }
-        }
-
-        public static void TestAssembler()
-        {
-            (string[] lines, Types.Token[] tokens) = Lexer.Tokenize("Example sources\\ClassTest.nen");
-            PrintTokens(tokens);
-            try
-            {
-                var parser = new Parser("ClassTest", lines, tokens);
-                var module = parser.Parse();
-                Console.WriteLine($"Kết quả Parser:\n{module}");
-                var assembler = new Assembler("ClassTest", lines, module, []);
-                assembler.Assemble();
-                Console.WriteLine($"Hoàn thành biên dịch! OK");
-            }
-            catch (NENException e)
-            {
-                Console.WriteLine(e.Message);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e.Message);
-                Console.WriteLine(e.StackTrace);
             }
         }
     }
