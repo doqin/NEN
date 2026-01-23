@@ -61,7 +61,7 @@ namespace NEN
         public class TypeDiscrepancyException : NENException
         {
             public TypeDiscrepancyException() { }
-            public TypeDiscrepancyException(string[] contentLines, Types.TypeNode left, Types.TypeNode right, int line, int column) : base($"Kiểu dữ liệu không hợp lệ ({left.Name} <-> {right.Name})", CreateContent(contentLines, left, right), line, column) { }
+            public TypeDiscrepancyException(string[] contentLines, Types.TypeNode left, Types.TypeNode right, int line, int column) : base($"Kiểu dữ liệu không hợp lệ ({left} <-> {right})", CreateContent(contentLines, left, right), line, column) { }
 
             private static string CreateContent(string[] contentLines, Types.TypeNode left, Types.TypeNode right)
             {

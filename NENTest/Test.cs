@@ -1,4 +1,5 @@
 ﻿using NEN;
+using NEN.Exceptions;
 using System.Diagnostics.Metrics;
 using System.Diagnostics.SymbolStore;
 using System.IO.Enumeration;
@@ -44,8 +45,8 @@ namespace NENTest
             var parser = new Parser(fileName, lines, tokens);
             var module = parser.Parse();
             Console.WriteLine($"Parser result:\n{module}");
-            var analyzer = new StaticAnalyzer(lines);
-            analyzer.Analyze(ref module);
+            var analyzer = new StaticAnalyzer(lines, module, []);
+            analyzer.Analyze();
             Console.WriteLine($"Static Analyzer result:\n{module}");
         }
 
@@ -58,11 +59,32 @@ namespace NENTest
             var parser = new Parser(fileName, lines, tokens);
             var module = parser.Parse();
             Console.WriteLine($"Kết quả Parser:\n{module}");
-            var analyzer = new StaticAnalyzer(lines);
-            analyzer.Analyze(ref module);
-            var assembler = new Assembler(fileName, lines, module, []);
+            var analyzer = new StaticAnalyzer(lines, module, []);
+            analyzer.Analyze();
+            Console.WriteLine($"Kết quả Static Analyzer:\n{module}");
+            var assembler = new Assembler(fileName, lines, module);
             assembler.Assemble();
             Console.WriteLine($"Hoàn thành biên dịch! OK");
+        }
+
+        [TestMethod]
+        public void RedefinedTest()
+        {
+            string fileName = "RedefinedTest";
+            (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
+            PrintTokens(tokens);
+            var parser = new Parser(fileName, lines, tokens);
+            var module = parser.Parse();
+            Console.WriteLine($"Parser result:\n{module}");
+            var analyzer = new StaticAnalyzer(lines, module, []);
+            try
+            {
+                analyzer.Analyze();
+            }
+            catch (RedefinedException e)
+            {
+                Console.WriteLine(e.Message);
+            }
         }
 
         private static void PrintTokens(NEN.Types.Token[] tokens)

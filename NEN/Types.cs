@@ -80,7 +80,8 @@ namespace NEN
         {
             public required string Name { get; set; }
             public ClassNode[] Classes { get; set; } = [];
-
+            public MetadataLoadContext? MetadataLoadContext { get; set; }
+            public Assembly? CoreAssembly { get; set; }
             public override string ToString()
             {
                 return Helper.GetTreeString($"Mô đun: {Name}", Classes);
@@ -116,7 +117,7 @@ namespace NEN
             public override string ToString()
             {
                 string isEntryPoint = IsEntryPoint ? "(Hàm chính) " : "";
-                return Helper.GetTreeString<ASTNode>($"Phương thức: {isEntryPoint}({Attributes.ToString()}) {Name} -> {ReturnType}", [.. Parameters, .. Statements]);
+                return Helper.GetTreeString<ASTNode>($"Phương thức: {isEntryPoint}({Attributes.ToString()}) {Name}({string.Join(", ", Parameters.Select(param => $"{param.Name} thuộc {param.Type}"))}) -> {ReturnType}", [.. Statements]);
             }
         }
 
@@ -140,9 +141,14 @@ namespace NEN
         public class TypeNode : ASTNode
         {
             public required string Name { get; set; }
+            public Type? Type { get; set; }
             public override string ToString()
             {
-                return Name;
+                if (Type == null)
+                {
+                    return $"{Name}(*)";
+                }
+                return Type.FullName ?? Name;
             }
         }
 
@@ -162,8 +168,13 @@ namespace NEN
             }
         }
 
+        public class MethodCallStatement : StatementNode
+        {
+            public required MethodCallExpression MethodCall { set; get; }
+        }
+
         public abstract class ExpressionNode : ASTNode { 
-            public TypeNode? Type { get; set; }
+            public TypeNode? ReturnType { get; set; }
         }
 
         public class BinaryExpression : ExpressionNode
@@ -173,11 +184,11 @@ namespace NEN
             public required ExpressionNode Right { get; set; }
             public override string ToString()
             {
-                if (Type != null)
+                if (ReturnType != null)
                 {
                     var str = Helper.GetTreeString<object>(null, [Left, Operator, Right]);
                     var lines = str.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
-                    lines[0] = $"{lines[0]} -> {Type}";
+                    lines[0] = $"{lines[0]} -> {ReturnType}";
                     return string.Join("\n", lines);
                 }
                 return Helper.GetTreeString<object>(null, [Left, Operator, Right]);
@@ -189,9 +200,9 @@ namespace NEN
             public required string Value { get; set; }
             public override string ToString()
             {
-                if (Type != null)
+                if (ReturnType != null)
                 {
-                    return $"{Value} ({Type})";
+                    return $"{Value} ({ReturnType})";
                 }
                 return Value;
             }
@@ -202,12 +213,20 @@ namespace NEN
             public required string Name { get; set; }
             public override string ToString()
             {
-                if (Type != null)
+                if (ReturnType != null)
                 {
-                    return $"{Name} ({Type})";
+                    return $"{Name} ({ReturnType})";
                 }
                 return Name;
             }
+        }
+
+        public class MethodCallExpression : ExpressionNode
+        {
+            public MethodInfo? Info { get; set; }
+            public required TypeNode Type { get; set; }
+            public required string Name { get; set; }
+            public required ExpressionNode[] Arguments { get; set; }
         }
     }
 }

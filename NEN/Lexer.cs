@@ -21,11 +21,11 @@ namespace NEN
                     tokens.Add(new Token { Type = matchType, Value = match.Value, Line = i, Column = match.Index + 1 });
                 }
             }
-            Lexer.Analyse(ref tokens);
+            Lexer.Analyse( tokens);
             return (lines, [.. tokens]);
         }
 
-        private static void Analyse(ref List<Token> tokens)
+        private static void Analyse( List<Token> tokens)
         {
             for (var i = 0; i < tokens.Count; i++)
             {
@@ -34,7 +34,7 @@ namespace NEN
                     case TokenType.Comment:
                         if (tokens[i].Value == "/*")
                         {
-                            Lexer.RemoveComment(ref tokens, i);
+                            Lexer.RemoveComment( tokens, i);
                         }
                         else
                         {
@@ -43,8 +43,8 @@ namespace NEN
                         i--;
                         break;
                     case TokenType.Unknown:
-                        if (AnalyseKeyword(ref tokens.GetReferenceAt(i))) { }
-                        else if (AnalyseLiteral(ref tokens.GetReferenceAt(i))) { }
+                        if (AnalyseKeyword( tokens.GetReferenceAt(i))) { }
+                        else if (AnalyseLiteral( tokens.GetReferenceAt(i))) { }
                         else
                         {
                             tokens.GetReferenceAt(i).Type = TokenType.Identifier;
@@ -53,7 +53,7 @@ namespace NEN
                 }
             }
         }
-        private static bool AnalyseKeyword(ref Token token)
+        private static bool AnalyseKeyword( Token token)
         {
             string[] keywords = [
                 "lớp", "phương_thức", "quay_lại", "trả_về", "kết_thúc", "nhập", "biến", "hằng", "gán", "thuộc"
@@ -65,7 +65,7 @@ namespace NEN
             }
             return false;
         }
-        private static bool AnalyseLiteral(ref Token token)
+        private static bool AnalyseLiteral( Token token)
         {
             // TODO: Add more literal types later
             if (Int32.TryParse(token.Value, out var _))
@@ -75,7 +75,7 @@ namespace NEN
             }
             return false;
         }
-        private static void RemoveComment(ref List<Token> tokens, int index)
+        private static void RemoveComment( List<Token> tokens, int index)
         {
             while (index < tokens.Count && tokens[index].Value != "*/")
             {
@@ -99,15 +99,15 @@ namespace NEN
     // Because List<T> is stupid lol
     public static class ListExtensions
     {
-        // Safe helper to get a ref to a List<T> element
-        public static ref T GetReferenceAt<T>(this List<T> list, int index)
+        // Safe helper to get a  to a List<T> element
+        public static  T GetReferenceAt<T>(this List<T> list, int index)
         {
             ArgumentNullException.ThrowIfNull(list);
             if (index < 0 || index >= list.Count)
                 throw new ArgumentOutOfRangeException(nameof(index));
 
             // Access the public array via CollectionsMarshal
-            return ref System.Runtime.InteropServices.CollectionsMarshal.AsSpan(list)[index];
+            return  System.Runtime.InteropServices.CollectionsMarshal.AsSpan(list)[index];
         }
     }
 }

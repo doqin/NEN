@@ -14,7 +14,9 @@ lớp Chương_Trình
 kết_thúc
 
 lớp Phụ
-    phương_thức Test() -> System.Void
-        biến str thuộc System.String gán "Lmao";
+    phương_thức Test(a thuộc System.String, b thuộc System.Int32) -> System.Void
+        biến str thuộc System.String gán a + "Hello?";
+        biến int32 thuộc System.Int32 gán b + 15;
+        biến str2 thuộc System.String gán str;
     kết_thúc
 kết_thúc

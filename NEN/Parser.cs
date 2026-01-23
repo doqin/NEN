@@ -104,21 +104,29 @@ namespace NEN
         {
             var (line, column) = GetCurrentPosition();
             var methodIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên phương thức");
-            ConsumeOrThrow(TokenType.Punctuator, "(");
+            ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "(");
             // TODO: Parse parameters
             List<VariableNode> parameters = [];
-            ConsumeOrThrow(TokenType.Punctuator, ")");
-            ConsumeOrThrow(TokenType.Operator, "->");
+            while (Current() != null && Current()!.Value != ")")
+            {
+                var parameterIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên tham số");
+                ConsumeOrThrowIfNotEqual(TokenType.Keyword, "thuộc");
+                var type = ParseType();
+                parameters.Add(new VariableNode { Name = parameterIdentifier.Value, Type = type, Line = parameterIdentifier.Line, Column = parameterIdentifier.Column });
+                if (Current() != null && Current()!.Value != ")") ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ",");
+            }
+            ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ")");
+            ConsumeOrThrowIfNotEqual(TokenType.Operator, "->");
             var returnTypeIdentifier = ParseType();
             List<StatementNode> statements = [];
             while (Current() != null && Current()!.Value != "kết_thúc")
             {
                 statements.Add(ParseStatement());
-                ConsumeOrThrow(TokenType.Punctuator, ";");
+                ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ";");
             }
             if (Current() == null) OutOfTokenHelper("kết_thúc");
             Consume();
-            return new MethodNode { IsEntryPoint = isEntryPoint, Attributes = methodAttributes, Name = methodIdentifier.Value, ReturnType = returnTypeIdentifier, Statements = [.. statements], Line = line, Column = column };
+            return new MethodNode { IsEntryPoint = isEntryPoint, Attributes = methodAttributes, Name = methodIdentifier.Value, Parameters = [.. parameters], ReturnType = returnTypeIdentifier, Statements = [.. statements], Line = line, Column = column };
         }
 
         private StatementNode ParseStatement()
@@ -138,12 +146,12 @@ namespace NEN
         private StatementNode ParseVariableDeclarationStatement(int line, int column)
         {
             var variableIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên biến");
-            ConsumeOrThrow(TokenType.Keyword, "thuộc");
+            ConsumeOrThrowIfNotEqual(TokenType.Keyword, "thuộc");
             var typeIdentifier = ParseType();
             ExpressionNode? initialValue = null;
             if (Current()?.Value == "gán")
             {
-                ConsumeOrThrow(TokenType.Keyword, "gán"); // will never happen but ok
+                ConsumeOrThrowIfNotEqual(TokenType.Keyword, "gán"); // will never happen but ok
                 initialValue = ParseExpression(0);
             }
             return new VariableDeclarationStatement
@@ -170,7 +178,7 @@ namespace NEN
                 var token = ConsumeOrThrow(TokenType.Identifier, "kiểu dữ liệu");
                 typeIdentifier += token.Value;
                 if (Current()?.Value != ".") break;
-                ConsumeOrThrow(TokenType.Punctuator, ".");
+                ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ".");
                 typeIdentifier += ".";
             } while (true);
             return new Types.TypeNode { Name = typeIdentifier, Line = line, Column = column };
@@ -206,8 +214,7 @@ namespace NEN
                     if (token.Value == "(")
                     {
                         var expression = ParseExpression(0);
-                        var rparen = ConsumeOrThrow(TokenType.Punctuator, ")");
-                        if (rparen.Value != ")") throw new ExpectedException(content, ")", token.Line, token.Column);
+                        ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ")");
                         return expression;
                     }
                     else
@@ -232,6 +239,13 @@ namespace NEN
             if (token == null) OutOfTokenHelper(expected);
             else if (!expectedTokenTypes.HasFlag(token.Type)) throw new ExpectedException(content, expected, token.Line, token.Column);
             return token!;
+        }
+
+        private Token ConsumeOrThrowIfNotEqual(TokenType expectedTokenTypes, string expected)
+        {
+            var token = ConsumeOrThrow(expectedTokenTypes, expected);
+            if (token.Value != expected) throw new ExpectedException(content, expected, token.Line, token.Column);
+            return token;
         }
 
         private void OutOfTokenHelper(string expected)

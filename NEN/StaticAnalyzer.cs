@@ -3,63 +3,118 @@ using NEN.Types;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace NEN
 {
-    public class StaticAnalyzer(string[] contentLines)
+    public class StaticAnalyzer(string[] contentLines, Types.Module module, string[] assemblyPaths)
     {
         private readonly string[] content = contentLines;
+        private readonly Dictionary<string, Type> typeTable = [];
+        private Types.Module module = module;
 
-        public void Analyze(ref Types.Module module)
+        private void AcquireMetadataAndCoreAssembly()
         {
+            string runtimePath = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
+            PathAssemblyResolver resolver = new([.. Directory.GetFiles(runtimePath, "*.dll"), .. assemblyPaths]);
+            module.MetadataLoadContext = new(resolver);
+            module.CoreAssembly = module.MetadataLoadContext.CoreAssembly!;
+        }
+
+        public void Analyze()
+        {
+            AcquireMetadataAndCoreAssembly();
             for (int i = 0; i < module.Classes.Length; i++)
             {
-                AnalyzeClass(ref module.Classes[i]);
+                AnalyzeClass(module.Classes[i]);
             }
         }
 
-        private void AnalyzeClass(ref Types.ClassNode c)
+        private void AnalyzeClass(Types.ClassNode c)
         {
             for (int i = 0; i < c.Methods.Length; i++)
             {
-                AnalyzeMethod(ref c.Methods[i]);
+                AnalyzeMethod(c.Methods[i]);
             }
         }
 
-        private void AnalyzeMethod(ref Types.MethodNode method)
+        private void AnalyzeMethod(Types.MethodNode method)
         {
             SymbolTable<Types.TypeNode> localSymbolTable = new();
+            try
+            {
+                method.ReturnType.Type = module.CoreAssembly!.GetType(method.ReturnType.Name) ?? throw new();
+            }
+            catch (Exception)
+            {
+                throw new UnresolvedTypeException(content, method.ReturnType.Name, method.ReturnType.Line, method.ReturnType.Column);
+            }
+            foreach (var parameter in method.Parameters)
+            {
+                try
+                {
+                    parameter.Type.Type = module.CoreAssembly!.GetType(parameter.Type.Name) ?? throw new();
+                    if (!localSymbolTable.TryAdd(parameter.Name, parameter.Type))
+                    {
+                        throw new RedefinedException(content, parameter.Name, parameter.Line, parameter.Column);
+                    }
+                }
+                catch (RedefinedException)
+                {
+                    throw;
+                }
+                catch (Exception)
+                {
+                    throw new UnresolvedTypeException(content, parameter.Type.Name, parameter.Type.Line, parameter.Type.Column);
+                }
+            }
             for (int i = 0; i < method.Statements.Length; i++)
             {
-                AnalyzeStatement(ref localSymbolTable, ref method.Statements[i]);
+                AnalyzeStatement(localSymbolTable,  method.Statements[i]);
             }
         }
 
-        private void AnalyzeStatement(ref SymbolTable<Types.TypeNode> localSymbolTable, ref Types.StatementNode statement)
+        private void AnalyzeStatement(SymbolTable<Types.TypeNode> localSymbolTable,  Types.StatementNode statement)
         {
             switch(statement)
             {
-                case VariableDeclarationStatement variableDeclarationStatement: AnalyzeVariableDeclarationStatement(ref localSymbolTable, ref variableDeclarationStatement); break;
+                case VariableDeclarationStatement variableDeclarationStatement: AnalyzeVariableDeclarationStatement(localSymbolTable,  variableDeclarationStatement); break;
                 default: throw new NotImplementedException();
             }
         }
 
-        private void AnalyzeVariableDeclarationStatement(ref SymbolTable<Types.TypeNode> localSymbolTable, ref VariableDeclarationStatement variableDeclarationStatement)
+        private void AnalyzeVariableDeclarationStatement(SymbolTable<Types.TypeNode> localSymbolTable,  VariableDeclarationStatement variableDeclarationStatement)
         {
             if (localSymbolTable.TryGetValue(variableDeclarationStatement.Variable.Name, out _))
             {
                 throw new RedefinedException(content, variableDeclarationStatement.Variable.Name, variableDeclarationStatement.Variable.Line, variableDeclarationStatement.Variable.Column);
             }
+            try
+            {
+                variableDeclarationStatement.Variable.Type.Type = module.CoreAssembly!.GetType(variableDeclarationStatement.Variable.Type.Name) ?? throw new();
+            }
+            catch (Exception)
+            {
+                throw new UnresolvedTypeException(
+                    content, 
+                    variableDeclarationStatement.Variable.Type.Name, 
+                    variableDeclarationStatement.Variable.Type.Line, 
+                    variableDeclarationStatement.Variable.Type.Column
+                );
+            }
             if (variableDeclarationStatement.InitialValue == null) { }
             else
             {
                 var expr = variableDeclarationStatement.InitialValue;
-                AnalyzeExpression(ref localSymbolTable, ref expr);
-                if (expr.Type!.Name != variableDeclarationStatement.Variable.Type.Name)
+                AnalyzeExpression(localSymbolTable,  expr);
+                var sameName = expr.ReturnType!.Type!.FullName == variableDeclarationStatement.Variable.Type!.Type!.FullName;
+                var isSubClass = expr.ReturnType!.Type!.IsSubclassOf(variableDeclarationStatement.Variable.Type!.Type!);
+                var isAssignable = expr.ReturnType!.Type!.IsAssignableTo(variableDeclarationStatement.Variable.Type!.Type!);
+                if (!sameName && !isSubClass && !isAssignable)
                 {
-                    throw new TypeDiscrepancyException(content, variableDeclarationStatement.Variable.Type, expr.Type, variableDeclarationStatement.Line, variableDeclarationStatement.Column);
+                    throw new TypeDiscrepancyException(content, variableDeclarationStatement.Variable.Type, expr.ReturnType, variableDeclarationStatement.Line, variableDeclarationStatement.Column);
                 }
                 variableDeclarationStatement.InitialValue = expr;
             }
@@ -69,45 +124,45 @@ namespace NEN
             }
         }
 
-        private Types.TypeNode AnalyzeExpression(ref SymbolTable<Types.TypeNode> localSymbolTable, ref ExpressionNode expression)
+        private Types.TypeNode AnalyzeExpression(SymbolTable<Types.TypeNode> localSymbolTable,  ExpressionNode expression)
         {
             switch(expression)
             {
-                case LiteralExpression literalExpression: return AnalyzeLiteralExpression(ref literalExpression);
-                case VariableExpression variableExpression: return AnalyzeVariableExpression(ref localSymbolTable, ref variableExpression);
-                case BinaryExpression binaryExpression: return AnalyzeBinaryExpression(ref localSymbolTable, ref binaryExpression);
+                case LiteralExpression literalExpression: return AnalyzeLiteralExpression(literalExpression);
+                case VariableExpression variableExpression: return AnalyzeVariableExpression(localSymbolTable, variableExpression);
+                case BinaryExpression binaryExpression: return AnalyzeBinaryExpression(localSymbolTable,  binaryExpression);
                 default: throw new NotImplementedException();
             }
         }
 
-        private Types.TypeNode AnalyzeLiteralExpression(ref LiteralExpression literalExpression)
+        private Types.TypeNode AnalyzeLiteralExpression(LiteralExpression literalExpression)
         {
             if (literalExpression.Value.StartsWith('"') && literalExpression.Value.EndsWith('"'))
             {
-                literalExpression.Type = new Types.TypeNode { Name = PrimitiveType.String, Line = literalExpression.Line, Column = literalExpression.Column };
+                literalExpression.ReturnType = new Types.TypeNode { Name = PrimitiveType.String, Type = module.CoreAssembly!.GetType(PrimitiveType.String), Line = literalExpression.Line, Column = literalExpression.Column };
                 literalExpression.Value = literalExpression.Value[1..^1];
             }
             else if (literalExpression.Value.EndsWith('L'))
             {
-                literalExpression.Type = new Types.TypeNode { Name = PrimitiveType.Int64, Line = literalExpression.Line, Column = literalExpression.Column };
+                literalExpression.ReturnType = new Types.TypeNode { Name = PrimitiveType.Int64, Type = module.CoreAssembly!.GetType(PrimitiveType.Int64), Line = literalExpression.Line, Column = literalExpression.Column };
                 literalExpression.Value = literalExpression.Value[0..^1];
             }
             else if (Int64.TryParse(literalExpression.Value, out _))
             {
-                literalExpression.Type = new Types.TypeNode { Name = PrimitiveType.Int32, Line = literalExpression.Line, Column = literalExpression.Column };
+                literalExpression.ReturnType = new Types.TypeNode { Name = PrimitiveType.Int32, Type = module.CoreAssembly!.GetType(PrimitiveType.Int32) , Line = literalExpression.Line, Column = literalExpression.Column };
             }
             else
             {
                 throw new NotImplementedException();
             }
-            return literalExpression.Type;
+            return literalExpression.ReturnType;
         }
 
-        private Types.TypeNode AnalyzeVariableExpression(ref SymbolTable<Types.TypeNode> localSymbolTable, ref VariableExpression variableExpression)
+        private Types.TypeNode AnalyzeVariableExpression(SymbolTable<Types.TypeNode> localSymbolTable,  VariableExpression variableExpression)
         {
             if (localSymbolTable.TryGetValue(variableExpression.Name, out var type))
             {
-                variableExpression.Type = type;
+                variableExpression.ReturnType = type;
                 return type!;
             }
             else
@@ -116,19 +171,19 @@ namespace NEN
             }
         }
 
-        private Types.TypeNode AnalyzeBinaryExpression(ref SymbolTable<Types.TypeNode> localSymbolTable, ref BinaryExpression binaryExpression)
+        private Types.TypeNode AnalyzeBinaryExpression(SymbolTable<Types.TypeNode> localSymbolTable,  BinaryExpression binaryExpression)
         {
             var left = binaryExpression.Left;
             var right = binaryExpression.Right;
 
-            var leftType = AnalyzeExpression(ref localSymbolTable, ref left);
-            var rightType = AnalyzeExpression(ref localSymbolTable, ref right);
+            var leftType = AnalyzeExpression(localSymbolTable,  left);
+            var rightType = AnalyzeExpression(localSymbolTable,  right);
 
             binaryExpression.Left = left;
             binaryExpression.Right = right;
 
             if (leftType.Name != rightType.Name) throw new TypeDiscrepancyException(content, leftType, rightType, binaryExpression.Line, binaryExpression.Column);
-            binaryExpression.Type = rightType;
+            binaryExpression.ReturnType = rightType;
             return rightType;
         }
     }

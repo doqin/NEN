@@ -1,5 +1,4 @@
-﻿
-lớp Chương_Trình
+﻿lớp Chương_Trình
     @Chính @Tĩnh
     phương_thức Chính() -> System.Void
         biến str thuộc System.String gán "Xin chào";
@@ -14,6 +13,6 @@ kết_thúc
 
 lớp Phụ
     phương_thức Test(a thuộc System.String, b thuộc System.Int32) -> System.Void
-        biến str thuộc System.String gán a;
+        biến a thuộc System.String gán "Hello";
     kết_thúc
 kết_thúc

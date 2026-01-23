@@ -12,29 +12,21 @@ namespace NEN
 {
     public class Assembler
     {
-
-
-        private readonly MetadataLoadContext metadataLoadContext;
         private readonly PersistedAssemblyBuilder assemblyBuilder;
         private readonly ModuleBuilder moduleBuilder;
-        private readonly Assembly coreAssembly;
         private readonly AssemblyName assemblyName;
-        private readonly NEN.Types.Module module;
-        private readonly Dictionary<string, System.Type> typeTable = [];
+        private readonly Types.Module module;
+        private readonly Dictionary<string, Type> typeTable = [];
         private MethodBuilder? entryPointMethod;
         private readonly string[] content;
         private readonly ISymbolDocumentWriter documentWriter;
 
-        public Assembler(string assemblyName, string[] contentLines, NEN.Types.Module module, string[] assemblyPaths)
+        public Assembler(string assemblyName, string[] contentLines, Types.Module module)
         {
             this.module = module;
             content = contentLines;
-            string runtimePath = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
-            PathAssemblyResolver resolver = new([..Directory.GetFiles(runtimePath, "*.dll"), ..assemblyPaths]);
-            metadataLoadContext = new(resolver);
-            coreAssembly = metadataLoadContext.CoreAssembly!;
-            this.assemblyName = new (assemblyName);
-            assemblyBuilder = new(this.assemblyName!, coreAssembly!);
+            this.assemblyName = new AssemblyName(assemblyName);
+            assemblyBuilder = new(this.assemblyName!, module.CoreAssembly!);
             moduleBuilder = assemblyBuilder.DefineDynamicModule(module.Name);
             documentWriter = moduleBuilder.DefineDocument($"{assemblyName}.nen");
         }
@@ -112,19 +104,23 @@ namespace NEN
             );
             foreach(var method in c.Methods)
             {
-                AssembleMethod(ref typeBuilder, method);
+                AssembleMethod( typeBuilder, method);
             }
             typeBuilder.CreateType();
         }
 
-        private void AssembleMethod(ref TypeBuilder typeBuilder, MethodNode method)
+        private void AssembleMethod( TypeBuilder typeBuilder, MethodNode method)
         {   
             var methodBuilder = typeBuilder.DefineMethod(
                 method.Name, 
                 method.Attributes,
-                GetType(method.ReturnType.Name, method.ReturnType.Line, method.ReturnType.Column),
-                null
+                method.ReturnType.Type!,
+                [.. method.Parameters.Select(param => param.Type.Type!)]
             );
+            for (int i = 0; i < method.Parameters.Length; i++)
+            {
+                ParameterBuilder p = methodBuilder.DefineParameter(i + 1, ParameterAttributes.None, method.Parameters[i].Name);
+            }
             if (method.IsEntryPoint)
             {
                 if (entryPointMethod != null) throw new MultipleEntryPointException(content, method.Line, method.Column);
@@ -134,40 +130,34 @@ namespace NEN
             SymbolTable<LocalBuilder> localSymbolTable = new();
             foreach(var statement in method.Statements)
             {
-                AssembleStatement(ref ilGenerator, ref localSymbolTable, statement);
+                AssembleStatement( ilGenerator, method.Parameters, localSymbolTable, statement);
             }
             ilGenerator.Emit(OpCodes.Ret);
         }
 
-        private void AssembleStatement(ref ILGenerator ilGenerator, ref SymbolTable<LocalBuilder> localSymbolTable, StatementNode statement)
+        private void AssembleStatement( ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, StatementNode statement)
         {
             switch (statement)
             {
                 case VariableDeclarationStatement variableDeclarationStatement:
-                    AssembleVariableDeclarationStatement(ref ilGenerator, ref localSymbolTable, variableDeclarationStatement);
+                    AssembleVariableDeclarationStatement( ilGenerator, parameters, localSymbolTable, variableDeclarationStatement);
                     break;
                 default:
                     throw new NotImplementedException();
             }
         }
 
-        private void AssembleVariableDeclarationStatement(ref ILGenerator ilGenerator, ref SymbolTable<LocalBuilder> localSymbolTable, VariableDeclarationStatement variableDeclarationStatement)
+        private void AssembleVariableDeclarationStatement( ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, VariableDeclarationStatement variableDeclarationStatement)
         {
             var variable = variableDeclarationStatement.Variable;
             var type = variable.Type;
-            var localBuilder = ilGenerator.DeclareLocal(
-                GetType(
-                    type.Name,
-                    type.Line,
-                    type.Column
-                )
-            );
+            var localBuilder = ilGenerator.DeclareLocal(variable.Type.Type!);
             localBuilder.SetLocalSymInfo(variable.Name);
             ilGenerator.MarkSequencePoint(documentWriter, variable.Line, variable.Column, variable.Line, variable.Column + 1);
             localSymbolTable.TryAdd(variable.Name, localBuilder);
             if (variableDeclarationStatement.InitialValue != null)
             {
-                AssembleExpression(ref ilGenerator, ref localSymbolTable, variableDeclarationStatement.InitialValue);
+                AssembleExpression( ilGenerator, parameters, localSymbolTable, variableDeclarationStatement.InitialValue);
                 if (localSymbolTable.TryGetIndex(variable.Name, out var index))
                 {
                     ilGenerator.Emit(OpCodes.Stloc_S, index);
@@ -179,19 +169,27 @@ namespace NEN
             }
         }
 
-        private void AssembleExpression(ref ILGenerator ilGenerator, ref SymbolTable<LocalBuilder> localSymbolTable, ExpressionNode expression)
+        private void AssembleExpression( ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, ExpressionNode expression)
         {
             switch (expression)
             {
-                case LiteralExpression literalExpression: AssembleLiteralExpression(ref ilGenerator, literalExpression); break;
-                case VariableExpression variableExpression: AssembleVariableExpression(ref ilGenerator, ref localSymbolTable, variableExpression); break;
-                case BinaryExpression binaryExpression: AssembleBinaryExpression(ref ilGenerator, ref localSymbolTable, binaryExpression); break;
+                case LiteralExpression literalExpression: AssembleLiteralExpression( ilGenerator, literalExpression); break;
+                case VariableExpression variableExpression: AssembleVariableExpression( ilGenerator, parameters, localSymbolTable, variableExpression); break;
+                case BinaryExpression binaryExpression: AssembleBinaryExpression( ilGenerator, parameters, localSymbolTable, binaryExpression); break;
                 default: throw new NotImplementedException();
             }
         }
 
-        private void AssembleVariableExpression(ref ILGenerator ilGenerator, ref SymbolTable<LocalBuilder> localSymbolTable, VariableExpression variableExpression)
+        private void AssembleVariableExpression( ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, VariableExpression variableExpression)
         {
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                if (parameters[i].Name == variableExpression.Name)
+                {
+                    ilGenerator.Emit(OpCodes.Ldarg_S, i + 1);
+                    return;
+                }
+            }
             if (localSymbolTable.TryGetIndex(variableExpression.Name, out var localVariableIndex))
             {
                 ilGenerator.Emit(OpCodes.Ldloc_S, localVariableIndex);
@@ -203,10 +201,10 @@ namespace NEN
             }
         }
 
-        private void AssembleBinaryExpression(ref ILGenerator ilGenerator, ref SymbolTable<LocalBuilder> localSymbolTable, BinaryExpression binaryExpression)
+        private void AssembleBinaryExpression( ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, BinaryExpression binaryExpression)
         {
-            AssembleExpression(ref ilGenerator, ref localSymbolTable, binaryExpression.Left);
-            AssembleExpression(ref ilGenerator, ref localSymbolTable, binaryExpression.Right);
+            AssembleExpression( ilGenerator, parameters, localSymbolTable, binaryExpression.Left);
+            AssembleExpression( ilGenerator, parameters, localSymbolTable, binaryExpression.Right);
             if (binaryExpression.Operator == Operator.Plus)
             {
                 ilGenerator.Emit(OpCodes.Add);
@@ -229,17 +227,17 @@ namespace NEN
             }
         }
 
-        private void AssembleLiteralExpression(ref ILGenerator ilGenerator, LiteralExpression literalExpression)
+        private void AssembleLiteralExpression( ILGenerator ilGenerator, LiteralExpression literalExpression)
         {
-            if (literalExpression.Type!.Name == PrimitiveType.String)
+            if (literalExpression.ReturnType!.Type!.FullName == PrimitiveType.String)
             {
                 ilGenerator.Emit(OpCodes.Ldstr, literalExpression.Value);
             }
-            else if (literalExpression.Type!.Name == PrimitiveType.Int64)
+            else if (literalExpression.ReturnType!.Type!.FullName == PrimitiveType.Int64)
             {
                 ilGenerator.Emit(OpCodes.Ldc_I8, Int64.Parse(literalExpression.Value));
             }
-            else if (literalExpression.Type!.Name == PrimitiveType.Int32)
+            else if (literalExpression.ReturnType!.Type!.FullName == PrimitiveType.Int32)
             {
                 ilGenerator.Emit(OpCodes.Ldc_I4, Int32.Parse(literalExpression.Value));
             }
@@ -250,27 +248,6 @@ namespace NEN
         }
 
         /* Helpers */
-
-        private System.Type GetType(string typeName, int line, int column)
-        {
-            if (typeTable.TryGetValue(typeName, out var result) == true)
-            {
-                return result;
-            } 
-            else
-            {
-                try
-                {
-                    System.Type type = coreAssembly.GetType(typeName)!;
-                    typeTable.Add(typeName, type);
-                    return type;
-                }
-                catch
-                {
-                    throw new UnresolvedTypeException(content, typeName, line, column);
-                }
-            }
-        }
 
         private void SetupTargetFramework()
         {
