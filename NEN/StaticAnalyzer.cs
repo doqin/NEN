@@ -30,35 +30,52 @@ namespace NEN
 
         private void AnalyzeMethod(ref Types.Method method)
         {
+            SymbolTable<Types.Type> localSymbolTable = new();
             for (int i = 0; i < method.Statements.Length; i++)
             {
-                AnalyzeStatement(ref method.Statements[i]);
+                AnalyzeStatement(ref localSymbolTable, ref method.Statements[i]);
             }
         }
 
-        private void AnalyzeStatement(ref Types.Statement statement)
+        private void AnalyzeStatement(ref SymbolTable<Types.Type> localSymbolTable, ref Types.Statement statement)
         {
             switch(statement)
             {
-                case VariableDeclarationStatement variableDeclarationStatement: AnalyzeVariableDeclarationStatement(ref variableDeclarationStatement); break;
+                case VariableDeclarationStatement variableDeclarationStatement: AnalyzeVariableDeclarationStatement(ref localSymbolTable, ref variableDeclarationStatement); break;
                 default: throw new NotImplementedException();
             }
         }
 
-        private void AnalyzeVariableDeclarationStatement(ref VariableDeclarationStatement variableDeclarationStatement)
+        private void AnalyzeVariableDeclarationStatement(ref SymbolTable<Types.Type> localSymbolTable, ref VariableDeclarationStatement variableDeclarationStatement)
         {
-            if (variableDeclarationStatement.InitialValue == null) return;
-            var expr = variableDeclarationStatement.InitialValue;
-            AnalyzeExpression(ref expr);
-            variableDeclarationStatement.InitialValue = expr;
+            if (localSymbolTable.TryGetValue(variableDeclarationStatement.Variable.Name, out _))
+            {
+                throw new RedefinedException(content, variableDeclarationStatement.Variable.Name, variableDeclarationStatement.Variable.Line, variableDeclarationStatement.Variable.Column);
+            }
+            if (variableDeclarationStatement.InitialValue == null) { }
+            else
+            {
+                var expr = variableDeclarationStatement.InitialValue;
+                AnalyzeExpression(ref localSymbolTable, ref expr);
+                if (expr.Type!.Name != variableDeclarationStatement.Variable.Type.Name)
+                {
+                    throw new TypeDiscrepancyException(content, variableDeclarationStatement.Variable.Type, expr.Type, variableDeclarationStatement.Line, variableDeclarationStatement.Column);
+                }
+                variableDeclarationStatement.InitialValue = expr;
+            }
+            if (!localSymbolTable.TryAdd(variableDeclarationStatement.Variable.Name, variableDeclarationStatement.Variable.Type))
+            {
+                throw new RedefinedException(content, variableDeclarationStatement.Variable.Name, variableDeclarationStatement.Variable.Line, variableDeclarationStatement.Variable.Column);
+            }
         }
 
-        private Types.Type AnalyzeExpression(ref Expression expression)
+        private Types.Type AnalyzeExpression(ref SymbolTable<Types.Type> localSymbolTable, ref Expression expression)
         {
             switch(expression)
             {
                 case LiteralExpression literalExpression: return AnalyzeLiteralExpression(ref literalExpression);
-                case BinaryExpression binaryExpression: return AnalyzeBinaryExpression(ref binaryExpression);
+                case VariableExpression variableExpression: return AnalyzeVariableExpression(ref localSymbolTable, ref variableExpression);
+                case BinaryExpression binaryExpression: return AnalyzeBinaryExpression(ref localSymbolTable, ref binaryExpression);
                 default: throw new NotImplementedException();
             }
         }
@@ -86,10 +103,30 @@ namespace NEN
             return literalExpression.Type;
         }
 
-        private Types.Type AnalyzeBinaryExpression(ref BinaryExpression binaryExpression)
+        private Types.Type AnalyzeVariableExpression(ref SymbolTable<Types.Type> localSymbolTable, ref VariableExpression variableExpression)
         {
-            var leftType = AnalyzeExpression(ref binaryExpression.Left);
-            var rightType = AnalyzeExpression(ref binaryExpression.Right);
+            if (localSymbolTable.TryGetValue(variableExpression.Name, out var type))
+            {
+                variableExpression.Type = type;
+                return type!;
+            }
+            else
+            {
+                throw new UnresolvedIdentifierException(content, variableExpression.Name, variableExpression.Line, variableExpression.Column);
+            }
+        }
+
+        private Types.Type AnalyzeBinaryExpression(ref SymbolTable<Types.Type> localSymbolTable, ref BinaryExpression binaryExpression)
+        {
+            var left = binaryExpression.Left;
+            var right = binaryExpression.Right;
+
+            var leftType = AnalyzeExpression(ref localSymbolTable, ref left);
+            var rightType = AnalyzeExpression(ref localSymbolTable, ref right);
+
+            binaryExpression.Left = left;
+            binaryExpression.Right = right;
+
             if (leftType.Name != rightType.Name) throw new TypeDiscrepancyException(content, leftType, rightType, binaryExpression.Line, binaryExpression.Column);
             binaryExpression.Type = rightType;
             return rightType;

@@ -197,14 +197,26 @@ namespace NEN
         private Expression ParsePrimary()
         {
             var (line, column) = GetCurrentPosition();
-            var token = ConsumeOrThrow(TokenType.Literal | TokenType.Identifier, "biểu thức");
-            return token.Type switch
+            var token = ConsumeOrThrow(TokenType.Literal | TokenType.Identifier | TokenType.Punctuator, "biểu thức");
+            switch(token.Type)
             {
-                TokenType.Literal => new LiteralExpression { Value = token.Value, Line = token.Line, Column = token.Column },
-                // TODO: Handle variables and function call expressions
-                TokenType.Identifier => throw new NotImplementedException(),
-                _ => throw new(),// Should never happen
-            };
+                case TokenType.Literal: return new LiteralExpression { Value = token.Value, Line = token.Line, Column = token.Column };
+                case TokenType.Identifier: return new VariableExpression { Name = token.Value, Line = token.Line, Column = token.Column };
+                case TokenType.Punctuator:
+                    if (token.Value == "(")
+                    {
+                        var expression = ParseExpression(0);
+                        var rparen = ConsumeOrThrow(TokenType.Punctuator, ")");
+                        if (rparen.Value != ")") throw new ExpectedException(content, ")", token.Line, token.Column);
+                        return expression;
+                    }
+                    else
+                    {
+                        UnexpectedHelper(token);
+                        throw new(); // never happens
+                    }
+                default: throw new NotImplementedException();
+            }
         }
 
         /* Helpers */

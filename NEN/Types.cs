@@ -38,6 +38,44 @@ namespace NEN
             public required int Column { get; set; }
         }
 
+        internal class SymbolTable<V>
+        {
+            private readonly Dictionary<string, (V builder, int index)> _dict = [];
+            private int _nextIndex = 0;
+
+            public bool TryAdd(string key, V value)
+            {
+                if (_dict.TryAdd(key, (value, _nextIndex)))
+                {
+                    _nextIndex++;
+                    return true;
+                }
+                return false;
+            }
+
+            public bool TryGetValue(string key, out V? value)
+            {
+                if (_dict.TryGetValue(key, out var entry))
+                {
+                    value = entry.builder;
+                    return true;
+                }
+                value = default;
+                return false;
+            }
+
+            public bool TryGetIndex(string key, out int index)
+            {
+                if (_dict.TryGetValue(key, out var entry))
+                {
+                    index = entry.index;
+                    return true;
+                }
+                index = -1;
+                return false;
+            }
+        }
+
         public class Module
         {
             public required string Name { get; set; }
@@ -96,7 +134,7 @@ namespace NEN
         {
             public static readonly string Int32 = "System.Int32";
             public static readonly string Int64 = "System.Int64";
-            public static readonly string String = "String";
+            public static readonly string String = "System.String";
         }
 
         public class Type : AST
@@ -130,9 +168,9 @@ namespace NEN
 
         public class BinaryExpression : Expression
         {
-            public required Expression Left;
-            public required string Operator;
-            public required Expression Right;
+            public required Expression Left { get; set; }
+            public required string Operator { get; set; }
+            public required Expression Right { get; set; }
             public override string ToString()
             {
                 if (Type != null)
@@ -156,6 +194,19 @@ namespace NEN
                     return $"{Value} ({Type})";
                 }
                 return Value;
+            }
+        }
+
+        public class VariableExpression : Expression
+        {
+            public required string Name { get; set; }
+            public override string ToString()
+            {
+                if (Type != null)
+                {
+                    return $"{Name} ({Type})";
+                }
+                return Name;
             }
         }
     }

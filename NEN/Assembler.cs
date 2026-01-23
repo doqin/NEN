@@ -12,40 +12,7 @@ namespace NEN
 {
     public class Assembler
     {
-        private class SymbolTable
-        {
-            private readonly Dictionary<string, (LocalBuilder builder, int index)> _dict = [];
-            private int _nextIndex = 0;
 
-            public bool TryAdd(string key, LocalBuilder value)
-            {
-                if (_dict.TryAdd(key, (value, _nextIndex))) {
-                    _nextIndex++;
-                    return true;
-                }
-                return false;
-            }
-
-            public bool TryGetValue(string key, out LocalBuilder? value)
-            {
-                if (_dict.TryGetValue(key, out var entry)) {
-                    value = entry.builder;
-                    return true;
-                }
-                value = null;
-                return false;
-            }
-
-            public bool TryGetIndex(string key, out int index)
-            {
-                if (_dict.TryGetValue(key, out var entry)) {
-                    index = entry.index;
-                    return true;
-                }
-                index = -1;
-                return false;
-            }
-        }
 
         private readonly MetadataLoadContext metadataLoadContext;
         private readonly PersistedAssemblyBuilder assemblyBuilder;
@@ -164,7 +131,7 @@ namespace NEN
                 entryPointMethod = methodBuilder;
             }
             var ilGenerator = methodBuilder.GetILGenerator();
-            SymbolTable localSymbolTable = new();
+            SymbolTable<LocalBuilder> localSymbolTable = new();
             foreach(var statement in method.Statements)
             {
                 AssembleStatement(ref ilGenerator, ref localSymbolTable, statement);
@@ -172,7 +139,7 @@ namespace NEN
             ilGenerator.Emit(OpCodes.Ret);
         }
 
-        private void AssembleStatement(ref ILGenerator ilGenerator, ref SymbolTable localSymbolTable, Statement statement)
+        private void AssembleStatement(ref ILGenerator ilGenerator, ref SymbolTable<LocalBuilder> localSymbolTable, Statement statement)
         {
             switch (statement)
             {
@@ -184,7 +151,7 @@ namespace NEN
             }
         }
 
-        private void AssembleVariableDeclarationStatement(ref ILGenerator ilGenerator, ref SymbolTable localSymbolTable, VariableDeclarationStatement variableDeclarationStatement)
+        private void AssembleVariableDeclarationStatement(ref ILGenerator ilGenerator, ref SymbolTable<LocalBuilder> localSymbolTable, VariableDeclarationStatement variableDeclarationStatement)
         {
             var variable = variableDeclarationStatement.Variable;
             var type = variable.Type;
@@ -212,22 +179,31 @@ namespace NEN
             }
         }
 
-        private void AssembleExpression(ref ILGenerator ilGenerator, ref SymbolTable localSymbolTable, Expression expression)
+        private void AssembleExpression(ref ILGenerator ilGenerator, ref SymbolTable<LocalBuilder> localSymbolTable, Expression expression)
         {
             switch (expression)
             {
-                case LiteralExpression literalExpression:
-                    AssembleLiteralExpression(ref ilGenerator, literalExpression);
-                    break;
-                case BinaryExpression binaryExpression:
-                    AssembleBinaryExpression(ref ilGenerator, ref localSymbolTable, binaryExpression);
-                    break;
-                default:
-                    throw new NotImplementedException();
+                case LiteralExpression literalExpression: AssembleLiteralExpression(ref ilGenerator, literalExpression); break;
+                case VariableExpression variableExpression: AssembleVariableExpression(ref ilGenerator, ref localSymbolTable, variableExpression); break;
+                case BinaryExpression binaryExpression: AssembleBinaryExpression(ref ilGenerator, ref localSymbolTable, binaryExpression); break;
+                default: throw new NotImplementedException();
             }
         }
 
-        private void AssembleBinaryExpression(ref ILGenerator ilGenerator, ref SymbolTable localSymbolTable, BinaryExpression binaryExpression)
+        private void AssembleVariableExpression(ref ILGenerator ilGenerator, ref SymbolTable<LocalBuilder> localSymbolTable, VariableExpression variableExpression)
+        {
+            if (localSymbolTable.TryGetIndex(variableExpression.Name, out var localVariableIndex))
+            {
+                ilGenerator.Emit(OpCodes.Ldloc_S, localVariableIndex);
+            }
+            else
+            {
+                // Usually should not happen as StaticAnalyzer already handles it
+                throw new UnresolvedIdentifierException(content, variableExpression.Name, variableExpression.Line, variableExpression.Column);
+            }
+        }
+
+        private void AssembleBinaryExpression(ref ILGenerator ilGenerator, ref SymbolTable<LocalBuilder> localSymbolTable, BinaryExpression binaryExpression)
         {
             AssembleExpression(ref ilGenerator, ref localSymbolTable, binaryExpression.Left);
             AssembleExpression(ref ilGenerator, ref localSymbolTable, binaryExpression.Right);

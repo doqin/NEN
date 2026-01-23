@@ -6,8 +6,9 @@ lớp Chương_Trình
         biến str2 thuộc System.String gán "OK";
         biến b thuộc System.Int32;
         biến c thuộc System.Int32 gán 1 + 2 + 3;
-        biến d thuộc System.Int32 gán 1 * 3 * 10 + 3 * 4;
+        biến d thuộc System.Int32 gán 1 * 3 * (10 + 3) * 4;
         biến e thuộc System.Int64 gán 2L *32L / 4L;
+        biến f thuộc System.Int32 gán 25 + b;
     kết_thúc
 kết_thúc
 
