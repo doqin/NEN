@@ -104,7 +104,7 @@ namespace NEN
             File.WriteAllText(configName, jsonContent);
         }
 
-        private void AssembleType(Class c)
+        private void AssembleType(ClassNode c)
         {
             var typeBuilder = moduleBuilder.DefineType(
                 c.Name,
@@ -117,7 +117,7 @@ namespace NEN
             typeBuilder.CreateType();
         }
 
-        private void AssembleMethod(ref TypeBuilder typeBuilder, Method method)
+        private void AssembleMethod(ref TypeBuilder typeBuilder, MethodNode method)
         {   
             var methodBuilder = typeBuilder.DefineMethod(
                 method.Name, 
@@ -139,7 +139,7 @@ namespace NEN
             ilGenerator.Emit(OpCodes.Ret);
         }
 
-        private void AssembleStatement(ref ILGenerator ilGenerator, ref SymbolTable<LocalBuilder> localSymbolTable, Statement statement)
+        private void AssembleStatement(ref ILGenerator ilGenerator, ref SymbolTable<LocalBuilder> localSymbolTable, StatementNode statement)
         {
             switch (statement)
             {
@@ -179,7 +179,7 @@ namespace NEN
             }
         }
 
-        private void AssembleExpression(ref ILGenerator ilGenerator, ref SymbolTable<LocalBuilder> localSymbolTable, Expression expression)
+        private void AssembleExpression(ref ILGenerator ilGenerator, ref SymbolTable<LocalBuilder> localSymbolTable, ExpressionNode expression)
         {
             switch (expression)
             {

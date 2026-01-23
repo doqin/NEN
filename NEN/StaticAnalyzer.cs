@@ -20,7 +20,7 @@ namespace NEN
             }
         }
 
-        private void AnalyzeClass(ref Types.Class c)
+        private void AnalyzeClass(ref Types.ClassNode c)
         {
             for (int i = 0; i < c.Methods.Length; i++)
             {
@@ -28,16 +28,16 @@ namespace NEN
             }
         }
 
-        private void AnalyzeMethod(ref Types.Method method)
+        private void AnalyzeMethod(ref Types.MethodNode method)
         {
-            SymbolTable<Types.Type> localSymbolTable = new();
+            SymbolTable<Types.TypeNode> localSymbolTable = new();
             for (int i = 0; i < method.Statements.Length; i++)
             {
                 AnalyzeStatement(ref localSymbolTable, ref method.Statements[i]);
             }
         }
 
-        private void AnalyzeStatement(ref SymbolTable<Types.Type> localSymbolTable, ref Types.Statement statement)
+        private void AnalyzeStatement(ref SymbolTable<Types.TypeNode> localSymbolTable, ref Types.StatementNode statement)
         {
             switch(statement)
             {
@@ -46,7 +46,7 @@ namespace NEN
             }
         }
 
-        private void AnalyzeVariableDeclarationStatement(ref SymbolTable<Types.Type> localSymbolTable, ref VariableDeclarationStatement variableDeclarationStatement)
+        private void AnalyzeVariableDeclarationStatement(ref SymbolTable<Types.TypeNode> localSymbolTable, ref VariableDeclarationStatement variableDeclarationStatement)
         {
             if (localSymbolTable.TryGetValue(variableDeclarationStatement.Variable.Name, out _))
             {
@@ -69,7 +69,7 @@ namespace NEN
             }
         }
 
-        private Types.Type AnalyzeExpression(ref SymbolTable<Types.Type> localSymbolTable, ref Expression expression)
+        private Types.TypeNode AnalyzeExpression(ref SymbolTable<Types.TypeNode> localSymbolTable, ref ExpressionNode expression)
         {
             switch(expression)
             {
@@ -80,21 +80,21 @@ namespace NEN
             }
         }
 
-        private Types.Type AnalyzeLiteralExpression(ref LiteralExpression literalExpression)
+        private Types.TypeNode AnalyzeLiteralExpression(ref LiteralExpression literalExpression)
         {
             if (literalExpression.Value.StartsWith('"') && literalExpression.Value.EndsWith('"'))
             {
-                literalExpression.Type = new Types.Type { Name = PrimitiveType.String, Line = literalExpression.Line, Column = literalExpression.Column };
+                literalExpression.Type = new Types.TypeNode { Name = PrimitiveType.String, Line = literalExpression.Line, Column = literalExpression.Column };
                 literalExpression.Value = literalExpression.Value[1..^1];
             }
             else if (literalExpression.Value.EndsWith('L'))
             {
-                literalExpression.Type = new Types.Type { Name = PrimitiveType.Int64, Line = literalExpression.Line, Column = literalExpression.Column };
+                literalExpression.Type = new Types.TypeNode { Name = PrimitiveType.Int64, Line = literalExpression.Line, Column = literalExpression.Column };
                 literalExpression.Value = literalExpression.Value[0..^1];
             }
             else if (Int64.TryParse(literalExpression.Value, out _))
             {
-                literalExpression.Type = new Types.Type { Name = PrimitiveType.Int32, Line = literalExpression.Line, Column = literalExpression.Column };
+                literalExpression.Type = new Types.TypeNode { Name = PrimitiveType.Int32, Line = literalExpression.Line, Column = literalExpression.Column };
             }
             else
             {
@@ -103,7 +103,7 @@ namespace NEN
             return literalExpression.Type;
         }
 
-        private Types.Type AnalyzeVariableExpression(ref SymbolTable<Types.Type> localSymbolTable, ref VariableExpression variableExpression)
+        private Types.TypeNode AnalyzeVariableExpression(ref SymbolTable<Types.TypeNode> localSymbolTable, ref VariableExpression variableExpression)
         {
             if (localSymbolTable.TryGetValue(variableExpression.Name, out var type))
             {
@@ -116,7 +116,7 @@ namespace NEN
             }
         }
 
-        private Types.Type AnalyzeBinaryExpression(ref SymbolTable<Types.Type> localSymbolTable, ref BinaryExpression binaryExpression)
+        private Types.TypeNode AnalyzeBinaryExpression(ref SymbolTable<Types.TypeNode> localSymbolTable, ref BinaryExpression binaryExpression)
         {
             var left = binaryExpression.Left;
             var right = binaryExpression.Right;

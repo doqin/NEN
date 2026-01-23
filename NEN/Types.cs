@@ -79,7 +79,7 @@ namespace NEN
         public class Module
         {
             public required string Name { get; set; }
-            public Class[] Classes { get; set; } = [];
+            public ClassNode[] Classes { get; set; } = [];
 
             public override string ToString()
             {
@@ -87,16 +87,16 @@ namespace NEN
             }
         }
 
-        public abstract class AST
+        public abstract class ASTNode
         {
             public required int Line {  set; get; }
             public required int Column { set; get; }
         }
 
-        public class Class : AST
+        public class ClassNode : ASTNode
         {
             public required string Name { get; set; }
-            public Method[] Methods { get; set; } = [];
+            public MethodNode[] Methods { get; set; } = [];
 
             public override string ToString()
             {
@@ -104,26 +104,26 @@ namespace NEN
             }
         }
 
-        public class Method : AST
+        public class MethodNode : ASTNode
         {
             public bool IsEntryPoint { get; set; } = false;
             public MethodAttributes Attributes { get; set; } = MethodAttributes.Public;
             public required string Name { get; set; }
-            public Variable[] Parameters { get; set; } = [];
-            public Statement[] Statements { get; set; } = [];
-            public required Type ReturnType { get; set; }
+            public VariableNode[] Parameters { get; set; } = [];
+            public StatementNode[] Statements { get; set; } = [];
+            public required TypeNode ReturnType { get; set; }
 
             public override string ToString()
             {
                 string isEntryPoint = IsEntryPoint ? "(Hàm chính) " : "";
-                return Helper.GetTreeString<AST>($"Phương thức: {isEntryPoint}({Attributes.ToString()}) {Name} -> {ReturnType}", [.. Parameters, .. Statements]);
+                return Helper.GetTreeString<ASTNode>($"Phương thức: {isEntryPoint}({Attributes.ToString()}) {Name} -> {ReturnType}", [.. Parameters, .. Statements]);
             }
         }
 
-        public class Variable : AST // Used for both attributes and parameters
+        public class VariableNode : ASTNode // Used for both attributes and parameters
         {
             public required string Name { get; set; }
-            public required Type Type { get; set; }
+            public required TypeNode Type { get; set; }
             public override string ToString()
             {
                 return $"{Name} ({Type})";
@@ -137,7 +137,7 @@ namespace NEN
             public static readonly string String = "System.String";
         }
 
-        public class Type : AST
+        public class TypeNode : ASTNode
         {
             public required string Name { get; set; }
             public override string ToString()
@@ -146,12 +146,12 @@ namespace NEN
             }
         }
 
-        public abstract class Statement : AST { }
+        public abstract class StatementNode : ASTNode { }
 
-        public class VariableDeclarationStatement : Statement
+        public class VariableDeclarationStatement : StatementNode
         {
-            public required Variable Variable { set; get; }
-            public Expression? InitialValue { set; get; }
+            public required VariableNode Variable { set; get; }
+            public ExpressionNode? InitialValue { set; get; }
             public override string ToString()
             {
                 if (InitialValue != null)
@@ -162,15 +162,15 @@ namespace NEN
             }
         }
 
-        public abstract class Expression : AST { 
-            public Type? Type { get; set; }
+        public abstract class ExpressionNode : ASTNode { 
+            public TypeNode? Type { get; set; }
         }
 
-        public class BinaryExpression : Expression
+        public class BinaryExpression : ExpressionNode
         {
-            public required Expression Left { get; set; }
+            public required ExpressionNode Left { get; set; }
             public required string Operator { get; set; }
-            public required Expression Right { get; set; }
+            public required ExpressionNode Right { get; set; }
             public override string ToString()
             {
                 if (Type != null)
@@ -184,7 +184,7 @@ namespace NEN
             }
         }
 
-        public class LiteralExpression : Expression
+        public class LiteralExpression : ExpressionNode
         {
             public required string Value { get; set; }
             public override string ToString()
@@ -197,7 +197,7 @@ namespace NEN
             }
         }
 
-        public class VariableExpression : Expression
+        public class VariableExpression : ExpressionNode
         {
             public required string Name { get; set; }
             public override string ToString()

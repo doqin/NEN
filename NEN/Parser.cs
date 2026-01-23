@@ -17,7 +17,7 @@ namespace NEN
         private readonly string[] content = contentLines;
         public Types.Module Parse()
         {
-            List<Class> classes = [];
+            List<ClassNode> classes = [];
             while (index < tokens.Length)
             {
                 var token = Consume();
@@ -40,11 +40,11 @@ namespace NEN
             return new Types.Module { Name = moduleName, Classes = [.. classes] };
         }
 
-        private Class ParseClass()
+        private ClassNode ParseClass()
         {
             var (line, column) = GetCurrentPosition();
             var classIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên lớp");
-            List<Method> methods = [];
+            List<MethodNode> methods = [];
             while (Current() != null && Current()!.Value != "kết_thúc")
             {
                 var token = Consume();
@@ -63,14 +63,14 @@ namespace NEN
             }
             if (Current() == null) OutOfTokenHelper("kết_thúc");
             Consume();
-            return new Class { Name = classIdentifier!.Value, Methods = [.. methods], Line = line, Column = column };
+            return new ClassNode { Name = classIdentifier!.Value, Methods = [.. methods], Line = line, Column = column };
         }
 
         private static string[] markers = [
             "Chính", "Tĩnh"    
         ];
 
-        private Method ParseMarker(MethodAttributes methodAttributes = MethodAttributes.Public, bool isEntryPoint = false)
+        private MethodNode ParseMarker(MethodAttributes methodAttributes = MethodAttributes.Public, bool isEntryPoint = false)
         {
             var (line, column) = GetCurrentPosition();
             var annotationIdentifier = ConsumeOrThrow(TokenType.Identifier, "thuộc tính phương thức");
@@ -100,17 +100,17 @@ namespace NEN
             }
         }
 
-        private Method ParseMethod(MethodAttributes methodAttributes = MethodAttributes.Public, bool isEntryPoint = false)
+        private MethodNode ParseMethod(MethodAttributes methodAttributes = MethodAttributes.Public, bool isEntryPoint = false)
         {
             var (line, column) = GetCurrentPosition();
             var methodIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên phương thức");
             ConsumeOrThrow(TokenType.Punctuator, "(");
             // TODO: Parse parameters
-            List<Variable> parameters = [];
+            List<VariableNode> parameters = [];
             ConsumeOrThrow(TokenType.Punctuator, ")");
             ConsumeOrThrow(TokenType.Operator, "->");
             var returnTypeIdentifier = ParseType();
-            List<Statement> statements = [];
+            List<StatementNode> statements = [];
             while (Current() != null && Current()!.Value != "kết_thúc")
             {
                 statements.Add(ParseStatement());
@@ -118,10 +118,10 @@ namespace NEN
             }
             if (Current() == null) OutOfTokenHelper("kết_thúc");
             Consume();
-            return new Method { IsEntryPoint = isEntryPoint, Attributes = methodAttributes, Name = methodIdentifier.Value, ReturnType = returnTypeIdentifier, Statements = [.. statements], Line = line, Column = column };
+            return new MethodNode { IsEntryPoint = isEntryPoint, Attributes = methodAttributes, Name = methodIdentifier.Value, ReturnType = returnTypeIdentifier, Statements = [.. statements], Line = line, Column = column };
         }
 
-        private Statement ParseStatement()
+        private StatementNode ParseStatement()
         {
             var (line, column) = GetCurrentPosition();
             var token = Consume(); // this token is guaranteed not null from ParseMethod()
@@ -135,12 +135,12 @@ namespace NEN
             }
         }
 
-        private Statement ParseVariableDeclarationStatement(int line, int column)
+        private StatementNode ParseVariableDeclarationStatement(int line, int column)
         {
             var variableIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên biến");
             ConsumeOrThrow(TokenType.Keyword, "thuộc");
             var typeIdentifier = ParseType();
-            Expression? initialValue = null;
+            ExpressionNode? initialValue = null;
             if (Current()?.Value == "gán")
             {
                 ConsumeOrThrow(TokenType.Keyword, "gán"); // will never happen but ok
@@ -148,7 +148,7 @@ namespace NEN
             }
             return new VariableDeclarationStatement
             {
-                Variable = new Variable
+                Variable = new VariableNode
                 {
                     Name = variableIdentifier.Value,
                     Type = typeIdentifier,
@@ -161,7 +161,7 @@ namespace NEN
             };
         }
 
-        private Types.Type ParseType()
+        private Types.TypeNode ParseType()
         {
             var (line, column) = GetCurrentPosition();
             string typeIdentifier = "";
@@ -173,13 +173,13 @@ namespace NEN
                 ConsumeOrThrow(TokenType.Punctuator, ".");
                 typeIdentifier += ".";
             } while (true);
-            return new Types.Type { Name = typeIdentifier, Line = line, Column = column };
+            return new Types.TypeNode { Name = typeIdentifier, Line = line, Column = column };
         }
 
-        private Expression ParseExpression(int minPrecedence)
+        private ExpressionNode ParseExpression(int minPrecedence)
         {
             var (line, column) = GetCurrentPosition();
-            Expression left = ParsePrimary();
+            ExpressionNode left = ParsePrimary();
             while(true)
             {
                 var precedence = CurrentPrecedence();
@@ -194,7 +194,7 @@ namespace NEN
             return left;
         }
 
-        private Expression ParsePrimary()
+        private ExpressionNode ParsePrimary()
         {
             var (line, column) = GetCurrentPosition();
             var token = ConsumeOrThrow(TokenType.Literal | TokenType.Identifier | TokenType.Punctuator, "biểu thức");
