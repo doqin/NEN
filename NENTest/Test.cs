@@ -86,14 +86,13 @@ namespace NENTest
         public void GeneralTest()
         {
             {
-                AssemblyName aName = new("Common");
-                PersistedAssemblyBuilder ab = new(aName, typeof(object).Assembly);
-                ModuleBuilder mb = ab.DefineDynamicModule(aName.Name ?? "Common");
+                var (ab, context, coreAssembly) = CreateAssembly("Common", []);
+                ModuleBuilder mb = ab.DefineDynamicModule("Common");
                 TypeBuilder tb = mb.DefineType(
                     "Common",
                     TypeAttributes.Public | TypeAttributes.Class
                 );
-                Type intType = typeof(object).Assembly!.GetType("System.Int32")!;
+                Type intType = coreAssembly!.GetType("System.Int32")!;
                 MethodBuilder sumMethod = tb.DefineMethod(
                     "Sum",
                     MethodAttributes.Public | MethodAttributes.Static,
@@ -107,31 +106,13 @@ namespace NENTest
                 il.Emit(OpCodes.Add);
                 il.Emit(OpCodes.Ret);
                 tb.CreateType();
-                ab.Save("Common.dll");
+                SaveAssembly(ab, "Common");
             }
 
 
             {
-                AssemblyName aName = new("Test");
-                string runtimePath = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
-                PathAssemblyResolver resolver = new(Directory.GetFiles(runtimePath, "*.dll").Append("Common.dll"));
-                using MetadataLoadContext context = new(resolver);
-                Assembly? coreAssembly = context.CoreAssembly;
-                PersistedAssemblyBuilder ab = new(aName, coreAssembly ?? typeof(object).Assembly);
-
-                // Set target framework attribute using runtime types for CustomAttributeBuilder
-                ConstructorInfo targetFrameworkConstructor = typeof(System.Runtime.Versioning.TargetFrameworkAttribute).GetConstructor([typeof(string)])!;
-                PropertyInfo frameworkDisplayNameProperty = typeof(System.Runtime.Versioning.TargetFrameworkAttribute).GetProperty("FrameworkDisplayName")!;
-
-                CustomAttributeBuilder targetFrameworkAttribute = new(
-                    targetFrameworkConstructor,
-                    [".NETCoreApp,Version=v9.0"],
-                    [frameworkDisplayNameProperty],
-                    [".NET 9.0"]
-                );
-                ab.SetCustomAttribute(targetFrameworkAttribute);
-
-                ModuleBuilder mb = ab.DefineDynamicModule(aName.Name ?? "Test");
+                var (ab, context, coreAssembly) = CreateAssembly("Test", ["Common.dll"]);
+                ModuleBuilder mb = ab.DefineDynamicModule("Test");
 
                 // Get types from MetadataLoadContext for IL generation
                 Type consoleType = context.LoadFromAssemblyName("System.Console").GetType("System.Console")!;
@@ -156,6 +137,7 @@ namespace NENTest
                 ISymbolDocumentWriter srcDoc = mb.DefineDocument("Test.nen");
 
                 ILGenerator il = mainMethod.GetILGenerator();
+
                 MethodInfo writeLineString = consoleType.GetMethod("WriteLine", [stringType])!;
                 MethodInfo writeLineVariadic = consoleType.GetMethod("WriteLine", [stringType, variadicType])!;
                 MethodInfo sum = commonType.GetMethod("Sum", [intType, intType])!;
@@ -195,45 +177,86 @@ namespace NENTest
                 il.Emit(OpCodes.Stloc_S, 1);
                 il.Emit(OpCodes.Ret);
                 tb.CreateType();
+                
+                SaveAssemblyWithEntrypoint(ab, mainMethod, "Test");
 
-                MetadataBuilder metadataBuilder = ab.GenerateMetadata(out BlobBuilder ilStream, out BlobBuilder fieldData, out MetadataBuilder pdbBuilder);
-                PEHeaderBuilder peHeader = new(imageCharacteristics: Characteristics.ExecutableImage | Characteristics.Dll);
+                Console.WriteLine("Compilation Complete. Saved Test.dll");
+                Console.WriteLine("Run with: dotnet Test.dll");
+            }
+        }
 
-                // Build the PDB
-                BlobBuilder portablePdbBlob = new();
-                PortablePdbBuilder portablePdbBuilder = new(
-                    pdbBuilder,
-                    metadataBuilder.GetRowCounts(),
-                    MetadataTokens.MethodDefinitionHandle(mainMethod.MetadataToken)
-                );
-                BlobContentId pdbContentId = portablePdbBuilder.Serialize(portablePdbBlob);
+        [TestMethod]
+        public void MethodCallTest()
+        {
+            var (ab, context, coreAssembly) = CreateAssembly("MethodCallTest", []);
+            ModuleBuilder mb = ab.DefineDynamicModule("MethodCallTest");
+            TypeBuilder tb = mb.DefineType("MethodCallTest", TypeAttributes.Public | TypeAttributes.Class);
+            Type voidType = coreAssembly!.GetType("System.Void")!;
+            Type consoleType = coreAssembly!.GetType("System.Console")!;
+            Type stringType = coreAssembly!.GetType("System.String")!;
+            MethodBuilder mainMethod = tb.DefineMethod(
+                "Main", 
+                MethodAttributes.Public | MethodAttributes.Static,
+                voidType,
+                null
+            );
 
-                // Save standalone PDB file
-                using FileStream pdbStream = new("Test.pdb", FileMode.Create, FileAccess.Write);
-                portablePdbBlob.WriteContentTo(pdbStream);
+            MethodBuilder fooMethod = tb.DefineMethod(
+                "Foo", 
+                MethodAttributes.Public | MethodAttributes.Static,
+                voidType,
+                null
+            );
+            ILGenerator fooGen = fooMethod.GetILGenerator();
+            MethodInfo writeLineMethod = consoleType.GetMethod("WriteLine", [stringType])!;
+            fooGen.Emit(OpCodes.Ldstr, "Foo bar!");
+            fooGen.Emit(OpCodes.Call, writeLineMethod);
+            fooGen.Emit(OpCodes.Ret);
+            ILGenerator mainGen = mainMethod.GetILGenerator();
+            MethodInfo fooInfo = fooMethod;
+            mainGen.Emit(OpCodes.Call, fooInfo);
+            mainGen.Emit(OpCodes.Ret);
+            tb.CreateType();
+            SaveAssemblyWithEntrypoint(ab, mainMethod, "MethodCallTest");
+        }
 
-                // Add debug directory with embedded PDB
-                DebugDirectoryBuilder debugDirectoryBuilder = new();
-                debugDirectoryBuilder.AddCodeViewEntry("Test.pdb", pdbContentId, portablePdbBuilder.FormatVersion);
-                //debugDirectoryBuilder.AddEmbeddedPortablePdbEntry(portablePdbBlob, portablePdbBuilder.FormatVersion);
+        private static void SaveAssemblyWithEntrypoint(PersistedAssemblyBuilder ab, MethodBuilder mainMethod, string assemblyName)
+        {
+            MetadataBuilder metadataBuilder = ab.GenerateMetadata(out BlobBuilder ilStream, out BlobBuilder fieldData, out MetadataBuilder pdbBuilder);
+            PEHeaderBuilder peHeader = new(imageCharacteristics: Characteristics.ExecutableImage | Characteristics.Dll);
 
-                ManagedPEBuilder peBuilder = new(
-                    header: peHeader,
-                    metadataRootBuilder: new MetadataRootBuilder(metadataBuilder),
-                    ilStream: ilStream,
-                    mappedFieldData: fieldData,
-                    debugDirectoryBuilder: debugDirectoryBuilder,
-                    entryPoint: MetadataTokens.MethodDefinitionHandle(mainMethod.MetadataToken)
-                );
+            // Build the PDB
+            BlobBuilder portablePdbBlob = new();
+            PortablePdbBuilder portablePdbBuilder = new(
+                pdbBuilder,
+                metadataBuilder.GetRowCounts(),
+                MetadataTokens.MethodDefinitionHandle(mainMethod.MetadataToken)
+            );
+            BlobContentId pdbContentId = portablePdbBuilder.Serialize(portablePdbBlob);
+            using FileStream pdbStream = new($"{assemblyName}.pdb", FileMode.Create, FileAccess.Write);
+            portablePdbBlob.WriteContentTo(pdbStream);
 
-                BlobBuilder peBlob = new();
-                peBuilder.Serialize(peBlob);
+            // Add debug directory with embedded PDB
+            DebugDirectoryBuilder debugDirectoryBuilder = new();
+            debugDirectoryBuilder.AddCodeViewEntry($"{assemblyName}.pdb", pdbContentId, portablePdbBuilder.FormatVersion);
+            //debugDirectoryBuilder.AddEmbeddedPortablePdbEntry(portablePdbBlob, portablePdbBuilder.FormatVersion);
 
-                using FileStream fileStream = new("Test.dll", FileMode.Create, FileAccess.Write);
-                peBlob.WriteContentTo(fileStream);
+            ManagedPEBuilder peBuilder = new(
+                header: peHeader,
+                metadataRootBuilder: new MetadataRootBuilder(metadataBuilder),
+                ilStream: ilStream,
+                mappedFieldData: fieldData,
+                debugDirectoryBuilder: debugDirectoryBuilder,
+                entryPoint: MetadataTokens.MethodDefinitionHandle(mainMethod.MetadataToken)
+            );
 
-                string configName = "Test.runtimeconfig.json";
-                string jsonContent = """
+            BlobBuilder peBlob = new();
+            peBuilder.Serialize(peBlob);
+            using FileStream fileStream = new($"{assemblyName}.dll", FileMode.Create, FileAccess.Write);
+            peBlob.WriteContentTo(fileStream);
+
+            string configName = $"{assemblyName}.runtimeconfig.json";
+            string jsonContent = """
                 {
                     "runtimeOptions": {
                         "tfm": "net9.0",
@@ -244,11 +267,64 @@ namespace NENTest
                     }
                 }
                 """;
-                File.WriteAllText(configName, jsonContent);
+            File.WriteAllText(configName, jsonContent);
+        }
 
-                Console.WriteLine("Compilation Complete. Saved Test.dll");
-                Console.WriteLine("Run with: dotnet Test.dll");
-            }
+        private static void SaveAssembly(PersistedAssemblyBuilder ab, string assemblyName)
+        {
+            MetadataBuilder metadataBuilder = ab.GenerateMetadata(out BlobBuilder ilStream, out BlobBuilder fieldData, out MetadataBuilder pdbBuilder);
+            PEHeaderBuilder peHeader = new(imageCharacteristics: Characteristics.ExecutableImage | Characteristics.Dll);
+            ManagedPEBuilder peBuilder = new(
+                header: peHeader,
+                metadataRootBuilder: new MetadataRootBuilder(metadataBuilder),
+                ilStream: ilStream,
+                mappedFieldData: fieldData,
+                debugDirectoryBuilder: null,
+                entryPoint: default
+            );
+
+            BlobBuilder peBlob = new();
+            peBuilder.Serialize(peBlob);
+
+            using FileStream fileStream = new($"{assemblyName}.dll", FileMode.Create, FileAccess.Write);
+            peBlob.WriteContentTo(fileStream);
+
+            string commonConfigName = $"{assemblyName}.runtimeconfig.json";
+            string commonJsonContent = """
+                {
+                    "runtimeOptions": {
+                        "tfm": "net9.0",
+                        "framework": {
+                            "name": "Microsoft.NETCore.App",
+                            "version": "9.0.0"
+                        }
+                    }
+                }
+                """;
+            File.WriteAllText(commonConfigName, commonJsonContent);
+        }
+
+        private static (PersistedAssemblyBuilder, MetadataLoadContext, Assembly?) CreateAssembly(string assemblyName, string[] includedLibraries)
+        {
+            AssemblyName aName = new(assemblyName);
+            string runtimePath = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
+            PathAssemblyResolver resolver = new([..Directory.GetFiles(runtimePath, "*.dll"), ..includedLibraries]);
+            MetadataLoadContext context = new(resolver);
+            Assembly? coreAssembly = context.CoreAssembly;
+            PersistedAssemblyBuilder ab = new(aName, coreAssembly ?? typeof(object).Assembly);
+
+            // Set target framework attribute using runtime types for CustomAttributeBuilder
+            ConstructorInfo targetFrameworkConstructor = typeof(System.Runtime.Versioning.TargetFrameworkAttribute).GetConstructor([typeof(string)])!;
+            PropertyInfo frameworkDisplayNameProperty = typeof(System.Runtime.Versioning.TargetFrameworkAttribute).GetProperty("FrameworkDisplayName")!;
+
+            CustomAttributeBuilder targetFrameworkAttribute = new(
+                targetFrameworkConstructor,
+                [".NETCoreApp,Version=v9.0"],
+                [frameworkDisplayNameProperty],
+                [".NET 9.0"]
+            );
+            ab.SetCustomAttribute(targetFrameworkAttribute);
+            return (ab, context, coreAssembly);
         }
 
         [TestMethod]
