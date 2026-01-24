@@ -102,7 +102,19 @@ namespace NEN
             SymbolTable<LocalBuilder> localSymbolTable = new();
             foreach(var statement in method.Statements)
             {
-                AssembleStatement( ilGenerator, method.Parameters, localSymbolTable, statement);
+                VariableNode[] parameters = method.MethodBuilder.IsStatic ? method.Parameters : 
+                    [ new VariableNode { 
+                        Name = "này", 
+                        Type = new TypeNode {
+                            NamespaceAndName = typeBuilder.FullName!.Split("."),
+                            Type = typeBuilder,
+                            Line = method.ReturnType.Line,
+                            Column = method.ReturnType.Column
+                        }, 
+                        Column = method.ReturnType.Line,
+                        Line = method.ReturnType.Column
+                    },..method.Parameters];
+                AssembleStatement( ilGenerator, parameters, localSymbolTable, statement);
             }
             ilGenerator.Emit(OpCodes.Ret);
         }
@@ -114,9 +126,17 @@ namespace NEN
                 case VariableDeclarationStatement variableDeclarationStatement:
                     AssembleVariableDeclarationStatement( ilGenerator, parameters, localSymbolTable, variableDeclarationStatement);
                     break;
+                case ExpressionStatement expressionStatement:
+                    AssembleExpressionStatement(ilGenerator, parameters, localSymbolTable, expressionStatement);
+                    break;
                 default:
                     throw new NotImplementedException();
             }
+        }
+
+        private void AssembleExpressionStatement(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, ExpressionStatement expressionStatement)
+        {
+            AssembleExpression(ilGenerator, parameters, localSymbolTable, expressionStatement.Expression);
         }
 
         private void AssembleVariableDeclarationStatement( ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, VariableDeclarationStatement variableDeclarationStatement)
@@ -148,8 +168,35 @@ namespace NEN
                 case LiteralExpression literalExpression: AssembleLiteralExpression( ilGenerator, literalExpression); break;
                 case VariableExpression variableExpression: AssembleVariableExpression( ilGenerator, parameters, localSymbolTable, variableExpression); break;
                 case BinaryExpression binaryExpression: AssembleBinaryExpression( ilGenerator, parameters, localSymbolTable, binaryExpression); break;
+                case StandardMethodCallExpression standardMethodCallExpression: AssembleStandardMethodCallExpression( ilGenerator, parameters, localSymbolTable, standardMethodCallExpression); break;
+                case StaticMethodCallExpression staticMethodCallExpression: AssembleStaticMethodCallExpression(ilGenerator, parameters, localSymbolTable, staticMethodCallExpression); break;
+                case ThisExpression thisExpression: AssembleThisExpression(ilGenerator);  break;
                 default: throw new NotImplementedException();
             }
+        }
+
+        private void AssembleThisExpression(ILGenerator ilGenerator)
+        {
+            ilGenerator.Emit(OpCodes.Ldarg_0); // Load {this} instance
+        }
+
+        private void AssembleStaticMethodCallExpression(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, StaticMethodCallExpression staticMethodCallExpression)
+        {
+            foreach (var argument in staticMethodCallExpression.Arguments)
+            {
+                AssembleExpression(ilGenerator, parameters, localSymbolTable, argument);
+            }
+            ilGenerator.Emit(OpCodes.Call, staticMethodCallExpression.Info!);
+        }
+
+        private void AssembleStandardMethodCallExpression(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, StandardMethodCallExpression standardMethodCallExpression)
+        {
+            AssembleExpression(ilGenerator, parameters, localSymbolTable, standardMethodCallExpression.Object);
+            foreach (var argument in standardMethodCallExpression.Arguments)
+            {
+                AssembleExpression(ilGenerator, parameters, localSymbolTable, argument);
+            }
+            ilGenerator.Emit(OpCodes.Call, standardMethodCallExpression.Info!);
         }
 
         private void AssembleVariableExpression( ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, VariableExpression variableExpression)
@@ -158,7 +205,7 @@ namespace NEN
             {
                 if (parameters[i].Name == variableExpression.Name)
                 {
-                    ilGenerator.Emit(OpCodes.Ldarg_S, i + 1);
+                    ilGenerator.Emit(OpCodes.Ldarg_S, i);
                     return;
                 }
             }

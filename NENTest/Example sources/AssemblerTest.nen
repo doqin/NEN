@@ -2,7 +2,7 @@
 lớp Chương_Trình
     @Chính @Tĩnh
     phương_thức Chính() -> System::Void
-        biến str thuộc System::String gán "Xin chào";
+        biến bro thuộc System::String gán "mọi người";
         biến str2 thuộc System::String gán "OK";
         biến int32 thuộc System::Int32 gán 3;
         biến int64 thuộc System::Int64 gán 5L;
@@ -10,13 +10,21 @@ lớp Chương_Trình
         biến b thuộc System::Int32 gán 1 * 3 * (10 + 3) * 4 / 5;
         biến c thuộc System::Int64 gán 2L *32L / 4L;
         biến d thuộc System::Int64 gán c * (25L + 62L);
+
+        System::Console::WriteLine(bro);
+        biến là_sai thuộc System::Boolean gán str2.Contains("H");
+        biến là_đúng thuộc System::Boolean gán str2.Contains("K");
+        System::Console::WriteLine(là_đúng);
+        System::Console::WriteLine("Hellu {0}", "everyone");
+        System::Console::WriteLine("Yo chào {0}", bro);
+        System::Console::WriteLine(d);
+        Phụ::Test("Foo");
     kết_thúc
 kết_thúc
 
 lớp Phụ
-    phương_thức Test(a thuộc System::String, b thuộc System::Int32) -> System::Void
-        biến str thuộc System::String gán a + "Hello?";
-        biến int32 thuộc System::Int32 gán b + 15;
-        biến str2 thuộc System::String gán str;
+    @Tĩnh
+    phương_thức Test(a thuộc System::String) -> System::Void
+        System::Console::WriteLine("{0} Bar!", a);
     kết_thúc
 kết_thúc
