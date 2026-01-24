@@ -10,26 +10,12 @@ using System.Reflection.PortableExecutable;
 
 namespace NEN
 {
-    public class Assembler
+    public class Assembler(string[] contentLines, Types.Module module)
     {
-        private readonly PersistedAssemblyBuilder assemblyBuilder;
-        private readonly ModuleBuilder moduleBuilder;
-        private readonly AssemblyName assemblyName;
-        private readonly Types.Module module;
-        private readonly Dictionary<string, Type> typeTable = [];
+        private readonly Types.Module module = module;
         private MethodBuilder? entryPointMethod;
-        private readonly string[] content;
-        private readonly ISymbolDocumentWriter documentWriter;
-
-        public Assembler(string assemblyName, string[] contentLines, Types.Module module)
-        {
-            this.module = module;
-            content = contentLines;
-            this.assemblyName = new AssemblyName(assemblyName);
-            assemblyBuilder = new(this.assemblyName!, module.CoreAssembly!);
-            moduleBuilder = assemblyBuilder.DefineDynamicModule(module.Name);
-            documentWriter = moduleBuilder.DefineDocument($"{assemblyName}.nen");
-        }
+        private readonly string[] content = contentLines;
+        private readonly ISymbolDocumentWriter documentWriter = module.ModuleBuilder!.DefineDocument($"{module.AssemblyBuilder!.GetName().Name}.nen");
 
         public void Assemble()
         {
@@ -39,7 +25,7 @@ namespace NEN
                 AssembleType(c);
             }
 
-            MetadataBuilder metadataBuilder = assemblyBuilder.GenerateMetadata(out BlobBuilder ilStream, out BlobBuilder fieldData, out MetadataBuilder pdbBuilder);
+            MetadataBuilder metadataBuilder = module.AssemblyBuilder!.GenerateMetadata(out BlobBuilder ilStream, out BlobBuilder fieldData, out MetadataBuilder pdbBuilder);
             DebugDirectoryBuilder? debugDirectoryBuilder = null;
             if (entryPointMethod != null) debugDirectoryBuilder = CreateDebugMetadata(metadataBuilder, pdbBuilder);
             CreatePortableExecutable(metadataBuilder, ilStream, fieldData, debugDirectoryBuilder);
@@ -55,10 +41,10 @@ namespace NEN
             );
             BlobBuilder portablePdbBlob = new();
             BlobContentId pdbContentId = portablePdbBuilder.Serialize(portablePdbBlob);
-            using FileStream pdbStream = new($"{assemblyName.Name}.pdb", FileMode.Create, FileAccess.Write);
+            using FileStream pdbStream = new($"{module.AssemblyBuilder!.GetName().Name}.pdb", FileMode.Create, FileAccess.Write);
             portablePdbBlob.WriteContentTo(pdbStream);
             var debugDirectoryBuilder = new DebugDirectoryBuilder();
-            debugDirectoryBuilder.AddCodeViewEntry($"{assemblyName.Name}.pdb", pdbContentId, portablePdbBuilder.FormatVersion);
+            debugDirectoryBuilder.AddCodeViewEntry($"{module.AssemblyBuilder!.GetName().Name}.pdb", pdbContentId, portablePdbBuilder.FormatVersion);
             return debugDirectoryBuilder;
         }
 
@@ -75,13 +61,13 @@ namespace NEN
                 );
             BlobBuilder peBlob = new();
             peBuilder.Serialize(peBlob);
-            using FileStream fileStream = new($"{assemblyName.Name}.dll", FileMode.Create, FileAccess.Write);
+            using FileStream fileStream = new($"{module.AssemblyBuilder!.GetName().Name}.dll", FileMode.Create, FileAccess.Write);
             peBlob.WriteContentTo(fileStream);
         }
 
         private void CreateRuntimeConfig()
         {
-            string configName = $"{assemblyName.Name}.runtimeconfig.json";
+            string configName = $"{module.AssemblyBuilder!.GetName().Name}.runtimeconfig.json";
             string jsonContent = """
                 {
                     "runtimeOptions": {
@@ -98,35 +84,21 @@ namespace NEN
 
         private void AssembleType(ClassNode c)
         {
-            var typeBuilder = moduleBuilder.DefineType(
-                c.Name,
-                TypeAttributes.Public | TypeAttributes.Class
-            );
             foreach(var method in c.Methods)
             {
-                AssembleMethod( typeBuilder, method);
+                AssembleMethod(c.TypeBuilder!, method);
             }
-            typeBuilder.CreateType();
+            c.TypeBuilder!.CreateType();
         }
 
         private void AssembleMethod( TypeBuilder typeBuilder, MethodNode method)
         {   
-            var methodBuilder = typeBuilder.DefineMethod(
-                method.Name, 
-                method.Attributes,
-                method.ReturnType.Type!,
-                [.. method.Parameters.Select(param => param.Type.Type!)]
-            );
-            for (int i = 0; i < method.Parameters.Length; i++)
-            {
-                ParameterBuilder p = methodBuilder.DefineParameter(i + 1, ParameterAttributes.None, method.Parameters[i].Name);
-            }
             if (method.IsEntryPoint)
             {
                 if (entryPointMethod != null) throw new MultipleEntryPointException(content, method.Line, method.Column);
-                entryPointMethod = methodBuilder;
+                entryPointMethod = method.MethodBuilder;
             }
-            var ilGenerator = methodBuilder.GetILGenerator();
+            var ilGenerator = method.MethodBuilder!.GetILGenerator();
             SymbolTable<LocalBuilder> localSymbolTable = new();
             foreach(var statement in method.Statements)
             {
@@ -151,7 +123,7 @@ namespace NEN
         {
             var variable = variableDeclarationStatement.Variable;
             var type = variable.Type;
-            var localBuilder = ilGenerator.DeclareLocal(variable.Type.Type!);
+            var localBuilder = ilGenerator.DeclareLocal(type.Type!);
             localBuilder.SetLocalSymInfo(variable.Name);
             ilGenerator.MarkSequencePoint(documentWriter, variable.Line, variable.Column, variable.Line, variable.Column + 1);
             localSymbolTable.TryAdd(variable.Name, localBuilder);
@@ -260,7 +232,7 @@ namespace NEN
                 [frameworkDisplayNameProperty],
                 [".NET 9.0"]
             );
-            assemblyBuilder.SetCustomAttribute(targetFrameworkAttribute);
+            module.AssemblyBuilder!.SetCustomAttribute(targetFrameworkAttribute);
         }
     }
 }

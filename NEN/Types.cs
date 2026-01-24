@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -82,6 +83,8 @@ namespace NEN
             public ClassNode[] Classes { get; set; } = [];
             public MetadataLoadContext? MetadataLoadContext { get; set; }
             public Assembly? CoreAssembly { get; set; }
+            public PersistedAssemblyBuilder? AssemblyBuilder { get; set; }
+            public ModuleBuilder? ModuleBuilder { get; set; }
             public override string ToString()
             {
                 return Helper.GetTreeString($"Mô đun: {Name}", Classes);
@@ -98,10 +101,11 @@ namespace NEN
         {
             public required string Name { get; set; }
             public MethodNode[] Methods { get; set; } = [];
-
+            public TypeBuilder? TypeBuilder { get; set; }
             public override string ToString()
             {
-                return Helper.GetTreeString($"Lớp: {Name}", Methods);
+                string isResolved = TypeBuilder == null ? "(*)" : "";
+                return Helper.GetTreeString($"Lớp: {Name}{isResolved}", Methods);
             }
         }
 
@@ -113,11 +117,12 @@ namespace NEN
             public VariableNode[] Parameters { get; set; } = [];
             public StatementNode[] Statements { get; set; } = [];
             public required TypeNode ReturnType { get; set; }
-
+            public MethodBuilder? MethodBuilder { get; set; }
             public override string ToString()
             {
                 string isEntryPoint = IsEntryPoint ? "(Hàm chính) " : "";
-                return Helper.GetTreeString<ASTNode>($"Phương thức: {isEntryPoint}({Attributes.ToString()}) {Name}({string.Join(", ", Parameters.Select(param => $"{param.Name} thuộc {param.Type}"))}) -> {ReturnType}", [.. Statements]);
+                string isResolved = MethodBuilder == null ? "(*)" : "";
+                return Helper.GetTreeString<ASTNode>($"Phương thức: {isEntryPoint}({Attributes.ToString()}) {Name}{isResolved}({string.Join(", ", Parameters.Select(param => $"{param.Name} thuộc {param.Type}"))}) -> {ReturnType}", [.. Statements]);
             }
         }
 

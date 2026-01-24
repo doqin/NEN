@@ -13,7 +13,10 @@ lớp Chương_Trình
 kết_thúc
 
 lớp Phụ
-    phương_thức Test(a thuộc System.String, b thuộc System.Int32) -> System.Void
+    phương_thức Test(
+        a thuộc System.String, 
+        b thuộc System.Int32
+    ) -> System.Void
         biến str thuộc System.String gán a;
     kết_thúc
 kết_thúc

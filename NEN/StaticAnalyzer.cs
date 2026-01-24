@@ -4,45 +4,58 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace NEN
 {
-    public class StaticAnalyzer(string[] contentLines, Types.Module module, string[] assemblyPaths)
+    public class StaticAnalyzer(string[] contentLines, Types.Module module, string assemblyName, string[] assemblyPaths)
     {
         private readonly string[] content = contentLines;
         private readonly Dictionary<string, Type> typeTable = [];
-        private Types.Module module = module;
+        private readonly Dictionary<string, MethodInfo> moduleMethods = [];
+        private readonly Types.Module module = module;
 
-        private void AcquireMetadataAndCoreAssembly()
+        private void SetupAssembly()
         {
             string runtimePath = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
             PathAssemblyResolver resolver = new([.. Directory.GetFiles(runtimePath, "*.dll"), .. assemblyPaths]);
             module.MetadataLoadContext = new(resolver);
             module.CoreAssembly = module.MetadataLoadContext.CoreAssembly!;
+            module.AssemblyBuilder = new(new AssemblyName(assemblyName), module.CoreAssembly!);
+            module.ModuleBuilder = module.AssemblyBuilder.DefineDynamicModule(module.Name);
         }
 
         public void Analyze()
         {
-            AcquireMetadataAndCoreAssembly();
+            SetupAssembly();
             for (int i = 0; i < module.Classes.Length; i++)
             {
                 AnalyzeClass(module.Classes[i]);
             }
         }
 
-        private void AnalyzeClass(Types.ClassNode c)
+        private void AnalyzeClass(ClassNode c)
         {
+            TypeBuilder typeBuilder = module.ModuleBuilder!.DefineType(
+                c.Name,
+                TypeAttributes.Public | TypeAttributes.Class
+            );
+            c.TypeBuilder = typeBuilder;
+            if (!typeTable.TryAdd(c.Name, c.TypeBuilder))
+            {
+                throw new RedefinedException(content, c.Name, c.Line, c.Column);
+            }
             for (int i = 0; i < c.Methods.Length; i++)
             {
-                AnalyzeMethod(c.Methods[i]);
+                AnalyzeMethod(c, typeBuilder, c.Methods[i]);
             }
         }
 
-        private void AnalyzeMethod(Types.MethodNode method)
+        private void AnalyzeMethod(ClassNode c, TypeBuilder typeBuilder, MethodNode method)
         {
-            SymbolTable<Types.TypeNode> localSymbolTable = new();
+            SymbolTable<TypeNode> localSymbolTable = new();
             try
             {
                 method.ReturnType.Type = module.CoreAssembly!.GetType(method.ReturnType.Name) ?? throw new();
@@ -69,6 +82,21 @@ namespace NEN
                 {
                     throw new UnresolvedTypeException(content, parameter.Type.Name, parameter.Type.Line, parameter.Type.Column);
                 }
+            }
+            method.MethodBuilder = typeBuilder.DefineMethod(
+                method.Name,
+                method.Attributes,
+                method.ReturnType.Type!,
+                [.. method.Parameters.Select(param => param.Type.Type!)]
+            );
+            for (int i = 0; i < method.Parameters.Length; i++)
+            {
+                ParameterBuilder p = method.MethodBuilder.DefineParameter(i + 1, ParameterAttributes.None, method.Parameters[i].Name);
+            }
+            string methodFullName = string.Join('.', [c.Name, method.Name]);
+            if (!moduleMethods.TryAdd(methodFullName, method.MethodBuilder))
+            {
+                throw new RedefinedException(content, methodFullName, method.Line, method.Column);
             }
             for (int i = 0; i < method.Statements.Length; i++)
             {

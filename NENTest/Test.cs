@@ -45,7 +45,7 @@ namespace NENTest
             var parser = new Parser(fileName, lines, tokens);
             var module = parser.Parse();
             Console.WriteLine($"Parser result:\n{module}");
-            var analyzer = new StaticAnalyzer(lines, module, []);
+            var analyzer = new StaticAnalyzer(lines, module, fileName, []);
             analyzer.Analyze();
             Console.WriteLine($"Static Analyzer result:\n{module}");
         }
@@ -59,10 +59,10 @@ namespace NENTest
             var parser = new Parser(fileName, lines, tokens);
             var module = parser.Parse();
             Console.WriteLine($"Kết quả Parser:\n{module}");
-            var analyzer = new StaticAnalyzer(lines, module, []);
+            var analyzer = new StaticAnalyzer(lines, module, fileName, []);
             analyzer.Analyze();
             Console.WriteLine($"Kết quả Static Analyzer:\n{module}");
-            var assembler = new Assembler(fileName, lines, module);
+            var assembler = new Assembler(lines, module);
             assembler.Assemble();
             Console.WriteLine($"Hoàn thành biên dịch! OK");
         }
@@ -76,7 +76,7 @@ namespace NENTest
             var parser = new Parser(fileName, lines, tokens);
             var module = parser.Parse();
             Console.WriteLine($"Parser result:\n{module}");
-            var analyzer = new StaticAnalyzer(lines, module, []);
+            var analyzer = new StaticAnalyzer(lines, module, fileName, []);
             try
             {
                 analyzer.Analyze();
