@@ -21,7 +21,7 @@ namespace NENTest
         public void LexerTest()
         {
             string fileName = "LexerTest";
-            (string[] lines, NEN.Types.Token[] tokens) = NEN.Lexer.Tokenize($"Example sources\\{fileName}.nen");
+            (_, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
             PrintTokens(tokens);
         }
 

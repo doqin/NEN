@@ -10,7 +10,7 @@ lớp Chương_Trình
         biến e thuộc System::Int64 gán 2L *32L / 4L;
         biến f thuộc System::Int32 gán 25 + b;
 
-        System::Console::WriteLine(str + " mọi người!");
+        // System::Console::WriteLine(str + " mọi người!");
         biến là_sai thuộc System::Boolean gán str2.Contains("H");
         biến là_sao thuộc System::Boolean gán str2.Contains("K").Equals(là_sai);
     kết_thúc
