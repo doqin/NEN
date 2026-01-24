@@ -58,17 +58,17 @@ namespace NEN
             SymbolTable<TypeNode> localSymbolTable = new();
             try
             {
-                method.ReturnType.Type = module.CoreAssembly!.GetType(method.ReturnType.Name) ?? throw new();
+                method.ReturnType.Type = module.CoreAssembly!.GetType(string.Join(".", method.ReturnType.NamespaceAndName)) ?? throw new();
             }
             catch (Exception)
             {
-                throw new UnresolvedTypeException(content, method.ReturnType.Name, method.ReturnType.Line, method.ReturnType.Column);
+                throw new UnresolvedTypeException(content, string.Join("::", method.ReturnType.NamespaceAndName), method.ReturnType.Line, method.ReturnType.Column);
             }
             foreach (var parameter in method.Parameters)
             {
                 try
                 {
-                    parameter.Type.Type = module.CoreAssembly!.GetType(parameter.Type.Name) ?? throw new();
+                    parameter.Type.Type = module.CoreAssembly!.GetType(string.Join(".", parameter.Type.NamespaceAndName)) ?? throw new();
                     if (!localSymbolTable.TryAdd(parameter.Name, parameter.Type))
                     {
                         throw new RedefinedException(content, parameter.Name, parameter.Line, parameter.Column);
@@ -80,7 +80,7 @@ namespace NEN
                 }
                 catch (Exception)
                 {
-                    throw new UnresolvedTypeException(content, parameter.Type.Name, parameter.Type.Line, parameter.Type.Column);
+                    throw new UnresolvedTypeException(content, string.Join("::", parameter.Type.NamespaceAndName), parameter.Type.Line, parameter.Type.Column);
                 }
             }
             method.MethodBuilder = typeBuilder.DefineMethod(
@@ -121,13 +121,13 @@ namespace NEN
             }
             try
             {
-                variableDeclarationStatement.Variable.Type.Type = module.CoreAssembly!.GetType(variableDeclarationStatement.Variable.Type.Name) ?? throw new();
+                variableDeclarationStatement.Variable.Type.Type = module.CoreAssembly!.GetType(string.Join(".", variableDeclarationStatement.Variable.Type.NamespaceAndName)) ?? throw new();
             }
             catch (Exception)
             {
                 throw new UnresolvedTypeException(
-                    content, 
-                    variableDeclarationStatement.Variable.Type.Name, 
+                    content,
+                    string.Join("::", variableDeclarationStatement.Variable.Type.NamespaceAndName), 
                     variableDeclarationStatement.Variable.Type.Line, 
                     variableDeclarationStatement.Variable.Type.Column
                 );
@@ -167,17 +167,17 @@ namespace NEN
         {
             if (literalExpression.Value.StartsWith('"') && literalExpression.Value.EndsWith('"'))
             {
-                literalExpression.ReturnType = new Types.TypeNode { Name = PrimitiveType.String, Type = module.CoreAssembly!.GetType(PrimitiveType.String), Line = literalExpression.Line, Column = literalExpression.Column };
+                literalExpression.ReturnType = new Types.TypeNode { NamespaceAndName = ["System", "String"], Type = module.CoreAssembly!.GetType(PrimitiveType.String), Line = literalExpression.Line, Column = literalExpression.Column };
                 literalExpression.Value = literalExpression.Value[1..^1];
             }
             else if (literalExpression.Value.EndsWith('L'))
             {
-                literalExpression.ReturnType = new Types.TypeNode { Name = PrimitiveType.Int64, Type = module.CoreAssembly!.GetType(PrimitiveType.Int64), Line = literalExpression.Line, Column = literalExpression.Column };
+                literalExpression.ReturnType = new Types.TypeNode { NamespaceAndName = ["System", "Int64"], Type = module.CoreAssembly!.GetType(PrimitiveType.Int64), Line = literalExpression.Line, Column = literalExpression.Column };
                 literalExpression.Value = literalExpression.Value[0..^1];
             }
-            else if (Int64.TryParse(literalExpression.Value, out _))
+            else if (Int32.TryParse(literalExpression.Value, out _))
             {
-                literalExpression.ReturnType = new Types.TypeNode { Name = PrimitiveType.Int32, Type = module.CoreAssembly!.GetType(PrimitiveType.Int32) , Line = literalExpression.Line, Column = literalExpression.Column };
+                literalExpression.ReturnType = new Types.TypeNode { NamespaceAndName = ["System", "Int32"], Type = module.CoreAssembly!.GetType(PrimitiveType.Int32) , Line = literalExpression.Line, Column = literalExpression.Column };
             }
             else
             {
@@ -210,7 +210,9 @@ namespace NEN
             binaryExpression.Left = left;
             binaryExpression.Right = right;
 
-            if (leftType.Name != rightType.Name) throw new TypeDiscrepancyException(content, leftType, rightType, binaryExpression.Line, binaryExpression.Column);
+            var leftTypeFullName = string.Join("::", leftType.NamespaceAndName);
+            var rightTypeFullName = string.Join("::", rightType.NamespaceAndName);
+            if (leftTypeFullName != rightTypeFullName) throw new TypeDiscrepancyException(content, leftType, rightType, binaryExpression.Line, binaryExpression.Column);
             binaryExpression.ReturnType = rightType;
             return rightType;
         }

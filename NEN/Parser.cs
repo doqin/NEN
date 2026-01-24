@@ -133,14 +133,35 @@ namespace NEN
         {
             var (line, column) = GetCurrentPosition();
             var token = Consume(); // this token is guaranteed not null from ParseMethod()
-            switch (token!.Value)
+            switch (token!.Type)
             {
-                case "biến":
-                    return ParseVariableDeclarationStatement(line, column);
+                case TokenType.Keyword:
+                    switch (token!.Value)
+                    {
+                        case "biến":
+                            return ParseVariableDeclarationStatement(line, column);
+                        default:
+                            UnexpectedHelper(token);
+                            throw new();
+                    }
                 default:
-                    UnexpectedHelper(token);
-                    throw new();
+                    SetBack();
+                    return new ExpressionStatement { Expression = ParsePrimary(), Line = line, Column = column };
             }
+        }
+
+        private ExpressionNode[] ParseArguments()
+        {
+            ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "(");
+            List<ExpressionNode> arguments = [];
+            while (Current() != null && Current()?.Value != ")")
+            {
+                var argumentExpression = ParseExpression(0);
+                if (Current() != null && Current()!.Value != ")") ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ",");
+                arguments.Add(argumentExpression);
+            }
+            ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ")");
+            return [.. arguments];
         }
 
         private StatementNode ParseVariableDeclarationStatement(int line, int column)
@@ -172,16 +193,15 @@ namespace NEN
         private Types.TypeNode ParseType()
         {
             var (line, column) = GetCurrentPosition();
-            string typeIdentifier = "";
+            List<string> typeIdentifiers = [];
             do
             {
                 var token = ConsumeOrThrow(TokenType.Identifier, "kiểu dữ liệu");
-                typeIdentifier += token.Value;
-                if (Current()?.Value != ".") break;
-                ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ".");
-                typeIdentifier += ".";
+                typeIdentifiers.Add(token.Value);
+                if (Current()?.Value != "::") break;
+                ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "::");
             } while (true);
-            return new Types.TypeNode { Name = typeIdentifier, Line = line, Column = column };
+            return new Types.TypeNode { NamespaceAndName = [..typeIdentifiers], Line = line, Column = column };
         }
 
         private ExpressionNode ParseExpression(int minPrecedence)
@@ -204,26 +224,77 @@ namespace NEN
 
         private ExpressionNode ParsePrimary()
         {
+            ExpressionNode? expression = null;
             var (line, column) = GetCurrentPosition();
             var token = ConsumeOrThrow(TokenType.Literal | TokenType.Identifier | TokenType.Punctuator, "biểu thức");
-            switch(token.Type)
+            switch (token.Type)
             {
-                case TokenType.Literal: return new LiteralExpression { Value = token.Value, Line = token.Line, Column = token.Column };
-                case TokenType.Identifier: return new VariableExpression { Name = token.Value, Line = token.Line, Column = token.Column };
+                case TokenType.Literal:
+                    expression = new LiteralExpression { Value = token.Value, Line = token.Line, Column = token.Column }; 
+                    break;
+                case TokenType.Identifier: 
+                    if (Current()?.Value == "(")
+                    {
+                        var arguments = ParseArguments();
+                        expression = new AmbiguousMethodCallExpression { Name = token.Value, Arguments = arguments, Line = line, Column = column };
+                    }
+                    else if (Current()?.Value == "::")
+                    {
+                        SetBack();
+                        expression = ParseStaticAccessment();
+                    }
+                    else
+                    {
+                        expression = new VariableExpression { Name = token.Value, Line = token.Line, Column = token.Column };
+                    }
+                    break;
                 case TokenType.Punctuator:
                     if (token.Value == "(")
                     {
-                        var expression = ParseExpression(0);
+                        expression = ParseExpression(0);
                         ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ")");
-                        return expression;
                     }
                     else
                     {
                         UnexpectedHelper(token);
                         throw new(); // never happens
                     }
+                    break;
                 default: throw new NotImplementedException();
             }
+            while (Current()?.Value == ".")
+            {
+                ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ".");
+                var identifier = ConsumeOrThrow(TokenType.Identifier, "tên thuộc tính/tên phương thức");
+                if (Current() != null && Current()?.Value != "(")
+                {
+                    throw new NotImplementedException();
+                }
+                var arguments = ParseArguments();
+                expression = new StandardMethodCallExpression { Object = expression, Name = identifier.Value, Arguments = arguments, Line = line, Column = column };
+            }
+            return expression;
+        }
+
+        private ExpressionNode ParseStaticAccessment()
+        {
+            var (line, column) = GetCurrentPosition();
+            TypeNode typeIdentifier = ParseType();
+            var identifier = typeIdentifier.NamespaceAndName[^1..^0][0];
+            typeIdentifier.NamespaceAndName = typeIdentifier.NamespaceAndName[0..^1];
+            if (Current() != null && Current()?.Value != "(")
+            {
+                throw new NotImplementedException();
+            }
+            var arguments = ParseArguments();
+            return new StaticMethodCallExpression
+            {
+                Type = typeIdentifier,
+                Arguments = arguments,
+                Name = identifier,
+                Line = line,
+                Column = column
+            };
         }
 
         /* Helpers */
@@ -241,6 +312,13 @@ namespace NEN
             return token!;
         }
 
+        /// <summary>
+        /// Consumes the next token if it matches the specified type and value; otherwise, throws an exception.
+        /// </summary>
+        /// <param name="expectedTokenTypes">The expected token type or combination of token types to match against the next token.</param>
+        /// <param name="expected">The expected string value of the token. The token must have this value to be considered a match.</param>
+        /// <returns>The consumed token that matches the specified type and value.</returns>
+        /// <exception cref="ExpectedException">Thrown if the next token does not match the specified type or its value does not equal the expected value.</exception>
         private Token ConsumeOrThrowIfNotEqual(TokenType expectedTokenTypes, string expected)
         {
             var token = ConsumeOrThrow(expectedTokenTypes, expected);
@@ -328,6 +406,16 @@ namespace NEN
         private (int, int) GetCurrentPosition()
         {
             return (tokens[index].Line, tokens[index].Column);
+        }
+        private bool SetBack()
+        {
+            index--;
+            if (index < 0) return false;
+            return true;
+        }
+        private int GetCurrentIndex()
+        {
+            return index;
         }
     }
 }

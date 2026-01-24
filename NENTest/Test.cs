@@ -216,13 +216,13 @@ namespace NENTest
             Type voidType = coreAssembly!.GetType("System.Void")!;
             Type consoleType = coreAssembly!.GetType("System.Console")!;
             Type stringType = coreAssembly!.GetType("System.String")!;
+            Type boolType = coreAssembly!.GetType("System.Boolean")!;
             MethodBuilder mainMethod = tb.DefineMethod(
                 "Main", 
                 MethodAttributes.Public | MethodAttributes.Static,
                 voidType,
                 null
             );
-
             MethodBuilder fooMethod = tb.DefineMethod(
                 "Foo", 
                 MethodAttributes.Public | MethodAttributes.Static,
@@ -230,8 +230,14 @@ namespace NENTest
                 null
             );
             ILGenerator fooGen = fooMethod.GetILGenerator();
-            MethodInfo writeLineMethod = consoleType.GetMethod("WriteLine", [stringType])!;
+            MethodInfo writeLineMethod = consoleType.GetMethod("WriteLine", [boolType]) ?? throw new NullReferenceException();
+            MethodInfo stringContainsMethod = stringType.GetMethod("Contains", [stringType]) ?? throw new NullReferenceException();
             fooGen.Emit(OpCodes.Ldstr, "Foo bar!");
+            fooGen.DeclareLocal(stringType);
+            fooGen.Emit(OpCodes.Stloc_0);
+            fooGen.Emit(OpCodes.Ldloc_0);
+            fooGen.Emit(OpCodes.Ldstr, "Foo");
+            fooGen.Emit(OpCodes.Call, stringContainsMethod);
             fooGen.Emit(OpCodes.Call, writeLineMethod);
             fooGen.Emit(OpCodes.Ret);
             ILGenerator mainGen = mainMethod.GetILGenerator();

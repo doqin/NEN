@@ -145,15 +145,15 @@ namespace NEN
 
         public class TypeNode : ASTNode
         {
-            public required string Name { get; set; }
+            public required string[] NamespaceAndName { get; set; }
             public Type? Type { get; set; }
             public override string ToString()
             {
                 if (Type == null)
                 {
-                    return $"{Name}(*)";
+                    return $"{string.Join("::", NamespaceAndName)}(*)";
                 }
-                return Type.FullName ?? Name;
+                return Type.FullName ?? string.Join("::", NamespaceAndName);
             }
         }
 
@@ -173,9 +173,13 @@ namespace NEN
             }
         }
 
-        public class MethodCallStatement : StatementNode
+        public class ExpressionStatement : StatementNode
         {
-            public required MethodCallExpression MethodCall { set; get; }
+            public required ExpressionNode Expression { get; set; }
+            public override string ToString()
+            {
+                return $"Biểu thức: {Expression}";
+            }
         }
 
         public abstract class ExpressionNode : ASTNode { 
@@ -226,12 +230,40 @@ namespace NEN
             }
         }
 
-        public class MethodCallExpression : ExpressionNode
+        public class AmbiguousMethodCallExpression : ExpressionNode // For unresolved methods
         {
             public MethodInfo? Info { get; set; }
-            public required TypeNode Type { get; set; }
             public required string Name { get; set; }
             public required ExpressionNode[] Arguments { get; set; }
+            public override string ToString()
+            {
+                string isResolved = Info == null ? "(*)" : "";
+                string returnType = ReturnType == null ? "" : $" -> {ReturnType}";
+                return Helper.GetTreeString($"Gọi hàm(*): {Name}{isResolved}{returnType}", Arguments);
+            }
+        }
+
+        public class StaticMethodCallExpression : AmbiguousMethodCallExpression
+        {
+            public required TypeNode Type { get; set; }
+            public override string ToString()
+            {
+                string isResolved = Info == null ? "(*)" : "";
+                string namespaceAndType = Type.Type == null ? $"{string.Join("::", Type.NamespaceAndName)}(*)" : Type.Type.FullName ?? string.Join("::", Type.NamespaceAndName);
+                string returnType = ReturnType == null ? "" : $" -> {ReturnType}";
+                return Helper.GetTreeString($"Gọi hàm: {namespaceAndType}::{Name}{isResolved}{returnType}", Arguments);
+            }
+        }
+
+        public class StandardMethodCallExpression : AmbiguousMethodCallExpression
+        {
+            public required ExpressionNode Object { get; set; }
+            public override string ToString()
+            {
+                string isResolved = Info == null ? "(*)" : "";
+                string returnType = ReturnType == null ? "" : $" -> {ReturnType}";
+                return Helper.GetTreeString($"Gọi hàm: {Name}{isResolved}{returnType}", [Object, ..Arguments]);
+            }
         }
     }
 }
