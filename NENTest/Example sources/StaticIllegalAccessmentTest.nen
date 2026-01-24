@@ -33,5 +33,6 @@ lớp Phụ
     @Tĩnh
     phương_thức Test2() -> System::Void
         System::Console::WriteLine("Test2");
+        Test1();
     kết_thúc
 kết_thúc

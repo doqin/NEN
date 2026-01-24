@@ -68,6 +68,14 @@ namespace NEN
                 return $"{contentLines[left.Line - 1]}\n" + new string('~', left.Column - 1) + "^\n" + $"{contentLines[right.Line - 1]}\n" + new string('~', right.Column - 1) + '^';
             }
         }
+
+        public class StaticIllegalAccessmentException : NENException
+        {
+            public StaticIllegalAccessmentException() { }
+            public StaticIllegalAccessmentException(string[] contentLines, string accessment, int line, int column) : base(contentLines, $"Không thể truy cập thành phần không tĩnh '{accessment}' vì là phương thức tĩnh", line, column)
+            {
+            }
+        }
     } 
 
 }

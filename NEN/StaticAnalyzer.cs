@@ -14,7 +14,7 @@ namespace NEN
     {
         private readonly string[] content = contentLines;
         private readonly Dictionary<string, Type> typeTable = [];
-        private readonly Dictionary<(string, Type[]), MethodInfo> moduleMethods = [];
+        private readonly Dictionary<(string, Type[]), MethodInfo> moduleMethods = new(new MethodSignatureComparer());
         private readonly Types.Module module = module;
 
         private void SetupAssembly()
@@ -30,11 +30,21 @@ namespace NEN
         public void Analyze()
         {
             SetupAssembly();
-            List<SymbolTable<TypeNode>[]> lsLsSt = [];
-            // Define every class and method in the module
+            // Define every class in the module
             foreach (var c in module.Classes)
             {
-                lsLsSt.Add(DefineClass(c));
+                DefineClass(c);
+            }
+            // Define every module in the classes
+            List<SymbolTable<TypeNode>[]> lsLsSt = [];
+            foreach (var c in module.Classes)
+            {
+                List<SymbolTable<TypeNode>> lsSt = [];
+                foreach (var method in c.Methods)
+                {
+                    lsSt.Add(DefineMethod(c, method));
+                }
+                lsLsSt.Add([.. lsSt]);
             }
             // Analyze its the method bodies in each class
             for (int i = 0; i < module.Classes.Length; i++)
@@ -43,7 +53,7 @@ namespace NEN
             }
         }
 
-        private SymbolTable<TypeNode>[] DefineClass(ClassNode c)
+        private void DefineClass(ClassNode c)
         {
             c.TypeBuilder = module.ModuleBuilder!.DefineType(
                 c.Name,
@@ -53,12 +63,6 @@ namespace NEN
             {
                 throw new RedefinedException(content, c.Name, c.Line, c.Column);
             }
-            List<SymbolTable<TypeNode>> lsSt = [];
-            foreach (var method in c.Methods)
-            {
-                lsSt.Add(DefineMethod(c, method));
-            }
-            return [.. lsSt];
         }
 
         private SymbolTable<TypeNode> DefineMethod(ClassNode c, MethodNode method)
@@ -99,6 +103,7 @@ namespace NEN
             );
             for (int i = 0; i < method.Parameters.Length; i++)
             {
+                int index = method.MethodBuilder.IsStatic ? i : i + 1;
                 ParameterBuilder p = method.MethodBuilder.DefineParameter(i + 1, ParameterAttributes.None, method.Parameters[i].Name);
             }
             string methodFullName = string.Join('.', [c.Name, method.Name]);
@@ -113,34 +118,36 @@ namespace NEN
         {
             for (int i = 0; i < c.Methods.Length; i++)
             {
-                AnalyzeMethod(c, localSymbolTableList[i], c.Methods[i]);
+                AnalyzeMethod(c, c.Methods[i], localSymbolTableList[i]);
             }
         }
 
-        private void AnalyzeMethod(ClassNode c, SymbolTable<TypeNode> localSymbolTable, MethodNode method)
+        private void AnalyzeMethod(ClassNode c, MethodNode method, SymbolTable<TypeNode> localSymbolTable)
         {
             foreach (var statement in method.Statements)
             {
-                AnalyzeStatement(c, localSymbolTable, statement);
+                AnalyzeStatement(c, method, localSymbolTable, statement);
             }
         }
 
-        private void AnalyzeStatement(ClassNode c, SymbolTable<TypeNode> localSymbolTable, StatementNode statement)
+        private void AnalyzeStatement(ClassNode c, MethodNode method, SymbolTable<TypeNode> localSymbolTable, StatementNode statement)
         {
             switch(statement)
             {
-                case VariableDeclarationStatement variableDeclarationStatement: AnalyzeVariableDeclarationStatement(c, localSymbolTable,  variableDeclarationStatement); break;
-                case ExpressionStatement expressionStatement: AnalyzeExpressionStatement(c, localSymbolTable, expressionStatement); break;
+                case VariableDeclarationStatement variableDeclarationStatement: AnalyzeVariableDeclarationStatement(c, method, localSymbolTable,  variableDeclarationStatement); break;
+                case ExpressionStatement expressionStatement: AnalyzeExpressionStatement(c, method, localSymbolTable, ref expressionStatement); break;
                 default: throw new NotImplementedException();
             }
         }
 
-        private void AnalyzeExpressionStatement(ClassNode c, SymbolTable<TypeNode> localSymbolTable, ExpressionStatement expressionStatement)
+        private void AnalyzeExpressionStatement(ClassNode c, MethodNode method, SymbolTable<TypeNode> localSymbolTable, ref ExpressionStatement expressionStatement)
         {
-            AnalyzeExpression(c, localSymbolTable, expressionStatement.Expression);
+            var expression = expressionStatement.Expression;
+            AnalyzeExpression(c, method, localSymbolTable, ref expression);
+            expressionStatement.Expression = expression;
         }
 
-        private void AnalyzeVariableDeclarationStatement(ClassNode c, SymbolTable<Types.TypeNode> localSymbolTable,  VariableDeclarationStatement variableDeclarationStatement)
+        private void AnalyzeVariableDeclarationStatement(ClassNode c, MethodNode method, SymbolTable<Types.TypeNode> localSymbolTable,  VariableDeclarationStatement variableDeclarationStatement)
         {
             if (localSymbolTable.TryGetValue(variableDeclarationStatement.Variable.Name, out _))
             {
@@ -163,7 +170,8 @@ namespace NEN
             else
             {
                 var expr = variableDeclarationStatement.InitialValue;
-                AnalyzeExpression(c, localSymbolTable,  expr);
+                AnalyzeExpression(c, method, localSymbolTable,  ref expr);
+                variableDeclarationStatement.InitialValue = expr;
                 var sameName = expr.ReturnType!.Type!.FullName == variableDeclarationStatement.Variable.Type!.Type!.FullName;
                 var isSubClass = expr.ReturnType!.Type!.IsSubclassOf(variableDeclarationStatement.Variable.Type!.Type!);
                 var isAssignable = expr.ReturnType!.Type!.IsAssignableTo(variableDeclarationStatement.Variable.Type!.Type!);
@@ -171,7 +179,6 @@ namespace NEN
                 {
                     throw new TypeDiscrepancyException(content, variableDeclarationStatement.Variable.Type, expr.ReturnType, variableDeclarationStatement.Line, variableDeclarationStatement.Column);
                 }
-                variableDeclarationStatement.InitialValue = expr;
             }
             if (!localSymbolTable.TryAdd(variableDeclarationStatement.Variable.Name, variableDeclarationStatement.Variable.Type))
             {
@@ -179,30 +186,48 @@ namespace NEN
             }
         }
 
-        private Types.TypeNode AnalyzeExpression(ClassNode c, SymbolTable<Types.TypeNode> localSymbolTable,  ExpressionNode expression)
+        private Types.TypeNode AnalyzeExpression(ClassNode c, MethodNode method, SymbolTable<Types.TypeNode> localSymbolTable, ref ExpressionNode expression)
         {
             switch(expression)
             {
                 case LiteralExpression literalExpression: return AnalyzeLiteralExpression(literalExpression);
                 case VariableExpression variableExpression: return AnalyzeVariableExpression(localSymbolTable, variableExpression);
-                case StandardMethodCallExpression standardMethodCallExpression: return AnalyzeStandardMethodCallExpression(c, localSymbolTable, standardMethodCallExpression);
-                case StaticMethodCallExpression staticMethodCallExpression: return AnalyzeStaticMethodCallExpression(c, localSymbolTable, staticMethodCallExpression);
-                case AmbiguousMethodCallExpression ambiguousMethodCallExpression: return AnalyzeAmbiguousMethodCallExpression(c, localSymbolTable, ambiguousMethodCallExpression);
-                case BinaryExpression binaryExpression: return AnalyzeBinaryExpression(c, localSymbolTable,  binaryExpression);
+                case StandardMethodCallExpression standardMethodCallExpression: return AnalyzeStandardMethodCallExpression(c, method, localSymbolTable, ref standardMethodCallExpression);
+                case StaticMethodCallExpression staticMethodCallExpression: return AnalyzeStaticMethodCallExpression(c, method, localSymbolTable, staticMethodCallExpression);
+                case AmbiguousMethodCallExpression ambiguousMethodCallExpression: 
+                    var type = AnalyzeAmbiguousMethodCallExpression(c, method, localSymbolTable, ref ambiguousMethodCallExpression);
+                    expression = ambiguousMethodCallExpression;
+                    return type;
+                case BinaryExpression binaryExpression: return AnalyzeBinaryExpression(c, method, localSymbolTable,  binaryExpression);
                 default: throw new NotImplementedException();
             }
         }
-        private TypeNode AnalyzeStandardMethodCallExpression(ClassNode c, SymbolTable<TypeNode> localSymbolTable, StandardMethodCallExpression standardMethodCallExpression)
+        private TypeNode AnalyzeStandardMethodCallExpression(ClassNode c, MethodNode method, SymbolTable<TypeNode> localSymbolTable, ref StandardMethodCallExpression standardMethodCallExpression)
         {
-            var objectType = AnalyzeExpression(c, localSymbolTable, standardMethodCallExpression.Object);
-            List<Type> arguments = [];
-            foreach(var arg in standardMethodCallExpression.Arguments)
+            var objec = standardMethodCallExpression.Object;
+            var objectType = AnalyzeExpression(c, method,localSymbolTable, ref objec);
+            standardMethodCallExpression.Object = objec;
+            if (
+                method.MethodBuilder!.IsStatic &&
+                string.Join(".", [c.Name, standardMethodCallExpression.Name]) == 
+                string.Join(".", [.. objectType.NamespaceAndName, standardMethodCallExpression.Name])
+            )
             {
-                TypeNode type = AnalyzeExpression(c, localSymbolTable, arg);
+                throw new StaticIllegalAccessmentException(
+                    content,
+                    string.Join("::", [c.Name, standardMethodCallExpression.Name]),
+                    standardMethodCallExpression.Line,
+                    standardMethodCallExpression.Column
+                );
+            }
+            List<Type> arguments = [];
+            for (int i = 0; i < standardMethodCallExpression.Arguments.Length; i++)
+            {
+                TypeNode type = AnalyzeExpression(c, method, localSymbolTable, ref standardMethodCallExpression.Arguments[i]);
                 arguments.Add(type.Type!);
             }
             if (moduleMethods.TryGetValue(
-                (string.Join(".", objectType.NamespaceAndName), 
+                (string.Join(".", [.. objectType.NamespaceAndName, standardMethodCallExpression.Name]), 
                 [.. arguments]), 
                 out var methodInfo
                 )
@@ -232,14 +257,146 @@ namespace NEN
             return standardMethodCallExpression.ReturnType;
         }
 
-        private TypeNode AnalyzeStaticMethodCallExpression(ClassNode c, SymbolTable<TypeNode> localSymbolTable, StaticMethodCallExpression staticMethodCallExpression)
+        private TypeNode AnalyzeStaticMethodCallExpression(ClassNode c, MethodNode method, SymbolTable<TypeNode> localSymbolTable, StaticMethodCallExpression staticMethodCallExpression)
         {
-            throw new NotImplementedException();
+            if (typeTable.TryGetValue(string.Join(".", staticMethodCallExpression.Type.NamespaceAndName), out var type))
+            {
+                staticMethodCallExpression.Type.Type = type;
+            }
+            else
+            {
+                staticMethodCallExpression.Type.Type = module.CoreAssembly!.GetType(
+                    string.Join(".", staticMethodCallExpression.Type.NamespaceAndName)
+                ) ?? throw new UnresolvedTypeException(
+                    content, 
+                    string.Join("::", staticMethodCallExpression.Type.NamespaceAndName), 
+                    staticMethodCallExpression.Type.Line, 
+                    staticMethodCallExpression.Type.Column
+                );
+            }
+            List<Type> arguments = [];
+            for (int i = 0; i < staticMethodCallExpression.Arguments.Length; i++)
+            {
+                TypeNode typ = AnalyzeExpression(c, method, localSymbolTable, ref staticMethodCallExpression.Arguments[i]);
+                arguments.Add(typ.Type!);
+            }
+            if (moduleMethods.TryGetValue(
+                (string.Join(".", [..staticMethodCallExpression.Type.NamespaceAndName, staticMethodCallExpression.Name]), 
+               [..arguments]),
+                out var methodInfo
+                )
+            )
+            {
+                staticMethodCallExpression.Info = methodInfo;
+            }
+            else
+            {
+                staticMethodCallExpression.Info = staticMethodCallExpression.Type.Type!.GetMethod(
+                    staticMethodCallExpression.Name,
+                    [.. arguments]
+                ) ?? throw new UnresolvedIdentifierException(
+                    content,
+                    string.Join("::", [.. staticMethodCallExpression.Type.NamespaceAndName, staticMethodCallExpression.Name]),
+                    staticMethodCallExpression.Line,
+                    staticMethodCallExpression.Column
+                );
+            }
+            staticMethodCallExpression.ReturnType = new TypeNode
+            {
+                NamespaceAndName = staticMethodCallExpression.Info.ReturnType.FullName!.Split("."),
+                Type = staticMethodCallExpression.Info.ReturnType,
+                Line = staticMethodCallExpression .Line,
+                Column = staticMethodCallExpression.Column
+            };
+            return staticMethodCallExpression.ReturnType;
         }
 
-        private TypeNode AnalyzeAmbiguousMethodCallExpression(ClassNode c, SymbolTable<TypeNode> localSymbolTable, AmbiguousMethodCallExpression ambiguousMethodCallExpression)
+        private TypeNode AnalyzeAmbiguousMethodCallExpression(ClassNode c, MethodNode method, SymbolTable<TypeNode> localSymbolTable, ref AmbiguousMethodCallExpression ambiguousMethodCallExpression)
         {
-            throw new NotImplementedException();
+            List<Type> arguments = [];
+            for (int i = 0; i < ambiguousMethodCallExpression.Arguments.Length; i++)
+            {
+                TypeNode typ = AnalyzeExpression(c, method, localSymbolTable, ref ambiguousMethodCallExpression.Arguments[i]);
+                arguments.Add(typ.Type!);
+            }
+            var methodFullName = string.Join(".", [c.Name, ambiguousMethodCallExpression.Name]);
+            if (moduleMethods.TryGetValue(
+                (methodFullName,
+               [.. arguments]),
+                out var methodInfo
+                )
+            )
+            {
+                ambiguousMethodCallExpression.Info = methodInfo;
+            }
+            else
+            {
+                throw new UnresolvedIdentifierException(
+                    content,
+                    ambiguousMethodCallExpression.Name,
+                    ambiguousMethodCallExpression.Line,
+                    ambiguousMethodCallExpression.Column
+                );
+            }
+            if (ambiguousMethodCallExpression.Info.IsStatic)
+            {
+                ambiguousMethodCallExpression = new StaticMethodCallExpression { 
+                    Arguments = ambiguousMethodCallExpression.Arguments, 
+                    Type = new TypeNode { 
+                        NamespaceAndName = ambiguousMethodCallExpression.Info.DeclaringType!.FullName!.Split("."),
+                        Type = methodInfo.DeclaringType,
+                        Line = ambiguousMethodCallExpression.Line,
+                        Column = ambiguousMethodCallExpression.Column
+                    },
+                    Name = ambiguousMethodCallExpression.Name,
+                    ReturnType = new TypeNode {
+                        NamespaceAndName = ambiguousMethodCallExpression.Info.ReturnType!.FullName!.Split("."),
+                        Type = ambiguousMethodCallExpression.Info.ReturnType,
+                        Line = ambiguousMethodCallExpression.Line,
+                        Column = ambiguousMethodCallExpression.Column
+                    },
+                    Info = ambiguousMethodCallExpression.Info,
+                    Line = ambiguousMethodCallExpression.Line,
+                    Column = ambiguousMethodCallExpression.Column
+                };
+            }
+            else
+            {
+                if (method.MethodBuilder!.IsStatic)
+                {
+                    throw new StaticIllegalAccessmentException(
+                        content, 
+                        string.Join("::", [c.Name, ambiguousMethodCallExpression.Name]), 
+                        ambiguousMethodCallExpression.Line, 
+                        ambiguousMethodCallExpression.Column
+                    );
+                }
+                ambiguousMethodCallExpression = new StandardMethodCallExpression
+                {
+                    Arguments = ambiguousMethodCallExpression.Arguments,
+                    Object = new ThisExpression {
+                        ReturnType = new TypeNode {
+                            NamespaceAndName = [c.Name],
+                            Type = typeTable.GetValueOrDefault(c.Name),
+                            Line = ambiguousMethodCallExpression.Line,
+                            Column = ambiguousMethodCallExpression.Column
+                        },
+                        Line = ambiguousMethodCallExpression.Line,
+                        Column = ambiguousMethodCallExpression.Column
+                    },
+                    Name = ambiguousMethodCallExpression.Name,
+                    ReturnType = new TypeNode {
+                        NamespaceAndName = ambiguousMethodCallExpression.Info.ReturnType!.FullName!.Split("."),
+                        Type = ambiguousMethodCallExpression.Info.ReturnType,
+                        Line = ambiguousMethodCallExpression.Line,
+                        Column = ambiguousMethodCallExpression.Column
+                    },
+                    Info = ambiguousMethodCallExpression.Info,
+                    Line = ambiguousMethodCallExpression.Line,
+                    Column = ambiguousMethodCallExpression.Column
+                };
+            }
+            return ambiguousMethodCallExpression.ReturnType!;
         }
 
         private Types.TypeNode AnalyzeLiteralExpression(LiteralExpression literalExpression)
@@ -278,13 +435,13 @@ namespace NEN
             }
         }
 
-        private Types.TypeNode AnalyzeBinaryExpression(ClassNode c, SymbolTable<Types.TypeNode> localSymbolTable,  BinaryExpression binaryExpression)
+        private Types.TypeNode AnalyzeBinaryExpression(ClassNode c, MethodNode method, SymbolTable<Types.TypeNode> localSymbolTable,  BinaryExpression binaryExpression)
         {
             var left = binaryExpression.Left;
             var right = binaryExpression.Right;
 
-            var leftType = AnalyzeExpression(c, localSymbolTable,  left);
-            var rightType = AnalyzeExpression(c, localSymbolTable,  right);
+            var leftType = AnalyzeExpression(c, method, localSymbolTable,  ref left);
+            var rightType = AnalyzeExpression(c, method, localSymbolTable,  ref right);
 
             binaryExpression.Left = left;
             binaryExpression.Right = right;
@@ -294,6 +451,33 @@ namespace NEN
             if (leftTypeFullName != rightTypeFullName) throw new TypeDiscrepancyException(content, leftType, rightType, binaryExpression.Line, binaryExpression.Column);
             binaryExpression.ReturnType = rightType;
             return rightType;
+        }
+
+        private sealed class MethodSignatureComparer : IEqualityComparer<(string MethodName, Type[] ArgumentTypes)>
+        {
+            public bool Equals((string MethodName, Type[] ArgumentTypes) x, (string MethodName, Type[] ArgumentTypes) y)
+            {
+                if (!string.Equals(x.MethodName, y.MethodName, StringComparison.Ordinal)) return false;
+                var xa = x.ArgumentTypes;
+                var ya = y.ArgumentTypes;
+                if (ReferenceEquals(xa, ya)) return true;
+                if (xa is null || ya is null) return false;
+                return xa.SequenceEqual(ya);
+            }
+
+            public int GetHashCode((string MethodName, Type[] ArgumentTypes) obj)
+            {
+                var hash = new HashCode();
+                hash.Add(obj.MethodName, StringComparer.Ordinal);
+                if (obj.ArgumentTypes != null)
+                {
+                    foreach (var t in obj.ArgumentTypes)
+                    {
+                        hash.Add(t);
+                    }
+                }
+                return hash.ToHashCode();
+            }
         }
     }
 }

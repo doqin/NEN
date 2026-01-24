@@ -84,7 +84,31 @@ namespace NENTest
             catch (RedefinedException e)
             {
                 Console.WriteLine(e.Message);
+                return;
             }
+            throw new Exception("Test failed");
+        }
+
+        [TestMethod]
+        public void StaticIllegalAccessmentTest()
+        {
+            string fileName = "StaticIllegalAccessmentTest";
+            (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
+            PrintTokens(tokens);
+            var parser = new Parser(fileName, lines, tokens);
+            var module = parser.Parse();
+            Console.WriteLine($"Parser result:\n{module}");
+            var analyzer = new StaticAnalyzer(lines, module, fileName, []);
+            try
+            {
+                analyzer.Analyze();
+            }
+            catch (StaticIllegalAccessmentException e)
+            {
+                Console.WriteLine(e.Message);
+                return;
+            }
+            throw new Exception("Test failed");
         }
 
         private static void PrintTokens(NEN.Types.Token[] tokens)
@@ -223,11 +247,16 @@ namespace NENTest
                 voidType,
                 null
             );
+            MethodBuilder barMethod = tb.DefineMethod(
+                "Bar",
+                MethodAttributes.Public,
+                voidType,
+                null);
             MethodBuilder fooMethod = tb.DefineMethod(
                 "Foo", 
-                MethodAttributes.Public | MethodAttributes.Static,
+                MethodAttributes.Public,
                 voidType,
-                null
+                [stringType]
             );
             ILGenerator fooGen = fooMethod.GetILGenerator();
             MethodInfo writeLineMethod = consoleType.GetMethod("WriteLine", [boolType]) ?? throw new NullReferenceException();
@@ -236,13 +265,17 @@ namespace NENTest
             fooGen.DeclareLocal(stringType);
             fooGen.Emit(OpCodes.Stloc_0);
             fooGen.Emit(OpCodes.Ldloc_0);
-            fooGen.Emit(OpCodes.Ldstr, "Foo");
+            fooGen.Emit(OpCodes.Ldarg_S, 1);
             fooGen.Emit(OpCodes.Call, stringContainsMethod);
             fooGen.Emit(OpCodes.Call, writeLineMethod);
             fooGen.Emit(OpCodes.Ret);
+            ILGenerator barGen = barMethod.GetILGenerator();
+            barGen.Emit(OpCodes.Ldarg_0);
+            barGen.Emit(OpCodes.Ldstr, "Bar");
+            barGen.Emit(OpCodes.Call, fooMethod);
+            barGen.Emit(OpCodes.Ret);
             ILGenerator mainGen = mainMethod.GetILGenerator();
             MethodInfo fooInfo = fooMethod;
-            mainGen.Emit(OpCodes.Call, fooInfo);
             mainGen.Emit(OpCodes.Ret);
             tb.CreateType();
             SaveAssemblyWithEntrypoint(ab, mainMethod, "MethodCallTest");

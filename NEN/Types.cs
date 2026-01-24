@@ -204,6 +204,13 @@ namespace NEN
             }
         }
 
+        public class ThisExpression : ExpressionNode {
+            public override string ToString()
+            {
+                return "{này}";
+            }
+        }
+
         public class LiteralExpression : ExpressionNode
         {
             public required string Value { get; set; }
@@ -261,8 +268,9 @@ namespace NEN
             public override string ToString()
             {
                 string isResolved = Info == null ? "(*)" : "";
+                string namespaceAndType = Object.ReturnType?.Type == null ? "" : $"{Object.ReturnType.Type?.FullName}";
                 string returnType = ReturnType == null ? "" : $" -> {ReturnType}";
-                return Helper.GetTreeString($"Gọi hàm: {Name}{isResolved}{returnType}", [Object, ..Arguments]);
+                return Helper.GetTreeString($"Gọi hàm: {namespaceAndType}::{Name}{isResolved}{returnType}", [Object, ..Arguments]);
             }
         }
     }
