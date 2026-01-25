@@ -354,6 +354,11 @@ namespace NENTest
             mainGen.Emit(OpCodes.Ldc_I4, 4);
             mainGen.Emit(OpCodes.Stfld, ageFld);
             mainGen.Emit(OpCodes.Stloc_1);
+
+            mainGen.Emit(OpCodes.Ldloc_1);
+            mainGen.Emit(OpCodes.Ldfld, nameFld);
+            mainGen.Emit(OpCodes.Call, writeLineMethod!);
+
             mainGen.Emit(OpCodes.Ret);
             tb.CreateType();
             SaveAssemblyWithEntrypoint(ab, mainMethod, assemblyName);

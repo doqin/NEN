@@ -129,6 +129,39 @@ namespace NEN
                 case ExpressionStatement expressionStatement:
                     AssembleExpressionStatement(ilGenerator, parameters, localSymbolTable, expressionStatement);
                     break;
+                case AssignmentStatement assignmentStatement:
+                    AssembleAssignmentStatement(ilGenerator, parameters, localSymbolTable, assignmentStatement);
+                    break;
+                default:
+                    throw new NotImplementedException();
+            }
+        }
+
+        private void AssembleAssignmentStatement(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, AssignmentStatement assignmentStatement)
+        {
+            AssembleExpression(ilGenerator, parameters, localSymbolTable, assignmentStatement.Destination);
+            AssembleExpression(ilGenerator, parameters, localSymbolTable, assignmentStatement.Source);
+            switch (assignmentStatement.Destination)
+            {
+                case VariableExpression variableExpression:
+                    for (int i = 0; i < parameters.Length; i++)
+                    {
+                        if (parameters[i].Name == variableExpression.Name)
+                        {
+                            ilGenerator.Emit(OpCodes.Starg_S, i);
+                            return;
+                        }
+                    }
+                    if (localSymbolTable.TryGetIndex(variableExpression.Name, out var localVariableIndex))
+                    {
+                        ilGenerator.Emit(OpCodes.Stloc_S, localVariableIndex);
+                    }
+                    else
+                    {
+                        // Usually should not happen as StaticAnalyzer already handles it
+                        throw new UnresolvedIdentifierException(content, variableExpression.Name, variableExpression.Line, variableExpression.Column);
+                    }
+                    break;
                 default:
                     throw new NotImplementedException();
             }
@@ -208,6 +241,7 @@ namespace NEN
 
         private void AssembleVariableExpression( ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, VariableExpression variableExpression)
         {
+            if (!variableExpression.IsLoading) return;
             for (int i = 0; i < parameters.Length; i++)
             {
                 if (parameters[i].Name == variableExpression.Name)

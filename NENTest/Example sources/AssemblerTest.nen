@@ -12,8 +12,10 @@ lớp Chương_Trình
         biến b thuộc Int32 gán 1 * 3 * (10 + 3) * 4 / 5;
         biến c thuộc Int64 gán 2L *32L / 4L;
         biến d thuộc Int64 gán c * (25L + 62L);
+        c gán 10L;
 
         Console::WriteLine(bro);
+        Console::WriteLine(c);
         biến là_sai thuộc Boolean gán str2.Contains("H");
         biến là_đúng thuộc Boolean gán str2.Contains("K");
         System::Console::WriteLine(là_đúng);

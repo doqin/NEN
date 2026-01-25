@@ -9,7 +9,9 @@ lớp Chương_Trình
         biến c thuộc Int32 gán 1 + 2 + 3;
         biến d thuộc Int32 gán 1 * 3 * (10 + 3) * 4;
         biến e thuộc Int64 gán 2L *32L / 4L;
+        b gán 10 + 2;
         biến f thuộc Int32 gán 25 + b;
+        
 
         Console::WriteLine("1 + 1 = {0}", 1 + 1);
         biến là_sai thuộc Boolean gán str2.Contains("H");

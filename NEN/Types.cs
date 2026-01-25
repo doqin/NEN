@@ -186,6 +186,16 @@ namespace NEN
             }
         }
 
+        public class AssignmentStatement : StatementNode
+        {
+            public required ExpressionNode Destination { get; set; }
+            public required ExpressionNode Source { get; set; }
+            public override string ToString()
+            {
+                return Helper.GetTreeString("Gán:", [Destination, Source]);
+            }
+        }
+
         public class ExpressionStatement : StatementNode
         {
             public required ExpressionNode Expression { get; set; }
@@ -240,6 +250,7 @@ namespace NEN
         public class VariableExpression : ExpressionNode
         {
             public required string Name { get; set; }
+            public bool IsLoading { get; set; } = true;
             public override string ToString()
             {
                 if (ReturnType != null)

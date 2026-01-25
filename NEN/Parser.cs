@@ -1,11 +1,6 @@
-﻿using NEN.Types;
-using NEN.Exceptions;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using NEN.Exceptions;
+using NEN.Types;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace NEN
 {
@@ -161,8 +156,24 @@ namespace NEN
                             throw new();
                     }
                 default:
-                    SetBack();
-                    return new ExpressionStatement { Expression = ParsePrimary(), Line = line, Column = column };
+                    return ParseExpressionStatementOrAssignmentStatement();
+            }
+        }
+
+        private StatementNode ParseExpressionStatementOrAssignmentStatement()
+        {
+            SetBack();
+            var (line, column) = GetCurrentPosition();
+            var dest = ParsePrimary();
+            if (Current()?.Value == "gán")
+            {
+                ConsumeOrThrowIfNotEqual(TokenType.Keyword, "gán");
+                var src = ParseExpression(0);
+                return new AssignmentStatement { Destination = dest, Source = src, Line = line, Column = column };
+            }
+            else
+            {
+                return new ExpressionStatement { Expression = dest, Line = line, Column = column };
             }
         }
 

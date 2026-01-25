@@ -154,8 +154,28 @@ namespace NEN
             {
                 case VariableDeclarationStatement variableDeclarationStatement: AnalyzeVariableDeclarationStatement(c, method, localSymbolTable,  variableDeclarationStatement); break;
                 case ExpressionStatement expressionStatement: AnalyzeExpressionStatement(c, method, localSymbolTable, ref expressionStatement); break;
+                case AssignmentStatement assignmentStatement: AnalyzeAssignmentStatement(c, method, localSymbolTable, assignmentStatement); break;
                 default: throw new NotImplementedException();
             }
+        }
+
+        private void AnalyzeAssignmentStatement(ClassNode c, MethodNode method, SymbolTable<TypeNode> localSymbolTable, AssignmentStatement assignmentStatement)
+        {
+            var dest = assignmentStatement.Destination;
+            var destType = AnalyzeExpression(c, method, localSymbolTable, ref dest);
+            assignmentStatement.Destination = dest;
+            var src = assignmentStatement.Source;
+            var srcType = AnalyzeExpression(c, method, localSymbolTable, ref src);
+            assignmentStatement.Source = src;
+            switch(dest)
+            {
+                case VariableExpression variableExpression:
+                    variableExpression.IsLoading = false;
+                    break;
+                default:
+                    throw new IllegalAssignmentException(content, dest.Line, dest.Column);
+            }
+            AnalyzeTypes(destType, srcType);
         }
 
         private void AnalyzeExpressionStatement(ClassNode c, MethodNode method, SymbolTable<TypeNode> localSymbolTable, ref ExpressionStatement expressionStatement)
@@ -180,19 +200,24 @@ namespace NEN
             else
             {
                 var expr = variableDeclarationStatement.InitialValue;
-                AnalyzeExpression(c, method, localSymbolTable,  ref expr);
+                AnalyzeExpression(c, method, localSymbolTable, ref expr);
                 variableDeclarationStatement.InitialValue = expr;
-                var sameName = expr.ReturnType!.Type!.FullName == variableDeclarationStatement.Variable.Type!.Type!.FullName;
-                var isSubClass = expr.ReturnType!.Type!.IsSubclassOf(variableDeclarationStatement.Variable.Type!.Type!);
-                var isAssignable = expr.ReturnType!.Type!.IsAssignableTo(variableDeclarationStatement.Variable.Type!.Type!);
-                if (!sameName && !isSubClass && !isAssignable)
-                {
-                    throw new TypeDiscrepancyException(content, variableDeclarationStatement.Variable.Type, expr.ReturnType, variableDeclarationStatement.Line, variableDeclarationStatement.Column);
-                }
+                AnalyzeTypes(variableDeclarationStatement.Variable.Type, expr.ReturnType!);
             }
             if (!localSymbolTable.TryAdd(variableDeclarationStatement.Variable.Name, variableDeclarationStatement.Variable.Type))
             {
                 throw new RedefinedException(content, variableDeclarationStatement.Variable.Name, variableDeclarationStatement.Variable.Line, variableDeclarationStatement.Variable.Column);
+            }
+        }
+
+        private void AnalyzeTypes(TypeNode left, TypeNode right)
+        {
+            var sameName = right.Type!.FullName == right.Type.FullName;
+            var isSubClass = right.Type.IsSubclassOf(left.Type!);
+            var isAssignable = right.Type.IsAssignableTo(left.Type);
+            if (!sameName && !isSubClass && !isAssignable)
+            {
+                throw new TypeDiscrepancyException(content, left, right, left.Line, left.Column);
             }
         }
 

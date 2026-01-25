@@ -88,6 +88,12 @@ namespace NEN
             public AmbiguousTypeUsage() { }
             public AmbiguousTypeUsage(string[] contentLines, string typeName, string firstTypeName, string secondTypeName, int line, int column) : base(contentLines, $"Không thể phân biệt được kiểu dữ liệu đang sử dụng ({typeName} -> {firstTypeName}, {secondTypeName})", line, column) { }
         }
+
+        public class IllegalAssignmentException : NENException
+        {
+            public IllegalAssignmentException() { }
+            public IllegalAssignmentException(string[] contentLines, int line, int column) : base(contentLines, "Không thể gán giá trị cho loại biểu thức này", line, column) { }
+        }
     } 
 
 }
