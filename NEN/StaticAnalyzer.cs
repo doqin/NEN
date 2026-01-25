@@ -274,7 +274,7 @@ namespace NEN
             var objectType = GetTypeFromName(["System", "Object"], methodCallExpression.Line, methodCallExpression.Column);
             for (int i = 0; i < parameters.Length; i++)
             {
-                if (parameters[i].ParameterType == objectType && IsValueType(methodCallExpression.Arguments[i].ReturnType!))
+                if (parameters[i].ParameterType == objectType && methodCallExpression.Arguments[i].ReturnType!.Type!.IsValueType)
                 {
                     methodCallExpression.Arguments[i] = new BoxExpression
                     {
@@ -537,13 +537,6 @@ namespace NEN
                 throw new("Internal error");
             }
             return type;
-        }
-
-        // Need to update with more types in the future
-        private static bool IsValueType(TypeNode typeNode)
-        {
-            var typeName = string.Join(".", typeNode.NamespaceAndName);
-            return typeName == PrimitiveType.Int32 || typeName == PrimitiveType.Int64;
         }
 
         private sealed class MethodSignatureComparer : IEqualityComparer<(string MethodName, Type[] ArgumentTypes)>

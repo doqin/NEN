@@ -235,7 +235,6 @@ namespace NENTest
         public void MethodCallTest()
         {
             var (ab, context, coreAssembly) = CreateAssembly("MethodCallTest", []);
-            context.GetAssemblies().Select(assembly => assembly.GetExportedTypes().Select(type => type.Namespace).Distinct());
             ModuleBuilder mb = ab.DefineDynamicModule("MethodCallTest");
             TypeBuilder tb = mb.DefineType("MethodCallTest", TypeAttributes.Public | TypeAttributes.Class);
             Type voidType = coreAssembly!.GetType("System.Void")!;
@@ -287,6 +286,77 @@ namespace NENTest
             mainGen.Emit(OpCodes.Ret);
             tb.CreateType();
             SaveAssemblyWithEntrypoint(ab, mainMethod, "MethodCallTest");
+        }
+
+        [TestMethod]
+        public void ArrayTest()
+        {
+            var assemblyName = "ArrayTest";
+            var (ab, context, coreAssembly) = CreateAssembly(assemblyName, []);
+            var mb = ab.DefineDynamicModule(assemblyName);
+            var voidType = coreAssembly!.GetType("System.Void")!;
+            var intType = coreAssembly!.GetType("System.Int32")!;
+            var intArrType = intType.MakeArrayType(1);
+            var stringType = coreAssembly!.GetType("System.String")!;
+            var consoleType = coreAssembly!.GetType("System.Console")!;
+            var writeLineMethod = consoleType.GetMethod("WriteLine", [stringType]);
+
+            var personTb = mb.DefineType("Person", TypeAttributes.Public | TypeAttributes.Class);
+            var nameFld = personTb.DefineField("Name", stringType, FieldAttributes.Public);
+            var ageFld = personTb.DefineField("Age", intType, FieldAttributes.Public);
+            personTb.CreateType();
+            var tb = mb.DefineType(assemblyName, TypeAttributes.Public | TypeAttributes.Class);
+            var mainMethod = tb.DefineMethod(
+                "Main",
+                MethodAttributes.Public | MethodAttributes.Static,
+                voidType,
+                null
+            );
+            var mainGen = mainMethod.GetILGenerator();
+            mainGen.DeclareLocal(intArrType);
+            // array = new int[1] { 1 }
+            mainGen.Emit(OpCodes.Ldc_I4, 1);
+            mainGen.Emit(OpCodes.Newarr, intType);
+            mainGen.Emit(OpCodes.Dup); // get a reference of the array
+            mainGen.Emit(OpCodes.Ldc_I4, 0);
+            mainGen.Emit(OpCodes.Ldc_I4, 0);
+            mainGen.Emit(OpCodes.Stelem_I4);
+            mainGen.Emit(OpCodes.Stloc_0);
+
+            mainGen.Emit(OpCodes.Ldloc_0);
+            mainGen.Emit(OpCodes.Ldc_I4, 0);
+            mainGen.Emit(OpCodes.Ldc_I4, 1);
+            mainGen.Emit(OpCodes.Stelem_I4);
+
+            mainGen.DeclareLocal(personTb);
+            mainGen.Emit(OpCodes.Newobj, personTb.GetConstructor([])!); // constructor
+            mainGen.Emit(OpCodes.Dup); // get instance
+            mainGen.Emit(OpCodes.Ldstr, "Doqin");
+            mainGen.Emit(OpCodes.Stfld, nameFld);
+            mainGen.Emit(OpCodes.Dup); // get instance
+            mainGen.Emit(OpCodes.Ldc_I4, 19);
+            mainGen.Emit(OpCodes.Stfld, ageFld);
+            mainGen.Emit(OpCodes.Stloc_1);
+
+            mainGen.Emit(OpCodes.Ldloc_1);
+            mainGen.Emit(OpCodes.Ldstr, "penis");
+            mainGen.Emit(OpCodes.Stfld, nameFld);
+
+            mainGen.Emit(OpCodes.Ldloc_1);
+            mainGen.Emit(OpCodes.Ldfld, nameFld);
+            mainGen.Emit(OpCodes.Call, writeLineMethod!);
+
+            mainGen.Emit(OpCodes.Newobj, personTb.GetConstructor([])!); // constructor
+            mainGen.Emit(OpCodes.Dup); // get instance
+            mainGen.Emit(OpCodes.Ldstr, "Dawg");
+            mainGen.Emit(OpCodes.Stfld, nameFld);
+            mainGen.Emit(OpCodes.Dup); // get instance
+            mainGen.Emit(OpCodes.Ldc_I4, 4);
+            mainGen.Emit(OpCodes.Stfld, ageFld);
+            mainGen.Emit(OpCodes.Stloc_1);
+            mainGen.Emit(OpCodes.Ret);
+            tb.CreateType();
+            SaveAssemblyWithEntrypoint(ab, mainMethod, assemblyName);
         }
 
         private static void SaveAssemblyWithEntrypoint(PersistedAssemblyBuilder ab, MethodBuilder mainMethod, string assemblyName)
