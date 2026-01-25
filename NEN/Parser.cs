@@ -18,6 +18,7 @@ namespace NEN
         public Types.Module Parse()
         {
             List<ClassNode> classes = [];
+            List<UsingNamespaceStatement> usingNamespaceStatements = [];
             while (index < tokens.Length)
             {
                 var token = Consume();
@@ -26,6 +27,17 @@ namespace NEN
                     case TokenType.Keyword:
                         switch (token.Value)
                         {
+                            case "sử_dụng":
+                                var namespaceToken = ParseType();
+                                usingNamespaceStatements.Add(
+                                    new UsingNamespaceStatement {
+                                        Namespace = namespaceToken.NamespaceAndName,
+                                        Line = namespaceToken.Line,
+                                        Column = namespaceToken.Column,
+                                    }
+                                );
+                                ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ";");
+                                break;
                             case "lớp":
                                 classes.Add(ParseClass());
                                 break;
@@ -37,7 +49,11 @@ namespace NEN
                         throw new ExpectedException(content, "lớp", token.Line, token.Column);
                 }
             }
-            return new Types.Module { Name = moduleName, Classes = [.. classes] };
+            return new Types.Module { 
+                Name = moduleName, 
+                Classes = [.. classes], 
+                UsingNamespaces = [.. usingNamespaceStatements.Distinct()] 
+            };
         }
 
         private ClassNode ParseClass()
@@ -66,7 +82,7 @@ namespace NEN
             return new ClassNode { Name = classIdentifier!.Value, Methods = [.. methods], Line = line, Column = column };
         }
 
-        private static string[] markers = [
+        private static readonly string[] markers = [
             "Chính", "Tĩnh"    
         ];
 

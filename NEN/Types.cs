@@ -85,15 +85,17 @@ namespace NEN
             public Assembly? CoreAssembly { get; set; }
             public PersistedAssemblyBuilder? AssemblyBuilder { get; set; }
             public ModuleBuilder? ModuleBuilder { get; set; }
+            public UsingNamespaceStatement[] UsingNamespaces { get; set; } = [];
+            public string[] AvailableNamespaces { get; set; } = [];
             public override string ToString()
             {
-                return Helper.GetTreeString($"Mô đun: {Name}", Classes);
+                return Helper.GetTreeString<ASTNode>($"Mô đun: {Name}", [..UsingNamespaces, ..Classes]);
             }
         }
 
         public abstract class ASTNode
         {
-            public required int Line {  set; get; }
+            public required int Line { set; get; }
             public required int Column { set; get; }
         }
 
@@ -158,6 +160,17 @@ namespace NEN
         }
 
         public abstract class StatementNode : ASTNode { }
+
+        public class UsingNamespaceStatement : StatementNode
+        {
+            public required string[] Namespace;
+            public bool IsResolved = false;
+            public override string ToString()
+            {
+                string isResolved = IsResolved ? "" : "(*)";
+                return $"Sử dụng không gian tên '{string.Join("::", Namespace)}'{isResolved}";
+            }
+        }
 
         public class VariableDeclarationStatement : StatementNode
         {

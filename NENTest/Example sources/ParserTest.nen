@@ -1,37 +1,38 @@
-﻿
+﻿sử_dụng System;
+
 lớp Chương_Trình
     @Chính @Tĩnh
-    phương_thức Chính() -> System::Void
-        biến str thuộc System::String gán "Xin chào";
-        biến str2 thuộc System::String gán "OK";
-        biến b thuộc System::Int32;
-        biến c thuộc System::Int32 gán 1 + 2 + 3;
-        biến d thuộc System::Int32 gán 1 * 3 * (10 + 3) * 4;
-        biến e thuộc System::Int64 gán 2L *32L / 4L;
-        biến f thuộc System::Int32 gán 25 + b;
+    phương_thức Chính() -> Void
+        biến str thuộc String gán "Xin chào";
+        biến str2 thuộc String gán "OK";
+        biến b thuộc Int32;
+        biến c thuộc Int32 gán 1 + 2 + 3;
+        biến d thuộc Int32 gán 1 * 3 * (10 + 3) * 4;
+        biến e thuộc Int64 gán 2L *32L / 4L;
+        biến f thuộc Int32 gán 25 + b;
 
-        System::Console::WriteLine("1 + 1 = {0}", 1 + 1);
-        biến là_sai thuộc System::Boolean gán str2.Contains("H");
-        biến là_sao thuộc System::Boolean gán str2.Contains("K").Equals(là_sai);
+        Console::WriteLine("1 + 1 = {0}", 1 + 1);
+        biến là_sai thuộc Boolean gán str2.Contains("H");
+        biến là_sao thuộc Boolean gán str2.Contains("K").Equals(là_sai);
     kết_thúc
 kết_thúc
 
 lớp Phụ
     phương_thức Test(
-        a thuộc System::String, 
-        b thuộc System::Int32
-    ) -> System::Void
-        biến str thuộc System::String gán a;
+        a thuộc String, 
+        b thuộc Int32
+    ) -> Void
+        biến str thuộc String gán a;
         Test1();
         Test2();
     kết_thúc
 
-    phương_thức Test1() -> System::Void
-        System::Console::WriteLine("Test1");
+    phương_thức Test1() -> Void
+        Console::WriteLine("Test1");
     kết_thúc
 
     @Tĩnh
-    phương_thức Test2() -> System::Void
-        System::Console::WriteLine("Test2");
+    phương_thức Test2() -> Void
+        Console::WriteLine("Test2");
     kết_thúc
 kết_thúc

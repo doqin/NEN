@@ -76,6 +76,18 @@ namespace NEN
             {
             }
         }
+
+        public class InvalidUsingStatement : NENException
+        {
+            public InvalidUsingStatement() { }
+            public InvalidUsingStatement(string[] contentLines, string typeName, int line, int column) : base(contentLines, $"Không thể sử dụng tên của một kiểu dữ liệu trong câu sử dụng không gian tên (Phát hiện kiểu dữ liệu {typeName})", line, column) { }
+        }
+
+        public class AmbiguousTypeUsage : NENException
+        {
+            public AmbiguousTypeUsage() { }
+            public AmbiguousTypeUsage(string[] contentLines, string typeName, string firstTypeName, string secondTypeName, int line, int column) : base(contentLines, $"Không thể phân biệt được kiểu dữ liệu đang sử dụng ({typeName} -> {firstTypeName}, {secondTypeName})", line, column) { }
+        }
     } 
 
 }

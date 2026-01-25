@@ -17,19 +17,13 @@ namespace NEN
         private readonly Dictionary<(string, Type[]), MethodInfo> moduleMethods = new(new MethodSignatureComparer());
         private readonly Types.Module module = module;
 
-        private void SetupAssembly()
-        {
-            string runtimePath = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
-            PathAssemblyResolver resolver = new([.. Directory.GetFiles(runtimePath, "*.dll"), .. assemblyPaths]);
-            module.MetadataLoadContext = new(resolver);
-            module.CoreAssembly = module.MetadataLoadContext.CoreAssembly!;
-            module.AssemblyBuilder = new(new AssemblyName(assemblyName), module.CoreAssembly!);
-            module.ModuleBuilder = module.AssemblyBuilder.DefineDynamicModule(module.Name);
-        }
-
         public void Analyze()
         {
             SetupAssembly();
+            foreach (var usingNamespaceStatement in module.UsingNamespaces)
+            {
+                AnalyzeUsingNamespaceStatement(usingNamespaceStatement);
+            }
             // Define every class in the module
             foreach (var c in module.Classes)
             {
@@ -53,6 +47,25 @@ namespace NEN
             }
         }
 
+        private void SetupAssembly()
+        {
+            string runtimePath = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
+            PathAssemblyResolver resolver = new([.. Directory.GetFiles(runtimePath, "*.dll"), .. assemblyPaths]);
+            module.MetadataLoadContext = new(resolver);
+            module.CoreAssembly = module.MetadataLoadContext.CoreAssembly!;
+            module.AssemblyBuilder = new(new AssemblyName(assemblyName), module.CoreAssembly!);
+            module.ModuleBuilder = module.AssemblyBuilder.DefineDynamicModule(module.Name);
+            module.AvailableNamespaces =
+                [.. module.MetadataLoadContext
+                    .GetAssemblies()
+                    .Select(
+                        assembly => assembly.GetExportedTypes()
+                            .Select(type => type.Namespace)
+                    ).Aggregate(
+                        new List<string>(), 
+                        (x, y) => x.Concat(y).Distinct().ToList()!)];
+        }
+
         private void DefineClass(ClassNode c)
         {
             c.TypeBuilder = module.ModuleBuilder!.DefineType(
@@ -68,31 +81,17 @@ namespace NEN
         private SymbolTable<TypeNode> DefineMethod(ClassNode c, MethodNode method)
         {
             SymbolTable<TypeNode> localSymbolTable = new();
-            try
-            {
-                method.ReturnType.Type = module.CoreAssembly!.GetType(string.Join(".", method.ReturnType.NamespaceAndName)) ?? throw new();
-            }
-            catch (Exception)
-            {
-                throw new UnresolvedTypeException(content, string.Join("::", method.ReturnType.NamespaceAndName), method.ReturnType.Line, method.ReturnType.Column);
-            }
+            method.ReturnType.Type = GetTypeFromName(
+                method.ReturnType.NamespaceAndName,
+                method.ReturnType.Line,
+                method.ReturnType.Column
+           );
             foreach (var parameter in method.Parameters)
             {
-                try
+                parameter.Type.Type = GetTypeFromName(parameter.Type.NamespaceAndName, parameter.Type.Line, parameter.Type.Column);
+                if (!localSymbolTable.TryAdd(parameter.Name, parameter.Type))
                 {
-                    parameter.Type.Type = module.CoreAssembly!.GetType(string.Join(".", parameter.Type.NamespaceAndName)) ?? throw new();
-                    if (!localSymbolTable.TryAdd(parameter.Name, parameter.Type))
-                    {
-                        throw new RedefinedException(content, parameter.Name, parameter.Line, parameter.Column);
-                    }
-                }
-                catch (RedefinedException)
-                {
-                    throw;
-                }
-                catch (Exception)
-                {
-                    throw new UnresolvedTypeException(content, string.Join("::", parameter.Type.NamespaceAndName), parameter.Type.Line, parameter.Type.Column);
+                    throw new RedefinedException(content, parameter.Name, parameter.Line, parameter.Column);
                 }
             }
             method.MethodBuilder = c.TypeBuilder!.DefineMethod(
@@ -112,6 +111,25 @@ namespace NEN
                 throw new RedefinedException(content, methodFullName, method.Line, method.Column);
             }
             return localSymbolTable;
+        }
+
+        private void AnalyzeUsingNamespaceStatement(UsingNamespaceStatement usingNamespaceStatement)
+        {
+            Type? type = module.CoreAssembly!.GetType(string.Join(".", usingNamespaceStatement.Namespace));
+            if (type != null)
+            {
+                throw new InvalidUsingStatement(content, string.Join("::", usingNamespaceStatement.Namespace), usingNamespaceStatement.Line, usingNamespaceStatement.Column);
+            }
+            if (!module.AvailableNamespaces.Contains(string.Join(".", usingNamespaceStatement.Namespace)))
+            {
+                throw new UnresolvedIdentifierException(
+                    content, 
+                    string.Join("::", usingNamespaceStatement.Namespace), 
+                    usingNamespaceStatement.Line, 
+                    usingNamespaceStatement.Column
+                );
+            }
+            usingNamespaceStatement.IsResolved = true;
         }
 
         private void AnalyzeClass(ClassNode c, SymbolTable<TypeNode>[] localSymbolTableList)
@@ -153,19 +171,11 @@ namespace NEN
             {
                 throw new RedefinedException(content, variableDeclarationStatement.Variable.Name, variableDeclarationStatement.Variable.Line, variableDeclarationStatement.Variable.Column);
             }
-            try
-            {
-                variableDeclarationStatement.Variable.Type.Type = module.CoreAssembly!.GetType(string.Join(".", variableDeclarationStatement.Variable.Type.NamespaceAndName)) ?? throw new();
-            }
-            catch (Exception)
-            {
-                throw new UnresolvedTypeException(
-                    content,
-                    string.Join("::", variableDeclarationStatement.Variable.Type.NamespaceAndName), 
-                    variableDeclarationStatement.Variable.Type.Line, 
-                    variableDeclarationStatement.Variable.Type.Column
-                );
-            }
+            variableDeclarationStatement.Variable.Type.Type = GetTypeFromName(
+                variableDeclarationStatement.Variable.Type.NamespaceAndName, 
+                variableDeclarationStatement.Variable.Type.Line, 
+                variableDeclarationStatement.Variable.Type.Column
+            );
             if (variableDeclarationStatement.InitialValue == null) { }
             else
             {
@@ -261,7 +271,7 @@ namespace NEN
         private void AnalyzeArguments<T>(ref T methodCallExpression) where T : AmbiguousMethodCallExpression
         {
             var parameters = methodCallExpression.Info!.GetParameters();
-            var objectType = module.CoreAssembly!.GetType("System.Object") ?? throw new();
+            var objectType = GetTypeFromName(["System", "Object"], methodCallExpression.Line, methodCallExpression.Column);
             for (int i = 0; i < parameters.Length; i++)
             {
                 if (parameters[i].ParameterType == objectType && IsValueType(methodCallExpression.Arguments[i].ReturnType!))
@@ -279,21 +289,11 @@ namespace NEN
 
         private TypeNode AnalyzeStaticMethodCallExpression(ClassNode c, MethodNode method, SymbolTable<TypeNode> localSymbolTable, StaticMethodCallExpression staticMethodCallExpression)
         {
-            if (typeTable.TryGetValue(string.Join(".", staticMethodCallExpression.Type.NamespaceAndName), out var type))
-            {
-                staticMethodCallExpression.Type.Type = type;
-            }
-            else
-            {
-                staticMethodCallExpression.Type.Type = module.CoreAssembly!.GetType(
-                    string.Join(".", staticMethodCallExpression.Type.NamespaceAndName)
-                ) ?? throw new UnresolvedTypeException(
-                    content, 
-                    string.Join("::", staticMethodCallExpression.Type.NamespaceAndName), 
-                    staticMethodCallExpression.Type.Line, 
-                    staticMethodCallExpression.Type.Column
-                );
-            }
+            staticMethodCallExpression.Type.Type = GetTypeFromName(
+                staticMethodCallExpression.Type.NamespaceAndName, 
+                staticMethodCallExpression.Line, 
+                staticMethodCallExpression.Column
+            );
             List<Type> argumentTypes = [];
             for (int i = 0; i < staticMethodCallExpression.Arguments.Length; i++)
             {
@@ -421,21 +421,39 @@ namespace NEN
             return ambiguousMethodCallExpression.ReturnType!;
         }
 
-        private Types.TypeNode AnalyzeLiteralExpression(LiteralExpression literalExpression)
+        private TypeNode AnalyzeLiteralExpression(LiteralExpression literalExpression)
         {
             if (literalExpression.Value.StartsWith('"') && literalExpression.Value.EndsWith('"'))
             {
-                literalExpression.ReturnType = new Types.TypeNode { NamespaceAndName = ["System", "String"], Type = module.CoreAssembly!.GetType(PrimitiveType.String), Line = literalExpression.Line, Column = literalExpression.Column };
+                string[] namespaceAndName = PrimitiveType.String.Split(".");
+                literalExpression.ReturnType = new TypeNode { 
+                    NamespaceAndName = namespaceAndName, 
+                    Type = GetTypeFromName(namespaceAndName, literalExpression.Line, literalExpression.Column), 
+                    Line = literalExpression.Line, 
+                    Column = literalExpression.Column
+                };
                 literalExpression.Value = literalExpression.Value[1..^1];
             }
             else if (literalExpression.Value.EndsWith('L'))
             {
-                literalExpression.ReturnType = new Types.TypeNode { NamespaceAndName = ["System", "Int64"], Type = module.CoreAssembly!.GetType(PrimitiveType.Int64), Line = literalExpression.Line, Column = literalExpression.Column };
+                string[] namespaceAndName = PrimitiveType.Int64.Split(".");
+                literalExpression.ReturnType = new TypeNode { 
+                    NamespaceAndName = namespaceAndName, 
+                    Type = GetTypeFromName(namespaceAndName, literalExpression.Line, literalExpression.Column), 
+                    Line = literalExpression.Line, 
+                    Column = literalExpression.Column 
+                };
                 literalExpression.Value = literalExpression.Value[0..^1];
             }
             else if (Int32.TryParse(literalExpression.Value, out _))
             {
-                literalExpression.ReturnType = new Types.TypeNode { NamespaceAndName = ["System", "Int32"], Type = module.CoreAssembly!.GetType(PrimitiveType.Int32) , Line = literalExpression.Line, Column = literalExpression.Column };
+                string[] namespaceAndName = PrimitiveType.Int32.Split(".");
+                literalExpression.ReturnType = new TypeNode { 
+                    NamespaceAndName = namespaceAndName, 
+                    Type = GetTypeFromName(namespaceAndName, literalExpression.Line, literalExpression.Column), 
+                    Line = literalExpression.Line, 
+                    Column = literalExpression.Column 
+                };
             }
             else
             {
@@ -468,14 +486,54 @@ namespace NEN
             binaryExpression.Left = left;
             binaryExpression.Right = right;
 
-            var leftTypeFullName = string.Join("::", leftType.NamespaceAndName);
-            var rightTypeFullName = string.Join("::", rightType.NamespaceAndName);
+            var leftTypeFullName = leftType.Type!.FullName;
+            var rightTypeFullName = rightType.Type!.FullName;
             if (leftTypeFullName != rightTypeFullName) throw new TypeDiscrepancyException(content, leftType, rightType, binaryExpression.Line, binaryExpression.Column);
             binaryExpression.ReturnType = rightType;
             return rightType;
         }
 
         /* Helper */
+
+        private Type GetTypeFromName(string[] typeNamespaceAndName, int line, int column)
+        {
+            if (typeTable.TryGetValue(string.Join(".", typeNamespaceAndName), out var t))
+            {
+                return t;
+            }
+            string typeNamespace = string.Join(".", typeNamespaceAndName[0..^1]);
+            string typeName = typeNamespaceAndName.Last();
+            if (string.IsNullOrEmpty(typeName))
+            {
+                throw new ArgumentException("Internal error");
+            }
+            Type? type = null;
+            var namespaces = module.UsingNamespaces
+                .Select(n => string.Join(".", n.Namespace))
+                .Where(e => e.EndsWith(typeNamespace))
+                .ToArray();
+            foreach (var n in namespaces)
+            {
+                var tempType = module.CoreAssembly!.GetType(string.Join(".", [n, typeName]));
+                if (tempType != null && type != null && tempType.FullName != type.FullName)
+                {
+                    string tn = string.Join("::", typeNamespaceAndName);
+                    string ftn = string.Join("::", type.FullName!.Split("."));
+                    string stn = string.Join("::", tempType.FullName!.Split("."));
+                    throw new AmbiguousTypeUsage(content, tn, ftn, stn, line, column);
+                }
+                type = tempType;
+            }
+            if (type == null)
+            {
+                throw new UnresolvedTypeException(content, string.Join("::", typeNamespaceAndName), line, column);
+            }
+            if (!typeTable.TryAdd(string.Join(".", typeNamespaceAndName), type))
+            {
+                throw new("Internal error");
+            }
+            return type;
+        }
 
         // Need to update with more types in the future
         private static bool IsValueType(TypeNode typeNode)

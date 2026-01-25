@@ -235,13 +235,14 @@ namespace NENTest
         public void MethodCallTest()
         {
             var (ab, context, coreAssembly) = CreateAssembly("MethodCallTest", []);
+            context.GetAssemblies().Select(assembly => assembly.GetExportedTypes().Select(type => type.Namespace).Distinct());
             ModuleBuilder mb = ab.DefineDynamicModule("MethodCallTest");
             TypeBuilder tb = mb.DefineType("MethodCallTest", TypeAttributes.Public | TypeAttributes.Class);
             Type voidType = coreAssembly!.GetType("System.Void")!;
             Type consoleType = coreAssembly!.GetType("System.Console")!;
             Type stringType = coreAssembly!.GetType("System.String")!;
             Type boolType = coreAssembly!.GetType("System.Boolean")!;
-            Type intType = coreAssembly!.GetType("System.Int32")!;
+            Type intType = coreAssembly!.GetType("System.Int32") ?? throw new();
             MethodBuilder mainMethod = tb.DefineMethod(
                 "Main", 
                 MethodAttributes.Public | MethodAttributes.Static,
