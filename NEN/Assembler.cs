@@ -170,9 +170,16 @@ namespace NEN
                 case BinaryExpression binaryExpression: AssembleBinaryExpression( ilGenerator, parameters, localSymbolTable, binaryExpression); break;
                 case StandardMethodCallExpression standardMethodCallExpression: AssembleStandardMethodCallExpression( ilGenerator, parameters, localSymbolTable, standardMethodCallExpression); break;
                 case StaticMethodCallExpression staticMethodCallExpression: AssembleStaticMethodCallExpression(ilGenerator, parameters, localSymbolTable, staticMethodCallExpression); break;
-                case ThisExpression thisExpression: AssembleThisExpression(ilGenerator);  break;
+                case ThisExpression: AssembleThisExpression(ilGenerator);  break;
+                case BoxExpression boxExpression: AssembleBoxExpression(ilGenerator, parameters, localSymbolTable, boxExpression); break;
                 default: throw new NotImplementedException();
             }
+        }
+
+        private void AssembleBoxExpression(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, BoxExpression boxExpression)
+        {
+            AssembleExpression(ilGenerator, parameters, localSymbolTable, boxExpression.Expression);
+            ilGenerator.Emit(OpCodes.Box, boxExpression.ReturnType!.Type!);
         }
 
         private void AssembleThisExpression(ILGenerator ilGenerator)

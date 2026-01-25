@@ -273,5 +273,13 @@ namespace NEN
                 return Helper.GetTreeString($"Gọi hàm: {namespaceAndType}::{Name}{isResolved}{returnType}", [Object, ..Arguments]);
             }
         }
+
+        public class BoxExpression : ExpressionNode {
+            public required ExpressionNode Expression { get; set; }
+            public override string ToString()
+            {
+                return Helper.GetTreeString("Box biểu thức", [Expression]);
+            }
+        }
     }
 }

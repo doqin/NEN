@@ -18,6 +18,7 @@ lớp Chương_Trình
         System::Console::WriteLine("Hellu {0}", "everyone");
         System::Console::WriteLine("Yo chào {0}", bro);
         System::Console::WriteLine(d);
+        System::Console::WriteLine("1 + 1 = {0}", 1 + 1);
         Phụ::Test("Foo");
     kết_thúc
 kết_thúc

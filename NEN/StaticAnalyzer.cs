@@ -205,12 +205,12 @@ namespace NEN
         private TypeNode AnalyzeStandardMethodCallExpression(ClassNode c, MethodNode method, SymbolTable<TypeNode> localSymbolTable, ref StandardMethodCallExpression standardMethodCallExpression)
         {
             var objec = standardMethodCallExpression.Object;
-            var objectType = AnalyzeExpression(c, method,localSymbolTable, ref objec);
+            var type = AnalyzeExpression(c, method, localSymbolTable, ref objec);
             standardMethodCallExpression.Object = objec;
             if (
                 method.MethodBuilder!.IsStatic &&
-                string.Join(".", [c.Name, standardMethodCallExpression.Name]) == 
-                string.Join(".", [.. objectType.NamespaceAndName, standardMethodCallExpression.Name])
+                string.Join(".", [c.Name, standardMethodCallExpression.Name]) ==
+                string.Join(".", [.. type.NamespaceAndName, standardMethodCallExpression.Name])
             )
             {
                 throw new StaticIllegalAccessmentException(
@@ -220,41 +220,61 @@ namespace NEN
                     standardMethodCallExpression.Column
                 );
             }
-            List<Type> arguments = [];
+            List<Type> argumentTypes = [];
             for (int i = 0; i < standardMethodCallExpression.Arguments.Length; i++)
             {
-                TypeNode type = AnalyzeExpression(c, method, localSymbolTable, ref standardMethodCallExpression.Arguments[i]);
-                arguments.Add(type.Type!);
+                TypeNode t = AnalyzeExpression(c, method, localSymbolTable, ref standardMethodCallExpression.Arguments[i]);
+                argumentTypes.Add(t.Type!);
             }
             if (moduleMethods.TryGetValue(
-                (string.Join(".", [.. objectType.NamespaceAndName, standardMethodCallExpression.Name]), 
-                [.. arguments]), 
+                (string.Join(".", [.. type.NamespaceAndName, standardMethodCallExpression.Name]),
+                [.. argumentTypes]),
                 out var methodInfo
                 )
             )
             {
                 standardMethodCallExpression.Info = methodInfo;
-            } 
+            }
             else
             {
-                standardMethodCallExpression.Info = objectType.Type!.GetMethod(
+                standardMethodCallExpression.Info = type.Type!.GetMethod(
                     standardMethodCallExpression.Name,
-                    [.. arguments]
+                    [.. argumentTypes]
                 ) ?? throw new UnresolvedIdentifierException(
                     content,
-                    string.Join("::", [.. objectType.NamespaceAndName, standardMethodCallExpression.Name]),
+                    string.Join("::", [.. type.NamespaceAndName, standardMethodCallExpression.Name]),
                     standardMethodCallExpression.Line,
                     standardMethodCallExpression.Column
                 );
             }
+            AnalyzeArguments(ref standardMethodCallExpression);
             standardMethodCallExpression.ReturnType = new TypeNode
             {
-                NamespaceAndName = standardMethodCallExpression.Info.ReturnType.FullName!.Split("."),
+                NamespaceAndName = standardMethodCallExpression.Info!.ReturnType.FullName!.Split("."),
                 Type = standardMethodCallExpression.Info.ReturnType,
                 Line = standardMethodCallExpression.Line,
                 Column = standardMethodCallExpression.Column
             };
             return standardMethodCallExpression.ReturnType;
+        }
+
+        private void AnalyzeArguments<T>(ref T methodCallExpression) where T : AmbiguousMethodCallExpression
+        {
+            var parameters = methodCallExpression.Info!.GetParameters();
+            var objectType = module.CoreAssembly!.GetType("System.Object") ?? throw new();
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                if (parameters[i].ParameterType == objectType && IsValueType(methodCallExpression.Arguments[i].ReturnType!))
+                {
+                    methodCallExpression.Arguments[i] = new BoxExpression
+                    {
+                        ReturnType = methodCallExpression.Arguments[i].ReturnType,
+                        Expression = methodCallExpression.Arguments[i],
+                        Line = methodCallExpression.Arguments[i].Line,
+                        Column = methodCallExpression.Arguments[i].Column
+                    };
+                }
+            }
         }
 
         private TypeNode AnalyzeStaticMethodCallExpression(ClassNode c, MethodNode method, SymbolTable<TypeNode> localSymbolTable, StaticMethodCallExpression staticMethodCallExpression)
@@ -274,15 +294,15 @@ namespace NEN
                     staticMethodCallExpression.Type.Column
                 );
             }
-            List<Type> arguments = [];
+            List<Type> argumentTypes = [];
             for (int i = 0; i < staticMethodCallExpression.Arguments.Length; i++)
             {
                 TypeNode typ = AnalyzeExpression(c, method, localSymbolTable, ref staticMethodCallExpression.Arguments[i]);
-                arguments.Add(typ.Type!);
+                argumentTypes.Add(typ.Type!);
             }
             if (moduleMethods.TryGetValue(
                 (string.Join(".", [..staticMethodCallExpression.Type.NamespaceAndName, staticMethodCallExpression.Name]), 
-               [..arguments]),
+               [..argumentTypes]),
                 out var methodInfo
                 )
             )
@@ -293,7 +313,7 @@ namespace NEN
             {
                 staticMethodCallExpression.Info = staticMethodCallExpression.Type.Type!.GetMethod(
                     staticMethodCallExpression.Name,
-                    [.. arguments]
+                    [.. argumentTypes]
                 ) ?? throw new UnresolvedIdentifierException(
                     content,
                     string.Join("::", [.. staticMethodCallExpression.Type.NamespaceAndName, staticMethodCallExpression.Name]),
@@ -301,9 +321,10 @@ namespace NEN
                     staticMethodCallExpression.Column
                 );
             }
+            AnalyzeArguments(ref staticMethodCallExpression);
             staticMethodCallExpression.ReturnType = new TypeNode
             {
-                NamespaceAndName = staticMethodCallExpression.Info.ReturnType.FullName!.Split("."),
+                NamespaceAndName = staticMethodCallExpression.Info!.ReturnType.FullName!.Split("."),
                 Type = staticMethodCallExpression.Info.ReturnType,
                 Line = staticMethodCallExpression .Line,
                 Column = staticMethodCallExpression.Column
@@ -313,16 +334,16 @@ namespace NEN
 
         private TypeNode AnalyzeAmbiguousMethodCallExpression(ClassNode c, MethodNode method, SymbolTable<TypeNode> localSymbolTable, ref AmbiguousMethodCallExpression ambiguousMethodCallExpression)
         {
-            List<Type> arguments = [];
+            List<Type> argumentTypes = [];
             for (int i = 0; i < ambiguousMethodCallExpression.Arguments.Length; i++)
             {
                 TypeNode typ = AnalyzeExpression(c, method, localSymbolTable, ref ambiguousMethodCallExpression.Arguments[i]);
-                arguments.Add(typ.Type!);
+                argumentTypes.Add(typ.Type!);
             }
             var methodFullName = string.Join(".", [c.Name, ambiguousMethodCallExpression.Name]);
             if (moduleMethods.TryGetValue(
                 (methodFullName,
-               [.. arguments]),
+               [.. argumentTypes]),
                 out var methodInfo
                 )
             )
@@ -338,7 +359,8 @@ namespace NEN
                     ambiguousMethodCallExpression.Column
                 );
             }
-            if (ambiguousMethodCallExpression.Info.IsStatic)
+            AnalyzeArguments(ref ambiguousMethodCallExpression);
+            if (ambiguousMethodCallExpression.Info!.IsStatic)
             {
                 ambiguousMethodCallExpression = new StaticMethodCallExpression { 
                     Arguments = ambiguousMethodCallExpression.Arguments, 
@@ -451,6 +473,15 @@ namespace NEN
             if (leftTypeFullName != rightTypeFullName) throw new TypeDiscrepancyException(content, leftType, rightType, binaryExpression.Line, binaryExpression.Column);
             binaryExpression.ReturnType = rightType;
             return rightType;
+        }
+
+        /* Helper */
+
+        // Need to update with more types in the future
+        private static bool IsValueType(TypeNode typeNode)
+        {
+            var typeName = string.Join(".", typeNode.NamespaceAndName);
+            return typeName == PrimitiveType.Int32 || typeName == PrimitiveType.Int64;
         }
 
         private sealed class MethodSignatureComparer : IEqualityComparer<(string MethodName, Type[] ArgumentTypes)>
