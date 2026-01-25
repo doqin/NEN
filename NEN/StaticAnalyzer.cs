@@ -512,6 +512,10 @@ namespace NEN
                 .Select(n => string.Join(".", n.Namespace))
                 .Where(e => e.EndsWith(typeNamespace))
                 .ToArray();
+            if (namespaces.Length == 0)
+            {
+                namespaces = [typeNamespace];
+            }
             foreach (var n in namespaces)
             {
                 var tempType = module.CoreAssembly!.GetType(string.Join(".", [n, typeName]));
