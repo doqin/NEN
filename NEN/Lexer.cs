@@ -56,7 +56,7 @@ namespace NEN
         private static bool AnalyseKeyword( Token token)
         {
             string[] keywords = [
-                "lớp", "phương_thức", "quay_lại", "trả_về", "kết_thúc", "sử_dụng", "biến", "hằng", "gán", "thuộc"
+                "lớp", "phương_thức", "quay_lại", "trả_về", "kết_thúc", "sử_dụng", "biến", "hằng", "gán", "thuộc", "tạo"
             ];
             if (keywords.Contains(token.Value))
             {
@@ -83,7 +83,7 @@ namespace NEN
             }
         }
 
-        [GeneratedRegex(@"(?<comment>//.*)|(?<comment>(/\*|\*/))|(?<literal>[0-9]+L)|(?<literal>[0-9]+)|(?<literal>""[^""]+"")|(?<operator>\->)|(?<marker>@)|(?<punctuator>::)|(?<punctuator>[,.();])|(?<operator>[+\-*\/=<>:])|(?<unknown>[^\s,.();+\-*\/=<>@:]+)")]
+        [GeneratedRegex(@"(?<comment>//.*)|(?<comment>(/\*|\*/))|(?<literal>[0-9]+L)|(?<literal>[0-9]+)|(?<literal>""[^""]+"")|(?<operator>\->)|(?<marker>@)|(?<punctuator>::)|(?<punctuator>[,.(){}\[\];])|(?<operator>[+\-*\/=<>:])|(?<unknown>[^\s,.(){}\[\];+\-*\/=<>@:]+)")]
         private static partial Regex LexerRegex();
         private static Types.TokenType GetMatchType(Match match)
         {

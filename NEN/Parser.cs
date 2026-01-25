@@ -1,6 +1,7 @@
 ﻿using NEN.Exceptions;
 using NEN.Types;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace NEN
 {
@@ -23,12 +24,12 @@ namespace NEN
                         switch (token.Value)
                         {
                             case "sử_dụng":
-                                var namespaceToken = ParseType();
+                                var (namespaceIdentifiers, line, column) = ParseIdentifier();
                                 usingNamespaceStatements.Add(
                                     new UsingNamespaceStatement {
-                                        Namespace = namespaceToken.NamespaceAndName,
-                                        Line = namespaceToken.Line,
-                                        Column = namespaceToken.Column,
+                                        Namespace = namespaceIdentifiers,
+                                        Line = line,
+                                        Column = column,
                                     }
                                 );
                                 ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ";");
@@ -217,18 +218,44 @@ namespace NEN
             };
         }
 
-        private Types.TypeNode ParseType()
+        private (string[], int, int) ParseIdentifier()
         {
             var (line, column) = GetCurrentPosition();
-            List<string> typeIdentifiers = [];
+            List<string> identifiers = [];
             do
             {
-                var token = ConsumeOrThrow(TokenType.Identifier, "kiểu dữ liệu");
-                typeIdentifiers.Add(token.Value);
+                var token = ConsumeOrThrow(TokenType.Identifier, "tên không gian");
+                identifiers.Add(token.Value);
                 if (Current()?.Value != "::") break;
                 ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "::");
             } while (true);
-            return new Types.TypeNode { NamespaceAndName = [..typeIdentifiers], Line = line, Column = column };
+            return ([.. identifiers], line, column);
+        }
+
+        private TypeNode ParseType()
+        {
+            var (typeIdentifiers, line, column) = ParseIdentifier();
+            TypeNode type = new NamedType
+            {
+                Namespaces = typeIdentifiers[0..^1],
+                Name = typeIdentifiers[^1],
+                Line = line,
+                Column = column
+            };
+            while (Current()?.Value == "[")
+            {
+                ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "[");
+                ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "]");
+                type = new ArrayType
+                {
+                    ElementType = type,
+                    Namespaces = type.Namespaces,
+                    Name = $"{type.Name}[*]",
+                    Line = line,
+                    Column = column
+                };
+            }
+            return type;
         }
 
         private ExpressionNode ParseExpression(int minPrecedence)
@@ -284,7 +311,16 @@ namespace NEN
                     else
                     {
                         UnexpectedHelper(token);
-                        throw new(); // never happens
+                    }
+                    break;
+                case TokenType.Keyword:
+                    if (token.Value == "tạo")
+                    {
+                        expression = ParseNewExpression();
+                    }
+                    else
+                    {
+                        UnexpectedHelper(token);
                     }
                     break;
                 default: throw new NotImplementedException();
@@ -298,17 +334,43 @@ namespace NEN
                     throw new NotImplementedException();
                 }
                 var arguments = ParseArguments();
-                expression = new StandardMethodCallExpression { Object = expression, Name = identifier.Value, Arguments = arguments, Line = line, Column = column };
+                expression = new StandardMethodCallExpression { Object = expression!, Name = identifier.Value, Arguments = arguments, Line = line, Column = column };
             }
-            return expression;
+            return expression!;
+        }
+
+        private ExpressionNode ParseNewExpression()
+        {
+            var (type, line, column) = ParseIdentifier();
+            if (Current()?.Value == "[")
+            {
+                List<ExpressionNode> sizes = [];
+                do {
+                    ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "[");
+                    if (Current()?.Value != null && Current()?.Value != "]")
+                    {
+                        sizes.Add(ParseExpression(0));
+                    }
+                    ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "]");
+                } while (Current()?.Value == "[");
+                throw new NotImplementedException();
+            }
+            else
+            {
+                throw new NotImplementedException();
+            }
         }
 
         private ExpressionNode ParseStaticAccessment()
         {
-            var (line, column) = GetCurrentPosition();
-            TypeNode typeIdentifier = ParseType();
-            var identifier = typeIdentifier.NamespaceAndName[^1..^0][0];
-            typeIdentifier.NamespaceAndName = typeIdentifier.NamespaceAndName[0..^1];
+            var (identifier, line, column) = ParseIdentifier();
+            NamedType type = new()
+            {
+                Namespaces = identifier[0..^2],
+                Name = identifier[^2],
+                Line = line,
+                Column = column
+            };
             if (Current() != null && Current()?.Value != "(")
             {
                 throw new NotImplementedException();
@@ -316,9 +378,9 @@ namespace NEN
             var arguments = ParseArguments();
             return new StaticMethodCallExpression
             {
-                Type = typeIdentifier,
+                Type = type,
                 Arguments = arguments,
-                Name = identifier,
+                Name = identifier[^1],
                 Line = line,
                 Column = column
             };

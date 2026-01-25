@@ -145,17 +145,42 @@ namespace NEN
             public static readonly string String = "System.String";
         }
 
-        public class TypeNode : ASTNode
+        public abstract class TypeNode : ASTNode
         {
-            public required string[] NamespaceAndName { get; set; }
-            public Type? Type { get; set; }
+            public required string[] Namespaces { get; set; }
+            public required string Name { get; set; }
+            public string FullName => string.Join("::", [.. Namespaces, Name]);
+            public string CLRFullName => string.Join(".", [.. Namespaces, Name]);
+        }
+
+        public class NamedType : TypeNode
+        {
+            public Type? CLRType { get; set; }
             public override string ToString()
             {
-                if (Type == null)
+                if (CLRType == null)
                 {
-                    return $"{string.Join("::", NamespaceAndName)}(*)";
+                    return $"{string.Join("::", [..Namespaces, Name])}(*)";
                 }
-                return Type.FullName ?? string.Join("::", NamespaceAndName);
+                return CLRType.FullName ?? string.Join("::", [.. Namespaces, Name]);
+            }
+        }
+
+        public class ArrayType : TypeNode
+        {
+            public required TypeNode ElementType { get; set; }
+            // For now: always 1
+            public int Rank { get; set; } = 1;
+
+            // For now: always true (SZARRAY)
+            public bool IsJagged => Rank == 1;
+
+            public override string ToString()
+            {
+                if (Rank == 1)
+                    return $"{ElementType}[*]";
+
+                return $"{ElementType}[{new string(',', Rank - 1)}]";
             }
         }
 
@@ -276,13 +301,12 @@ namespace NEN
 
         public class StaticMethodCallExpression : AmbiguousMethodCallExpression
         {
-            public required TypeNode Type { get; set; }
+            public required NamedType Type { get; set; }
             public override string ToString()
             {
                 string isResolved = Info == null ? "(*)" : "";
-                string namespaceAndType = Type.Type == null ? $"{string.Join("::", Type.NamespaceAndName)}(*)" : Type.Type.FullName ?? string.Join("::", Type.NamespaceAndName);
                 string returnType = ReturnType == null ? "" : $" -> {ReturnType}";
-                return Helper.GetTreeString($"Gọi hàm: {namespaceAndType}::{Name}{isResolved}{returnType}", Arguments);
+                return Helper.GetTreeString($"Gọi hàm: {Type.FullName}{isResolved}{returnType}", Arguments);
             }
         }
 
@@ -292,9 +316,9 @@ namespace NEN
             public override string ToString()
             {
                 string isResolved = Info == null ? "(*)" : "";
-                string namespaceAndType = Object.ReturnType?.Type == null ? "" : $"{Object.ReturnType.Type?.FullName}";
+                string namespaceAndType = Object.ReturnType == null ? "" : $"{Object.ReturnType?.FullName}";
                 string returnType = ReturnType == null ? "" : $" -> {ReturnType}";
-                return Helper.GetTreeString($"Gọi hàm: {namespaceAndType}::{Name}{isResolved}{returnType}", [Object, ..Arguments]);
+                return Helper.GetTreeString($"Gọi hàm: {namespaceAndType}{isResolved}{returnType}", [Object, ..Arguments]);
             }
         }
 
@@ -304,6 +328,12 @@ namespace NEN
             {
                 return Helper.GetTreeString("Box biểu thức", [Expression]);
             }
+        }
+
+        public class NewArrayExpression : ExpressionNode
+        {
+            public required ExpressionNode[]? Sizes { get; set; }
+            public ExpressionNode[]? Elements { get; set; }
         }
     }
 }

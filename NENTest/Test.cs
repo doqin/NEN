@@ -296,7 +296,8 @@ namespace NENTest
             var mb = ab.DefineDynamicModule(assemblyName);
             var voidType = coreAssembly!.GetType("System.Void")!;
             var intType = coreAssembly!.GetType("System.Int32")!;
-            var intArrType = intType.MakeArrayType(1);
+            var intArrType = coreAssembly!.GetType("System.Int32[*]")!;
+            Console.WriteLine($"{intArrType.FullName}");
             var stringType = coreAssembly!.GetType("System.String")!;
             var consoleType = coreAssembly!.GetType("System.Console")!;
             var writeLineMethod = consoleType.GetMethod("WriteLine", [stringType]);
@@ -362,6 +363,26 @@ namespace NENTest
             mainGen.Emit(OpCodes.Ret);
             tb.CreateType();
             SaveAssemblyWithEntrypoint(ab, mainMethod, assemblyName);
+        }
+
+        [TestMethod]
+        public void ArrayNameTest()
+        {
+            Console.WriteLine($"{typeof(int).FullName}");
+            foreach( var i in Enumerable.Range( 1,5)) {
+                Console.WriteLine($"{typeof(int).MakeArrayType(i).FullName}");
+            }
+            Console.WriteLine($"{typeof(int[]).FullName}"); // Use .IsSZArray
+
+            var arraymatrix = new int[2, 2][,];
+            var arr = new[] { 1 };
+            var matrix = new int[2, 2] { { 1, 2 }, { 3, 3 } };
+            matrix[0,0] = 1;
+            var arrarr = new int[][] { new[] { 1, 2 }, new[] { 3, 3 } }; // array of references
+            arrarr[0] = new int[] { 2, 3, 4, 5 };
+            var arrarr2 = new int[2][];
+            arrarr2[0] = new int[] { 123, 123 };
+            arrarr2[1] = new int[] { 1231, 12312312, 123123 };
         }
 
         private static void SaveAssemblyWithEntrypoint(PersistedAssemblyBuilder ab, MethodBuilder mainMethod, string assemblyName)
