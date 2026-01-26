@@ -280,14 +280,24 @@ namespace NEN
             // Analyze elements
             for (int i = 0; i < newArrayExpression.Elements.Length; i++)
             {
-                TypeNode expressionType = AnalyzeExpression(c, method, localSymbolTable, ref newArrayExpression.Elements[i]);
-                switch(newArrayExpression.ReturnType)
+                TypeNode expressionTypeNode = AnalyzeExpression(c, method, localSymbolTable, ref newArrayExpression.Elements[i]);
+                Type expressionType = GetTypeFromTypeNode(expressionTypeNode, expressionTypeNode.Line, expressionTypeNode.Column);
+                Type objectType = module.CoreAssembly!.GetType("System.Object")!;
+                TypeNode elementTypeNode = ((ArrayType)newArrayExpression.ReturnType).ElementType;
+                Type elementType = GetTypeFromTypeNode(elementTypeNode, elementTypeNode.Line, elementTypeNode.Column);
+                if (expressionType.IsValueType && elementType == objectType)
                 {
-                    case ArrayType arrayType:
-                        AnalyzeTypes(arrayType.ElementType, expressionType);
-                        break;
-                    default:
-                        throw new Exception("Internal error");
+                    newArrayExpression.Elements[i] = new BoxExpression
+                    {
+                        ReturnType = newArrayExpression.Elements[i].ReturnType,
+                        Expression = newArrayExpression.Elements[i],
+                        Line = newArrayExpression.Elements[i].Line,
+                        Column = newArrayExpression.Elements[i].Column
+                    };
+                }
+                else
+                {
+                    AnalyzeTypes(elementTypeNode, expressionTypeNode);
                 }
             }
             // Check if size isn't specified but no initialization

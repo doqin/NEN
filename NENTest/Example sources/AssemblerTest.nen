@@ -14,6 +14,13 @@ lớp Chương_Trình
         biến d thuộc Int64 gán c * (25L + 62L);
         c gán 10L;
 
+        biến mảng1 thuộc String[] gán tạo String[3] { "mảng", "của", "mảng" };
+        biến mảng2 thuộc Int32[] gán tạo Int32[] { 0, 1, 2, 3, 4 };
+        biến mảng_của_mảng thuộc String[][] gán tạo String[][] {
+            tạo String[] { "Đây", "là" },
+            mảng1
+        };
+
         Console::WriteLine(bro);
         Console::WriteLine(c);
         biến là_sai thuộc Boolean gán str2.Contains("H");

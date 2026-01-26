@@ -193,8 +193,49 @@ namespace NEN
                 case StaticMethodCallExpression staticMethodCallExpression: AssembleStaticMethodCallExpression(ilGenerator, parameters, localSymbolTable, staticMethodCallExpression); break;
                 case ThisExpression: AssembleThisExpression(ilGenerator);  break;
                 case BoxExpression boxExpression: AssembleBoxExpression(ilGenerator, parameters, localSymbolTable, boxExpression); break;
+                case NewArrayExpression newArrayExpression: AssembleNewArrayExpression(ilGenerator, parameters, localSymbolTable, newArrayExpression); break;
                 default: throw new NotImplementedException();
             }
+        }
+
+        private void AssembleNewArrayExpression(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, NewArrayExpression newArrayExpression)
+        {
+            AssembleExpression(ilGenerator, parameters, localSymbolTable, newArrayExpression.Size!);
+            Type arrayElementType = Lower(((ArrayType)newArrayExpression.ReturnType!).ElementType);
+            ilGenerator.Emit(OpCodes.Newarr, arrayElementType);
+            for (int i = 0; i < newArrayExpression.Elements.Length; i++)
+            {
+                ilGenerator.Emit(OpCodes.Dup); // Load a reference to the array onto the stack
+                ilGenerator.Emit(OpCodes.Ldc_I4, i); // Load the index onto the stack
+                AssembleExpression(ilGenerator, parameters, localSymbolTable, newArrayExpression.Elements[i]); // Load value or reference onto the stack
+                Type elementType = Lower(newArrayExpression.Elements[i].ReturnType!);
+                if (elementType.IsValueType && arrayElementType.IsValueType)
+                {
+                    var line = newArrayExpression.Elements[i].ReturnType!.Line;
+                    var column = newArrayExpression.Elements[i].ReturnType!.Column;
+                    if (elementType == GetTypeFromName(PrimitiveType.Int32, line, column))
+                    {
+                        ilGenerator.Emit(OpCodes.Stelem_I4);
+                    }
+                    else if (elementType == GetTypeFromName(PrimitiveType.Int64, line, column))
+                    {
+                        ilGenerator.Emit(OpCodes.Stelem_I8);
+                    }
+                    else
+                    {
+                        throw new NotImplementedException();
+                    }
+                }
+                else
+                {
+                    ilGenerator.Emit(OpCodes.Stelem_Ref);
+                }
+            }
+        }
+
+        private Type GetTypeFromName(string typeName, int line, int column)
+        {
+            return module.CoreAssembly!.GetType(typeName) ?? throw new UnresolvedTypeException(content, typeName, line, column);
         }
 
         private void AssembleBoxExpression(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, BoxExpression boxExpression)
