@@ -232,32 +232,6 @@ namespace NEN
             return ([.. identifiers], line, column);
         }
 
-        private TypeNode ParseType()
-        {
-            var (typeIdentifiers, line, column) = ParseIdentifier();
-            TypeNode type = new NamedType
-            {
-                Namespaces = typeIdentifiers[0..^1],
-                Name = typeIdentifiers[^1],
-                Line = line,
-                Column = column
-            };
-            while (Current()?.Value == "[")
-            {
-                ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "[");
-                ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "]");
-                type = new ArrayType
-                {
-                    ElementType = type,
-                    Namespaces = type.Namespaces,
-                    Name = $"{type.Name}[*]",
-                    Line = line,
-                    Column = column
-                };
-            }
-            return type;
-        }
-
         private ExpressionNode ParseExpression(int minPrecedence)
         {
             var (line, column) = GetCurrentPosition();
@@ -280,7 +254,7 @@ namespace NEN
         {
             ExpressionNode? expression = null;
             var (line, column) = GetCurrentPosition();
-            var token = ConsumeOrThrow(TokenType.Literal | TokenType.Identifier | TokenType.Punctuator, "biểu thức");
+            var token = ConsumeOrThrow(TokenType.Literal | TokenType.Identifier | TokenType.Punctuator | TokenType.Keyword, "biểu thức");
             switch (token.Type)
             {
                 case TokenType.Literal:
@@ -341,24 +315,84 @@ namespace NEN
 
         private ExpressionNode ParseNewExpression()
         {
-            var (type, line, column) = ParseIdentifier();
-            if (Current()?.Value == "[")
+            var (typeIdentifiers, line, column) = ParseIdentifier();
+            TypeNode type = new NamedType
             {
-                List<ExpressionNode> sizes = [];
-                do {
-                    ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "[");
-                    if (Current()?.Value != null && Current()?.Value != "]")
+                Namespaces = typeIdentifiers[0..^1],
+                Name = typeIdentifiers[^1],
+                Line = line,
+                Column = column
+            };
+            int nesting = 1;
+            ExpressionNode? size = null;
+            while (Current()?.Value == "[")
+            {
+                ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "[");
+                if (nesting == 1 && Current() != null && Current()?.Value != "]")
+                {
+                    size = ParseExpression(0);
+                }
+                ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "]");
+                type = new ArrayType
+                {
+                    ElementType = type,
+                    Namespaces = type.Namespaces,
+                    Name = $"{type.Name}[*]",
+                    Line = line,
+                    Column = column
+                };
+                nesting++;
+            }
+            switch(type)
+            {
+                case ArrayType arrayType:
+                    List<ExpressionNode> elements = [];
+                    if (Current()?.Value == "{")
                     {
-                        sizes.Add(ParseExpression(0));
+                        ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "{");
+                        while (Current() != null && Current()?.Value != "}")
+                        {
+                            elements.Add(ParseExpression(0));
+                            if (Current() != null && Current()?.Value != "}") ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ",");
+                        }
+                        ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "}");
                     }
-                    ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "]");
-                } while (Current()?.Value == "[");
-                throw new NotImplementedException();
+                    return new NewArrayExpression { 
+                        ReturnType = arrayType, 
+                        Size = size, 
+                        Elements = [..elements], 
+                        Line = line, 
+                        Column = column 
+                    };
+                default:
+                    throw new NotImplementedException();
             }
-            else
+        }
+
+        private TypeNode ParseType()
+        {
+            var (typeIdentifiers, line, column) = ParseIdentifier();
+            TypeNode type = new NamedType
             {
-                throw new NotImplementedException();
+                Namespaces = typeIdentifiers[0..^1],
+                Name = typeIdentifiers[^1],
+                Line = line,
+                Column = column
+            };
+            while (Current()?.Value == "[")
+            {
+                ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "[");
+                ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "]");
+                type = new ArrayType
+                {
+                    ElementType = type,
+                    Namespaces = type.Namespaces,
+                    Name = $"{type.Name}[*]",
+                    Line = line,
+                    Column = column
+                };
             }
+            return type;
         }
 
         private ExpressionNode ParseStaticAccessment()

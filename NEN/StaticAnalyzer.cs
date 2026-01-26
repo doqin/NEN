@@ -2,6 +2,7 @@
 using NEN.Types;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 
 namespace NEN
@@ -227,7 +228,7 @@ namespace NEN
         {
             Type left = GetTypeFromTypeNode(leftNode, leftNode.Line, leftNode.Column);
             Type right = GetTypeFromTypeNode(rightNode, rightNode.Line, rightNode.Column);
-            var sameName = right.FullName == right.FullName;
+            var sameName = right.FullName == left.FullName;
             var isSubClass = right.IsSubclassOf(left);
             var isAssignable = right.IsAssignableTo(left);
             if (!sameName && !isSubClass && !isAssignable)
@@ -236,12 +237,13 @@ namespace NEN
             }
         }
 
-        private Types.TypeNode AnalyzeExpression(ClassNode c, MethodNode method, SymbolTable<Types.TypeNode> localSymbolTable, ref ExpressionNode expression)
+        private TypeNode AnalyzeExpression(ClassNode c, MethodNode method, SymbolTable<Types.TypeNode> localSymbolTable, ref ExpressionNode expression)
         {
             switch(expression)
             {
                 case LiteralExpression literalExpression: return AnalyzeLiteralExpression(literalExpression);
                 case VariableExpression variableExpression: return AnalyzeVariableExpression(localSymbolTable, variableExpression);
+                case NewArrayExpression newArrayExpression: return AnalyzeNewArrayExpression(c, method, localSymbolTable, ref newArrayExpression);
                 case StandardMethodCallExpression standardMethodCallExpression: return AnalyzeStandardMethodCallExpression(c, method, localSymbolTable, ref standardMethodCallExpression);
                 case StaticMethodCallExpression staticMethodCallExpression: return AnalyzeStaticMethodCallExpression(c, method, localSymbolTable, staticMethodCallExpression);
                 case AmbiguousMethodCallExpression ambiguousMethodCallExpression: 
@@ -250,6 +252,95 @@ namespace NEN
                     return type;
                 case BinaryExpression binaryExpression: return AnalyzeBinaryExpression(c, method, localSymbolTable,  binaryExpression);
                 default: throw new NotImplementedException();
+            }
+        }
+
+        private TypeNode AnalyzeNewArrayExpression(ClassNode c, MethodNode method, SymbolTable<TypeNode> localSymbolTable, ref NewArrayExpression newArrayExpression)
+        {
+            int? size = null;
+            Type type = GetTypeFromTypeNode(newArrayExpression.ReturnType!, newArrayExpression.ReturnType!.Line, newArrayExpression.ReturnType.Column);
+            newArrayExpression.ReturnType = CreateTypeNodeFromType(type, newArrayExpression.ReturnType!.Line, newArrayExpression.ReturnType.Column);
+
+            // Analyze size expression if not null
+            if (newArrayExpression.Size != null)
+            {
+                ExpressionNode sizeNode = newArrayExpression.Size;
+                var sizeType = AnalyzeExpression(c, method, localSymbolTable, ref sizeNode);
+                newArrayExpression.Size = sizeNode;
+                if (sizeType.CLRFullName != PrimitiveType.Int32 && sizeType.CLRFullName != PrimitiveType.Int64)
+                {
+                    throw new InvalidArraySizeTypeException(content, sizeType.FullName, sizeNode.Line, sizeNode.Column);
+                }
+                size = GetValueIfLiteral(sizeNode);
+                if (size != null && size < 1)
+                {
+                    throw new NegativeArraySizeException(content, size.Value, sizeNode.Line, sizeNode.Line);
+                }
+            }
+            // Analyze elements
+            for (int i = 0; i < newArrayExpression.Elements.Length; i++)
+            {
+                TypeNode expressionType = AnalyzeExpression(c, method, localSymbolTable, ref newArrayExpression.Elements[i]);
+                switch(newArrayExpression.ReturnType)
+                {
+                    case ArrayType arrayType:
+                        AnalyzeTypes(arrayType.ElementType, expressionType);
+                        break;
+                    default:
+                        throw new Exception("Internal error");
+                }
+            }
+            // Check if size isn't specified but no initialization
+            if (newArrayExpression.Size == null && newArrayExpression.Elements.Length == 0)
+            {
+                throw new NoSizeArrayWithoutInitializationException(content, newArrayExpression.ReturnType!.Line, newArrayExpression.ReturnType!.Column);
+            }
+            // Check if size is specified but number of elements is unequal
+            if (size != null && size != newArrayExpression.Elements.Length && newArrayExpression.Elements.Length != 0)
+            {
+                throw new ArraySizeDiscrepancyException(content, size.Value, newArrayExpression.ReturnType!.Line, newArrayExpression.ReturnType.Column, newArrayExpression.Elements.Length, newArrayExpression.Elements[0].Line, newArrayExpression.Elements[0].Column);
+            }
+            // Ignore size is specified but no initialization but 
+
+            // Ignore if size expression has a variable expression or call expression (size == null && newArrayExpression.Size != null)
+
+            // If size isn't specified but there is initialization (checked from before), set the size for assembler later
+            newArrayExpression.Size ??= new LiteralExpression { 
+                    ReturnType = CreateTypeNodeFromType(
+                        module.CoreAssembly!.GetType(PrimitiveType.Int32)!,
+                        newArrayExpression.ReturnType!.Line,
+                        newArrayExpression.ReturnType!.Column
+                    ),
+                    Line = newArrayExpression.ReturnType!.Line, 
+                    Column = newArrayExpression.ReturnType!.Column, 
+                    Value = newArrayExpression.Elements.Length.ToString() 
+                };
+            return newArrayExpression.ReturnType!;
+        }
+
+        private static int? GetValueIfLiteral(ExpressionNode expression)
+        {
+            switch(expression)
+            {
+                case BinaryExpression binaryExpression:
+                    var leftValue = GetValueIfLiteral(binaryExpression.Left);
+                    var rightValue = GetValueIfLiteral(binaryExpression.Right);
+                    if (leftValue != null && rightValue != null)
+                    {
+                        return binaryExpression.Operator switch
+                        {
+                            "+" => leftValue + rightValue,
+                            "-" => leftValue - rightValue,
+                            "*" => leftValue * rightValue,
+                            "/" => leftValue / rightValue,
+                            _ => throw new NotImplementedException(),
+                        };
+                    }
+                    return null;
+                case LiteralExpression literalExpression:
+                    return int.Parse(literalExpression.Value);
+                default:
+                    return null;
             }
         }
 
@@ -571,7 +662,7 @@ namespace NEN
         static public TypeNode CreateTypeNodeFromType(Type type, int line, int column)
         {
             var namespaces = type.Namespace?.Split(".") ?? [];
-            if (type.IsSZArray)
+            if (type.IsArray)
             {
                 Type elementType = type.GetElementType()!;
                 return new ArrayType

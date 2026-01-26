@@ -1,0 +1,9 @@
+﻿
+sử_dụng System;
+
+lớp Chương_Trình
+    @Chính @Tĩnh
+    phương_thức Chính() -> System::Void
+        biến m thuộc Int32[] gán tạo Int32[3] { 1, 2, 3, 4};
+    kết_thúc
+kết_thúc

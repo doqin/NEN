@@ -1,4 +1,5 @@
-﻿using NEN;
+﻿using Microsoft.Testing.Extensions.CodeCoverage;
+using NEN;
 using NEN.Exceptions;
 using System.Diagnostics.Metrics;
 using System.Diagnostics.SymbolStore;
@@ -67,10 +68,8 @@ namespace NENTest
             Console.WriteLine($"Hoàn thành biên dịch! OK");
         }
 
-        [TestMethod]
-        public void RedefinedTest()
+        static private void GeneralStaticAnalyzerTest<T>(string fileName) where T : NENException
         {
-            string fileName = "RedefinedTest";
             (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
             PrintTokens(tokens);
             var parser = new Parser(fileName, lines, tokens);
@@ -81,7 +80,29 @@ namespace NENTest
             {
                 analyzer.Analyze();
             }
-            catch (RedefinedException e)
+            catch (T e)
+            {
+                Console.WriteLine(e.Message);
+                return;
+            }
+            throw new Exception("Test failed");
+        }
+
+        static private void GeneralAssemblerTest<T>(string fileName) where T : NENException
+        {
+            (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
+            PrintTokens(tokens);
+            var parser = new Parser(fileName, lines, tokens);
+            var module = parser.Parse();
+            Console.WriteLine($"Parser result:\n{module}");
+            var analyzer = new StaticAnalyzer(lines, module, fileName, []);
+            analyzer.Analyze();
+            var assembler = new Assembler(lines, module);
+            try
+            {
+                assembler.Assemble();
+            }
+            catch (T e)
             {
                 Console.WriteLine(e.Message);
                 return;
@@ -90,25 +111,66 @@ namespace NENTest
         }
 
         [TestMethod]
+        public void RedefinedTest()
+        {
+            GeneralStaticAnalyzerTest<RedefinedException>("RedefinedTest1");
+            GeneralStaticAnalyzerTest<RedefinedException>("RedefinedTest2");
+            GeneralStaticAnalyzerTest<RedefinedException>("RedefinedTest3");
+            GeneralStaticAnalyzerTest<RedefinedException>("RedefinedTest4");
+        }
+
+        [TestMethod]
         public void StaticIllegalAccessmentTest()
         {
-            string fileName = "StaticIllegalAccessmentTest";
-            (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
-            PrintTokens(tokens);
-            var parser = new Parser(fileName, lines, tokens);
-            var module = parser.Parse();
-            Console.WriteLine($"Parser result:\n{module}");
-            var analyzer = new StaticAnalyzer(lines, module, fileName, []);
-            try
-            {
-                analyzer.Analyze();
-            }
-            catch (StaticIllegalAccessmentException e)
-            {
-                Console.WriteLine(e.Message);
-                return;
-            }
-            throw new Exception("Test failed");
+            GeneralStaticAnalyzerTest<StaticIllegalAccessmentException>("StaticIllegalAccessmentTest");
+        }
+
+        [TestMethod]
+        public void InvalidArraySizeTypeTest()
+        {
+            GeneralStaticAnalyzerTest<InvalidArraySizeTypeException>("InvalidArraySizeTypeTest");
+        }
+
+        [TestMethod]
+        public void NegativeArraySizeTest()
+        {
+            GeneralStaticAnalyzerTest<NegativeArraySizeException>("NegativeArraySizeTest");
+        }
+
+        [TestMethod]
+        public void NoSizeArrayWithoutInitializationTest()
+        {
+            GeneralStaticAnalyzerTest<NoSizeArrayWithoutInitializationException>("NoSizeArrayWithoutInitializationTest");
+        }
+
+        [TestMethod]
+        public void ArraySizeDiscrepancyTest()
+        {
+            GeneralStaticAnalyzerTest<ArraySizeDiscrepancyException>("ArraySizeDiscrepancyTest");
+        }
+
+        [TestMethod]
+        public void TypeDiscrepancyTest()
+        {
+            GeneralStaticAnalyzerTest<TypeDiscrepancyException>("TypeDiscrepancyTest");
+        }
+
+        [TestMethod]
+        public void UnresolvedIdentifierTest()
+        {
+            GeneralStaticAnalyzerTest<UnresolvedIdentifierException>("UnresolvedIdentifierTest");
+        }
+
+        [TestMethod]
+        public void UnresolvedTypeTest()
+        {
+            GeneralStaticAnalyzerTest<UnresolvedTypeException>("UnresolvedTypeTest");
+        }
+
+        [TestMethod]
+        public void MultipleEntryPointTest()
+        {
+            GeneralAssemblerTest<MultipleEntryPointException>("MultipleEntryPointTest");
         }
 
         private static void PrintTokens(NEN.Types.Token[] tokens)

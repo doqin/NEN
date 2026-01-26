@@ -332,8 +332,13 @@ namespace NEN
 
         public class NewArrayExpression : ExpressionNode
         {
-            public required ExpressionNode[]? Sizes { get; set; }
-            public ExpressionNode[]? Elements { get; set; }
+            public ExpressionNode? Size { get; set; }
+            public required ExpressionNode[] Elements { get; set; }
+            public override string ToString()
+            {
+                string size = Size == null ? "tự động" : Size.ToString()!; 
+                return Helper.GetTreeString($"Khởi tạo mảng {ReturnType} ({size})", Elements);
+            }
         }
     }
 }

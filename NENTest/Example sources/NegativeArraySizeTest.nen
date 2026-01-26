@@ -1,0 +1,11 @@
+﻿
+sử_dụng System;
+
+lớp Chương_Trình
+    @Chính @Tĩnh
+    phương_thức Chính() -> System::Void
+        biến i thuộc Int32 gán 5;
+        biến m thuộc Int32[] gán tạo Int32[1 - i]; // OK vì không biết i trước
+        biến mm thuộc Int32[] gán tạo Int32[1 - 5]; // Ko đc vì âm
+    kết_thúc
+kết_thúc

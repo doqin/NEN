@@ -1,0 +1,9 @@
+﻿
+sử_dụng System;
+
+lớp Chương_Trình
+    @Chính @Tĩnh
+    phương_thức Chính() -> Void
+        biến m thuộc Int32[] gán "đây là một chuỗi";
+    kết_thúc
+kết_thúc

@@ -22,7 +22,7 @@ namespace NEN
                 return $"Dòng {line} Cột {column} | {message}\n{contentLines[line - 1]}\n" + new string('~', column - 1) + '^';
             }
         }
-        public class ExpectedException : NENException 
+        public class ExpectedException : NENException
         {
             public ExpectedException() { }
             public ExpectedException(string[] contentLines, string expected, int line, int column) : base(contentLines, $"Mong đợi {expected} tại vị trí này", line, column) { }
@@ -49,7 +49,7 @@ namespace NEN
         public class UnresolvedTypeException : NENException
         {
             public UnresolvedTypeException() { }
-            public UnresolvedTypeException(string[] contentLines, string unresolvedType, int line, int column) : base(contentLines, $"Không thể tìm thấy định nghĩa của '{unresolvedType}'", line, column) { } 
+            public UnresolvedTypeException(string[] contentLines, string unresolvedType, int line, int column) : base(contentLines, $"Không thể tìm thấy định nghĩa của '{unresolvedType}'", line, column) { }
         }
 
         public class UnresolvedIdentifierException : NENException
@@ -72,9 +72,7 @@ namespace NEN
         public class StaticIllegalAccessmentException : NENException
         {
             public StaticIllegalAccessmentException() { }
-            public StaticIllegalAccessmentException(string[] contentLines, string accessment, int line, int column) : base(contentLines, $"Không thể truy cập thành phần không tĩnh '{accessment}' vì là phương thức tĩnh", line, column)
-            {
-            }
+            public StaticIllegalAccessmentException(string[] contentLines, string accessment, int line, int column) : base(contentLines, $"Không thể truy cập thành phần không tĩnh '{accessment}' vì là phương thức tĩnh", line, column) { }
         }
 
         public class InvalidUsingStatement : NENException
@@ -94,6 +92,35 @@ namespace NEN
             public IllegalAssignmentException() { }
             public IllegalAssignmentException(string[] contentLines, int line, int column) : base(contentLines, "Không thể gán giá trị cho loại biểu thức này", line, column) { }
         }
-    } 
 
+        // Array exceptions
+
+        public class InvalidArraySizeTypeException : NENException
+        {
+            public InvalidArraySizeTypeException() { }
+            public InvalidArraySizeTypeException(string[] contentLines, string typeName, int line, int column) : base(contentLines, $"Kích thước mảng chỉ có thể là kiểu số nguyên (Biểu thức là kiểu {typeName})", line, column) { }
+        }
+
+        public class NegativeArraySizeException : NENException
+        {
+            public NegativeArraySizeException() { }
+            public NegativeArraySizeException(string[] contentLines, int size, int line, int column) : base(contentLines, $"Kích thước mảng chỉ có thể là số nguyên dương (Kết quả biểu thước là {size})", line, column) { }
+        }
+
+        public class NoSizeArrayWithoutInitializationException : NENException
+        {
+            public NoSizeArrayWithoutInitializationException() { }
+            public NoSizeArrayWithoutInitializationException(string[] contentLines, int line, int column) : base(contentLines, "Mảng không có giá trị khởi tạo phải khai báo kích thước", line, column) { }
+        }
+
+        public class ArraySizeDiscrepancyException : NENException
+        {
+            public ArraySizeDiscrepancyException() { }
+            public ArraySizeDiscrepancyException(string[] contentLines, int declaredSize, int declaredLine, int declaredColumn, int elementSize, int elementLine, int elementColumn) : base($"Kích thước mảng khai báo khác số phần tử được khởi tạo ({declaredSize} <-> {elementSize})", CreateContent(contentLines, declaredLine, declaredColumn, elementLine, elementColumn), declaredLine, declaredColumn) { }
+            private static string CreateContent(string[] contentLines, int leftLine, int leftColumn, int rightLine, int rightColumn)
+            {
+                return $"{contentLines[leftLine - 1]}\n" + new string('~', leftColumn - 1) + "^\n" + $"{contentLines[rightLine - 1]}\n" + new string('~', rightColumn - 1) + '^';
+            }
+        }
+    }
 }

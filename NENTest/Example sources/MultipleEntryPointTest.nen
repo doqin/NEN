@@ -1,0 +1,14 @@
+﻿
+sử_dụng System;
+
+lớp Chương_Trình
+    @Chính @Tĩnh
+    phương_thức Chính() -> Void
+        biến m thuộc Int32 gán 15;
+    kết_thúc
+
+    @Chính @Tĩnh
+    phương_thức Test() -> Void
+        biến str thuộc String;
+    kết_thúc
+kết_thúc
