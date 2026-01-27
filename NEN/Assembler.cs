@@ -1,5 +1,5 @@
-﻿using NEN.Types;
-using NEN.Exceptions;
+﻿using NEN.Exceptions;
+using NEN.Types;
 using System;
 using System.Diagnostics.SymbolStore;
 using System.Reflection;
@@ -128,10 +128,10 @@ namespace NEN
         private void AssembleAssignmentStatement(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, AssignmentStatement assignmentStatement)
         {
             AssembleExpression(ilGenerator, parameters, localSymbolTable, assignmentStatement.Destination);
-            AssembleExpression(ilGenerator, parameters, localSymbolTable, assignmentStatement.Source);
             switch (assignmentStatement.Destination)
             {
                 case VariableExpression variableExpression:
+                    AssembleExpression(ilGenerator, parameters, localSymbolTable, assignmentStatement.Source);
                     for (int i = 0; i < parameters.Length; i++)
                     {
                         if (parameters[i].Name == variableExpression.Name)
@@ -150,7 +150,20 @@ namespace NEN
                         throw new UnresolvedIdentifierException(content, variableExpression.Name, variableExpression.Line, variableExpression.Column);
                     }
                     break;
-                default:
+                case ArrayIndexingExpression arrayIndexingExpression:
+                    var elementType = Lower(arrayIndexingExpression.ReturnTypeNode!);
+                    AssembleExpression(ilGenerator, parameters, localSymbolTable, arrayIndexingExpression.Index); // Load the index onto the stack
+                    AssembleExpression(ilGenerator, parameters, localSymbolTable, assignmentStatement.Source);
+                    if (elementType.IsValueType)
+                    {
+                        ilGenerator.Emit(OpCodes.Stelem, elementType); // Store the value onto the element specifed by the index
+                    }
+                    else
+                    {
+                        ilGenerator.Emit(OpCodes.Stelem_Ref);
+                    }
+                    break;
+                    default:
                     throw new NotImplementedException();
             }
         }
@@ -163,7 +176,7 @@ namespace NEN
         private void AssembleVariableDeclarationStatement( ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, VariableDeclarationStatement variableDeclarationStatement)
         {
             var variable = variableDeclarationStatement.Variable;
-            var type = variable.Type;
+            var type = variable.TypeNode;
             var localBuilder = ilGenerator.DeclareLocal(Lower(type));
             localBuilder.SetLocalSymInfo(variable.Name);
             ilGenerator.MarkSequencePoint(documentWriter, variable.Line, variable.Column, variable.Line, variable.Column + 1);
@@ -194,37 +207,43 @@ namespace NEN
                 case ThisExpression: AssembleThisExpression(ilGenerator);  break;
                 case BoxExpression boxExpression: AssembleBoxExpression(ilGenerator, parameters, localSymbolTable, boxExpression); break;
                 case NewArrayExpression newArrayExpression: AssembleNewArrayExpression(ilGenerator, parameters, localSymbolTable, newArrayExpression); break;
+                case ArrayIndexingExpression arrayIndexingExpression: AssembleArrayIndexingExpression(ilGenerator, parameters, localSymbolTable, arrayIndexingExpression); break;
                 default: throw new NotImplementedException();
+            }
+        }
+
+        private void AssembleArrayIndexingExpression(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, ArrayIndexingExpression arrayIndexingExpression)
+        {
+            AssembleExpression(ilGenerator, parameters, localSymbolTable, arrayIndexingExpression.Array); // Load the array onto the stack
+            if (!arrayIndexingExpression.IsLoading) return; // Don't load unless specified
+            AssembleExpression(ilGenerator, parameters, localSymbolTable, arrayIndexingExpression.Index); // Load the index onto the stack
+            Type elementType = Lower(arrayIndexingExpression.ReturnTypeNode!);
+            if (elementType.IsValueType)
+            {
+                ilGenerator.Emit(OpCodes.Ldelem, elementType);
+            }
+            else
+            {
+                ilGenerator.Emit(OpCodes.Ldelem_Ref);
             }
         }
 
         private void AssembleNewArrayExpression(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, NewArrayExpression newArrayExpression)
         {
             AssembleExpression(ilGenerator, parameters, localSymbolTable, newArrayExpression.Size!);
-            Type arrayElementType = Lower(((ArrayType)newArrayExpression.ReturnType!).ElementType);
+            Type arrayElementType = Lower(((ArrayType)newArrayExpression.ReturnTypeNode!).ElementTypeNode);
             ilGenerator.Emit(OpCodes.Newarr, arrayElementType);
             for (int i = 0; i < newArrayExpression.Elements.Length; i++)
             {
                 ilGenerator.Emit(OpCodes.Dup); // Load a reference to the array onto the stack
                 ilGenerator.Emit(OpCodes.Ldc_I4, i); // Load the index onto the stack
                 AssembleExpression(ilGenerator, parameters, localSymbolTable, newArrayExpression.Elements[i]); // Load value or reference onto the stack
-                Type elementType = Lower(newArrayExpression.Elements[i].ReturnType!);
+                Type elementType = Lower(newArrayExpression.Elements[i].ReturnTypeNode!);
                 if (elementType.IsValueType && arrayElementType.IsValueType)
                 {
-                    var line = newArrayExpression.Elements[i].ReturnType!.Line;
-                    var column = newArrayExpression.Elements[i].ReturnType!.Column;
-                    if (elementType == GetTypeFromName(PrimitiveType.Int32, line, column))
-                    {
-                        ilGenerator.Emit(OpCodes.Stelem_I4);
-                    }
-                    else if (elementType == GetTypeFromName(PrimitiveType.Int64, line, column))
-                    {
-                        ilGenerator.Emit(OpCodes.Stelem_I8);
-                    }
-                    else
-                    {
-                        throw new NotImplementedException();
-                    }
+                    var line = newArrayExpression.Elements[i].ReturnTypeNode!.Line;
+                    var column = newArrayExpression.Elements[i].ReturnTypeNode!.Column;
+                    ilGenerator.Emit(OpCodes.Stelem, elementType);
                 }
                 else
                 {
@@ -241,7 +260,7 @@ namespace NEN
         private void AssembleBoxExpression(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, BoxExpression boxExpression)
         {
             AssembleExpression(ilGenerator, parameters, localSymbolTable, boxExpression.Expression);
-            ilGenerator.Emit(OpCodes.Box, Lower(boxExpression.ReturnType!));
+            ilGenerator.Emit(OpCodes.Box, Lower(boxExpression.ReturnTypeNode!));
         }
 
         private void AssembleThisExpression(ILGenerator ilGenerator)
@@ -318,15 +337,15 @@ namespace NEN
 
         private void AssembleLiteralExpression( ILGenerator ilGenerator, LiteralExpression literalExpression)
         {
-            if (Lower(literalExpression.ReturnType!).FullName == PrimitiveType.String)
+            if (Lower(literalExpression.ReturnTypeNode!).FullName == PrimitiveType.String)
             {
                 ilGenerator.Emit(OpCodes.Ldstr, literalExpression.Value);
             }
-            else if (Lower(literalExpression.ReturnType!).FullName == PrimitiveType.Int64)
+            else if (Lower(literalExpression.ReturnTypeNode!).FullName == PrimitiveType.Int64)
             {
                 ilGenerator.Emit(OpCodes.Ldc_I8, Int64.Parse(literalExpression.Value));
             }
-            else if (Lower(literalExpression.ReturnType!).FullName == PrimitiveType.Int32)
+            else if (Lower(literalExpression.ReturnTypeNode!).FullName == PrimitiveType.Int32)
             {
                 ilGenerator.Emit(OpCodes.Ldc_I4, Int32.Parse(literalExpression.Value));
             }
@@ -343,7 +362,7 @@ namespace NEN
             return typeNode switch
             {
                 NamedType namedType => namedType.CLRType!,
-                ArrayType arrayType => Lower(arrayType.ElementType).MakeArrayType(1),
+                ArrayType arrayType => Lower(arrayType.ElementTypeNode).MakeArrayType(1),
                 _ => throw new NotImplementedException()
             };
         }

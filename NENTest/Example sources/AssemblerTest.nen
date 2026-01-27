@@ -21,6 +21,9 @@ lớp Chương_Trình
             mảng1
         };
 
+        Console::WriteLine(mảng1[0]);
+        mảng1[0] gán "array";
+        Console::WriteLine(mảng1[0]);
         Console::WriteLine(bro);
         Console::WriteLine(c);
         biến là_sai thuộc Boolean gán str2.Contains("H");

@@ -14,6 +14,7 @@ lớp Chương_Trình
 
         biến mảng thuộc Int32[] gán tạo Int32[3];
         biến mảng1 thuộc Int32[] gán tạo Int32[] { 0, 1, 2, 3, 4 };
+        mảng[1];
 
         Console::WriteLine("1 + 1 = {0}", 1 + 1);
         biến là_sai thuộc Boolean gán str2.Contains("H");

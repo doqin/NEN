@@ -27,6 +27,9 @@
     <None Update="Example sources\ArraySizeDiscrepancyTest.nen">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Example sources\InvalidArrayIndexingTypeTest.nen">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Example sources\MultipleEntryPointTest.nen">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -37,6 +40,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Example sources\RedefinedTest2.nen">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Example sources\IndexingOnNonArrayTest.nen">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Example sources\UnresolvedTypeTest.nen">

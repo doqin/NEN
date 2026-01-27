@@ -1,7 +1,6 @@
 ﻿using NEN.Exceptions;
 using NEN.Types;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 
 namespace NEN
 {
@@ -124,7 +123,7 @@ namespace NEN
                 var parameterIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên tham số");
                 ConsumeOrThrowIfNotEqual(TokenType.Keyword, "thuộc");
                 var type = ParseType();
-                parameters.Add(new VariableNode { Name = parameterIdentifier.Value, Type = type, Line = parameterIdentifier.Line, Column = parameterIdentifier.Column });
+                parameters.Add(new VariableNode { Name = parameterIdentifier.Value, TypeNode = type, Line = parameterIdentifier.Line, Column = parameterIdentifier.Column });
                 if (Current() != null && Current()!.Value != ")") ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ",");
             }
             ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ")");
@@ -138,7 +137,7 @@ namespace NEN
             }
             if (Current() == null) OutOfTokenHelper("kết_thúc");
             Consume();
-            return new MethodNode { IsEntryPoint = isEntryPoint, Attributes = methodAttributes, Name = methodIdentifier.Value, Parameters = [.. parameters], ReturnType = returnTypeIdentifier, Statements = [.. statements], Line = line, Column = column };
+            return new MethodNode { IsEntryPoint = isEntryPoint, Attributes = methodAttributes, Name = methodIdentifier.Value, Parameters = [.. parameters], ReturnTypeNode = returnTypeIdentifier, Statements = [.. statements], Line = line, Column = column };
         }
 
         private StatementNode ParseStatement()
@@ -208,7 +207,7 @@ namespace NEN
                 Variable = new VariableNode
                 {
                     Name = variableIdentifier.Value,
-                    Type = typeIdentifier,
+                    TypeNode = typeIdentifier,
                     Line = variableIdentifier.Line,
                     Column = variableIdentifier.Column
                 },
@@ -258,9 +257,9 @@ namespace NEN
             switch (token.Type)
             {
                 case TokenType.Literal:
-                    expression = new LiteralExpression { Value = token.Value, Line = token.Line, Column = token.Column }; 
+                    expression = new LiteralExpression { Value = token.Value, Line = token.Line, Column = token.Column };
                     break;
-                case TokenType.Identifier: 
+                case TokenType.Identifier:
                     if (Current()?.Value == "(")
                     {
                         var arguments = ParseArguments();
@@ -299,18 +298,40 @@ namespace NEN
                     break;
                 default: throw new NotImplementedException();
             }
-            while (Current()?.Value == ".")
+            while (Current()?.Value == "." || Current()?.Value == "[")
             {
-                ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ".");
-                var identifier = ConsumeOrThrow(TokenType.Identifier, "tên thuộc tính/tên phương thức");
-                if (Current() != null && Current()?.Value != "(")
+                if (Current()?.Value == ".")
                 {
-                    throw new NotImplementedException();
+                    expression = ParseStandardMethodCallExpression(expression!);
                 }
-                var arguments = ParseArguments();
-                expression = new StandardMethodCallExpression { Object = expression!, Name = identifier.Value, Arguments = arguments, Line = line, Column = column };
+                else
+                {
+                    expression = ParseArrayIndexingExpression(expression!);
+                }
             }
             return expression!;
+        }
+
+        private ExpressionNode ParseStandardMethodCallExpression(ExpressionNode objectNode)
+        {
+            ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ".");
+            var (line, column) = GetCurrentPosition();
+            var identifier = ConsumeOrThrow(TokenType.Identifier, "tên thuộc tính/tên phương thức");
+            if (Current() != null && Current()?.Value != "(")
+            {
+                throw new NotImplementedException();
+            }
+            var arguments = ParseArguments();
+            return new StandardMethodCallExpression { Object = objectNode, Name = identifier.Value, Arguments = arguments, Line = line, Column = column };
+        }
+
+        private ExpressionNode ParseArrayIndexingExpression(ExpressionNode objectNode)
+        {
+            ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "[");
+            var (line, column) = GetCurrentPosition();
+            var indexNode = ParseExpression(0);
+            ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "]");
+            return new ArrayIndexingExpression { Array = objectNode, Index = indexNode, Line = line, Column = column };
         }
 
         private ExpressionNode ParseNewExpression()
@@ -335,7 +356,7 @@ namespace NEN
                 ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "]");
                 type = new ArrayType
                 {
-                    ElementType = type,
+                    ElementTypeNode = type,
                     Namespaces = type.Namespaces,
                     Name = $"{type.Name}[*]",
                     Line = line,
@@ -358,7 +379,7 @@ namespace NEN
                         ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "}");
                     }
                     return new NewArrayExpression { 
-                        ReturnType = arrayType, 
+                        ReturnTypeNode = arrayType, 
                         Size = size, 
                         Elements = [..elements], 
                         Line = line, 
@@ -385,7 +406,7 @@ namespace NEN
                 ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "]");
                 type = new ArrayType
                 {
-                    ElementType = type,
+                    ElementTypeNode = type,
                     Namespaces = type.Namespaces,
                     Name = $"{type.Name}[*]",
                     Line = line,
@@ -412,7 +433,7 @@ namespace NEN
             var arguments = ParseArguments();
             return new StaticMethodCallExpression
             {
-                Type = type,
+                TypeNode = type,
                 Arguments = arguments,
                 Name = identifier[^1],
                 Line = line,
@@ -528,6 +549,10 @@ namespace NEN
         }
         private (int, int) GetCurrentPosition()
         {
+            if (index >= tokens.Length)
+            {
+                return (-1, -1);
+            }
             return (tokens[index].Line, tokens[index].Column);
         }
         private bool SetBack()

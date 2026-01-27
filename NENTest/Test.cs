@@ -168,6 +168,18 @@ namespace NENTest
         }
 
         [TestMethod]
+        public void IndexingOnNonArrayTest()
+        {
+            GeneralStaticAnalyzerTest<IndexingOnNonArrayException>("IndexingOnNonArrayTest");
+        }
+
+        [TestMethod]
+        public void InvalidArrayIndexingTypeTest()
+        {
+            GeneralStaticAnalyzerTest<InvalidArrayIndexingTypeException>("InvalidArrayIndexingTypeTest");
+        }
+
+        [TestMethod]
         public void MultipleEntryPointTest()
         {
             GeneralAssemblerTest<MultipleEntryPointException>("MultipleEntryPointTest");

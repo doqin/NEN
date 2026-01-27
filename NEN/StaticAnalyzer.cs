@@ -79,17 +79,17 @@ namespace NEN
         {
             SymbolTable<TypeNode> localSymbolTable = new();
             var type = GetTypeFromTypeNode(
-                method.ReturnType,
-                method.ReturnType.Line,
-                method.ReturnType.Column
+                method.ReturnTypeNode,
+                method.ReturnTypeNode.Line,
+                method.ReturnTypeNode.Column
             );
-            method.ReturnType = CreateTypeNodeFromType(type, method.ReturnType.Line, method.ReturnType.Column);
+            method.ReturnTypeNode = CreateTypeNodeFromType(type, method.ReturnTypeNode.Line, method.ReturnTypeNode.Column);
             List<Type> paramTypes = [];
             foreach (var parameter in method.Parameters)
             {
-                var paramType = GetTypeFromTypeNode(parameter.Type, parameter.Type.Line, parameter.Type.Column);
-                parameter.Type = CreateTypeNodeFromType(paramType, parameter.Type.Line, parameter.Type.Column);
-                if (!localSymbolTable.TryAdd(parameter.Name, parameter.Type))
+                var paramType = GetTypeFromTypeNode(parameter.TypeNode, parameter.TypeNode.Line, parameter.TypeNode.Column);
+                parameter.TypeNode = CreateTypeNodeFromType(paramType, parameter.TypeNode.Line, parameter.TypeNode.Column);
+                if (!localSymbolTable.TryAdd(parameter.Name, parameter.TypeNode))
                 {
                     throw new RedefinedException(content, parameter.Name, parameter.Line, parameter.Column);
                 }
@@ -98,7 +98,7 @@ namespace NEN
             method.MethodBuilder = c.TypeBuilder!.DefineMethod(
                 method.Name,
                 method.Attributes,
-                GetTypeFromTypeNode(method.ReturnType, method.ReturnType.Line, method.ReturnType.Column),
+                GetTypeFromTypeNode(method.ReturnTypeNode, method.ReturnTypeNode.Line, method.ReturnTypeNode.Column),
                 [.. paramTypes]
             );
             for (int i = 0; i < method.Parameters.Length; i++)
@@ -141,9 +141,9 @@ namespace NEN
                 VariableNode[] parameters = c.Methods[i].MethodBuilder!.IsStatic ? c.Methods[i].Parameters :
                     [ new VariableNode {
                         Name = "này",
-                        Type = StaticAnalyzer.CreateTypeNodeFromType(c.TypeBuilder!, c.Methods[i].ReturnType.Line, c.Methods[i].ReturnType.Column),
-                        Column = c.Methods[i].ReturnType.Line,
-                        Line = c.Methods[i].ReturnType.Column
+                        TypeNode = StaticAnalyzer.CreateTypeNodeFromType(c.TypeBuilder!, c.Methods[i].ReturnTypeNode.Line, c.Methods[i].ReturnTypeNode.Column),
+                        Column = c.Methods[i].ReturnTypeNode.Line,
+                        Line = c.Methods[i].ReturnTypeNode.Column
                     },..c.Methods[i].Parameters];
                 c.Methods[i].Parameters = parameters;
             }
@@ -181,6 +181,9 @@ namespace NEN
                 case VariableExpression variableExpression:
                     variableExpression.IsLoading = false;
                     break;
+                case ArrayIndexingExpression arrayIndexingExpression:
+                    arrayIndexingExpression.IsLoading = false;
+                    break;
                 default:
                     throw new IllegalAssignmentException(content, dest.Line, dest.Column);
             }
@@ -201,14 +204,14 @@ namespace NEN
                 throw new RedefinedException(content, variableDeclarationStatement.Variable.Name, variableDeclarationStatement.Variable.Line, variableDeclarationStatement.Variable.Column);
             }
             var type = GetTypeFromTypeNode(
-                variableDeclarationStatement.Variable.Type,
-                variableDeclarationStatement.Variable.Type.Line,
-                variableDeclarationStatement.Variable.Type.Column
+                variableDeclarationStatement.Variable.TypeNode,
+                variableDeclarationStatement.Variable.TypeNode.Line,
+                variableDeclarationStatement.Variable.TypeNode.Column
             );
-            variableDeclarationStatement.Variable.Type = CreateTypeNodeFromType(
+            variableDeclarationStatement.Variable.TypeNode = CreateTypeNodeFromType(
                 type, 
-                variableDeclarationStatement.Variable.Type.Line, 
-                variableDeclarationStatement.Variable.Type.Column
+                variableDeclarationStatement.Variable.TypeNode.Line, 
+                variableDeclarationStatement.Variable.TypeNode.Column
             );
             if (variableDeclarationStatement.InitialValue == null) { }
             else
@@ -216,9 +219,9 @@ namespace NEN
                 var expr = variableDeclarationStatement.InitialValue;
                 AnalyzeExpression(c, method, localSymbolTable, ref expr);
                 variableDeclarationStatement.InitialValue = expr;
-                AnalyzeTypes(variableDeclarationStatement.Variable.Type, expr.ReturnType!);
+                AnalyzeTypes(variableDeclarationStatement.Variable.TypeNode, expr.ReturnTypeNode!);
             }
-            if (!localSymbolTable.TryAdd(variableDeclarationStatement.Variable.Name, variableDeclarationStatement.Variable.Type))
+            if (!localSymbolTable.TryAdd(variableDeclarationStatement.Variable.Name, variableDeclarationStatement.Variable.TypeNode))
             {
                 throw new RedefinedException(content, variableDeclarationStatement.Variable.Name, variableDeclarationStatement.Variable.Line, variableDeclarationStatement.Variable.Column);
             }
@@ -251,15 +254,37 @@ namespace NEN
                     expression = ambiguousMethodCallExpression;
                     return type;
                 case BinaryExpression binaryExpression: return AnalyzeBinaryExpression(c, method, localSymbolTable,  binaryExpression);
+                case ArrayIndexingExpression arrayIndexingExpression: return AnalyzeArrayIndexingExpression(c, method, localSymbolTable, arrayIndexingExpression);
                 default: throw new NotImplementedException();
             }
+        }
+
+        private TypeNode AnalyzeArrayIndexingExpression(ClassNode c, MethodNode method, SymbolTable<TypeNode> localSymbolTable, ArrayIndexingExpression arrayIndexingExpression)
+        {
+            var arrayNode = arrayIndexingExpression.Array;
+            AnalyzeExpression(c, method, localSymbolTable, ref arrayNode);
+            arrayIndexingExpression.Array = arrayNode;
+            var arrayType = GetTypeFromTypeNode(arrayNode.ReturnTypeNode!, arrayNode.Line, arrayNode.Column);
+            if (!arrayType.IsArray)
+            {
+                throw new IndexingOnNonArrayException(content, arrayNode.ReturnTypeNode!.FullName, arrayIndexingExpression.Line, arrayIndexingExpression.Column);
+            }
+            var indexNode = arrayIndexingExpression.Index;
+            AnalyzeExpression(c, method, localSymbolTable, ref indexNode);
+            arrayIndexingExpression.Index = indexNode;
+            if (indexNode.ReturnTypeNode!.CLRFullName != PrimitiveType.Int32 && indexNode.ReturnTypeNode.CLRFullName != PrimitiveType.Int64)
+            {
+                throw new InvalidArrayIndexingTypeException(content, indexNode.ReturnTypeNode.FullName, indexNode.Line, indexNode.Column);
+            }
+            arrayIndexingExpression.ReturnTypeNode = CreateTypeNodeFromType(arrayType.GetElementType()!, arrayIndexingExpression.Line, arrayIndexingExpression.Column);
+            return arrayIndexingExpression.ReturnTypeNode;
         }
 
         private TypeNode AnalyzeNewArrayExpression(ClassNode c, MethodNode method, SymbolTable<TypeNode> localSymbolTable, ref NewArrayExpression newArrayExpression)
         {
             int? size = null;
-            Type type = GetTypeFromTypeNode(newArrayExpression.ReturnType!, newArrayExpression.ReturnType!.Line, newArrayExpression.ReturnType.Column);
-            newArrayExpression.ReturnType = CreateTypeNodeFromType(type, newArrayExpression.ReturnType!.Line, newArrayExpression.ReturnType.Column);
+            Type type = GetTypeFromTypeNode(newArrayExpression.ReturnTypeNode!, newArrayExpression.ReturnTypeNode!.Line, newArrayExpression.ReturnTypeNode.Column);
+            newArrayExpression.ReturnTypeNode = CreateTypeNodeFromType(type, newArrayExpression.ReturnTypeNode!.Line, newArrayExpression.ReturnTypeNode.Column);
 
             // Analyze size expression if not null
             if (newArrayExpression.Size != null)
@@ -283,13 +308,13 @@ namespace NEN
                 TypeNode expressionTypeNode = AnalyzeExpression(c, method, localSymbolTable, ref newArrayExpression.Elements[i]);
                 Type expressionType = GetTypeFromTypeNode(expressionTypeNode, expressionTypeNode.Line, expressionTypeNode.Column);
                 Type objectType = module.CoreAssembly!.GetType("System.Object")!;
-                TypeNode elementTypeNode = ((ArrayType)newArrayExpression.ReturnType).ElementType;
+                TypeNode elementTypeNode = ((ArrayType)newArrayExpression.ReturnTypeNode).ElementTypeNode;
                 Type elementType = GetTypeFromTypeNode(elementTypeNode, elementTypeNode.Line, elementTypeNode.Column);
                 if (expressionType.IsValueType && elementType == objectType)
                 {
                     newArrayExpression.Elements[i] = new BoxExpression
                     {
-                        ReturnType = newArrayExpression.Elements[i].ReturnType,
+                        ReturnTypeNode = newArrayExpression.Elements[i].ReturnTypeNode,
                         Expression = newArrayExpression.Elements[i],
                         Line = newArrayExpression.Elements[i].Line,
                         Column = newArrayExpression.Elements[i].Column
@@ -303,12 +328,12 @@ namespace NEN
             // Check if size isn't specified but no initialization
             if (newArrayExpression.Size == null && newArrayExpression.Elements.Length == 0)
             {
-                throw new NoSizeArrayWithoutInitializationException(content, newArrayExpression.ReturnType!.Line, newArrayExpression.ReturnType!.Column);
+                throw new NoSizeArrayWithoutInitializationException(content, newArrayExpression.ReturnTypeNode!.Line, newArrayExpression.ReturnTypeNode!.Column);
             }
             // Check if size is specified but number of elements is unequal
             if (size != null && size != newArrayExpression.Elements.Length && newArrayExpression.Elements.Length != 0)
             {
-                throw new ArraySizeDiscrepancyException(content, size.Value, newArrayExpression.ReturnType!.Line, newArrayExpression.ReturnType.Column, newArrayExpression.Elements.Length, newArrayExpression.Elements[0].Line, newArrayExpression.Elements[0].Column);
+                throw new ArraySizeDiscrepancyException(content, size.Value, newArrayExpression.ReturnTypeNode!.Line, newArrayExpression.ReturnTypeNode.Column, newArrayExpression.Elements.Length, newArrayExpression.Elements[0].Line, newArrayExpression.Elements[0].Column);
             }
             // Ignore size is specified but no initialization but 
 
@@ -316,16 +341,16 @@ namespace NEN
 
             // If size isn't specified but there is initialization (checked from before), set the size for assembler later
             newArrayExpression.Size ??= new LiteralExpression { 
-                    ReturnType = CreateTypeNodeFromType(
+                    ReturnTypeNode = CreateTypeNodeFromType(
                         module.CoreAssembly!.GetType(PrimitiveType.Int32)!,
-                        newArrayExpression.ReturnType!.Line,
-                        newArrayExpression.ReturnType!.Column
+                        newArrayExpression.ReturnTypeNode!.Line,
+                        newArrayExpression.ReturnTypeNode!.Column
                     ),
-                    Line = newArrayExpression.ReturnType!.Line, 
-                    Column = newArrayExpression.ReturnType!.Column, 
+                    Line = newArrayExpression.ReturnTypeNode!.Line, 
+                    Column = newArrayExpression.ReturnTypeNode!.Column, 
                     Value = newArrayExpression.Elements.Length.ToString() 
                 };
-            return newArrayExpression.ReturnType!;
+            return newArrayExpression.ReturnTypeNode!;
         }
 
         private static int? GetValueIfLiteral(ExpressionNode expression)
@@ -363,7 +388,7 @@ namespace NEN
                 if (
                     parameters[i].ParameterType == objectType &&
                     GetTypeFromTypeNode(
-                        methodCallExpression.Arguments[i].ReturnType!,
+                        methodCallExpression.Arguments[i].ReturnTypeNode!,
                         methodCallExpression.Arguments[i].Line,
                         methodCallExpression.Arguments[i].Column)
                     .IsValueType
@@ -371,7 +396,7 @@ namespace NEN
                 {
                     methodCallExpression.Arguments[i] = new BoxExpression
                     {
-                        ReturnType = methodCallExpression.Arguments[i].ReturnType,
+                        ReturnTypeNode = methodCallExpression.Arguments[i].ReturnTypeNode,
                         Expression = methodCallExpression.Arguments[i],
                         Line = methodCallExpression.Arguments[i].Line,
                         Column = methodCallExpression.Arguments[i].Column
@@ -400,29 +425,29 @@ namespace NEN
             }
             var methodFullName = string.Join(".", [typeNode.CLRFullName, standardMethodCallExpression.Name]);
             AnalyzeMethodCallExpression(c, method, localSymbolTable, ref standardMethodCallExpression, methodFullName, GetTypeFromTypeNode(typeNode, typeNode.Line, typeNode.Column));
-            standardMethodCallExpression.ReturnType = CreateTypeNodeFromType(
+            standardMethodCallExpression.ReturnTypeNode = CreateTypeNodeFromType(
                 standardMethodCallExpression.Info!.ReturnType,
                 standardMethodCallExpression.Line,
                 standardMethodCallExpression.Column
             );
-            return standardMethodCallExpression.ReturnType;
+            return standardMethodCallExpression.ReturnTypeNode;
         }
 
         private TypeNode AnalyzeStaticMethodCallExpression(ClassNode c, MethodNode method, SymbolTable<TypeNode> localSymbolTable, StaticMethodCallExpression staticMethodCallExpression)
         {
-            staticMethodCallExpression.Type.CLRType = GetTypeFromTypeNode(
-                staticMethodCallExpression.Type, 
+            staticMethodCallExpression.TypeNode.CLRType = GetTypeFromTypeNode(
+                staticMethodCallExpression.TypeNode, 
                 staticMethodCallExpression.Line, 
                 staticMethodCallExpression.Column
             );
-            var methodFullName = string.Join(".", [staticMethodCallExpression.Type.CLRFullName, staticMethodCallExpression.Name]);
-            AnalyzeMethodCallExpression(c, method, localSymbolTable, ref staticMethodCallExpression, methodFullName, staticMethodCallExpression.Type.CLRType);
-            staticMethodCallExpression.ReturnType = CreateTypeNodeFromType(
+            var methodFullName = string.Join(".", [staticMethodCallExpression.TypeNode.CLRFullName, staticMethodCallExpression.Name]);
+            AnalyzeMethodCallExpression(c, method, localSymbolTable, ref staticMethodCallExpression, methodFullName, staticMethodCallExpression.TypeNode.CLRType);
+            staticMethodCallExpression.ReturnTypeNode = CreateTypeNodeFromType(
                 staticMethodCallExpression.Info!.ReturnType, 
                 staticMethodCallExpression.Line, 
                 staticMethodCallExpression.Column
             );
-            return staticMethodCallExpression.ReturnType;
+            return staticMethodCallExpression.ReturnTypeNode;
         }
 
         private TypeNode AnalyzeAmbiguousMethodCallExpression(ClassNode c, MethodNode method, SymbolTable<TypeNode> localSymbolTable, ref AmbiguousMethodCallExpression ambiguousMethodCallExpression)
@@ -441,9 +466,9 @@ namespace NEN
                     NamedType namedType => new StaticMethodCallExpression
                     {
                         Arguments = ambiguousMethodCallExpression.Arguments,
-                        Type = namedType,
+                        TypeNode = namedType,
                         Name = ambiguousMethodCallExpression.Name,
-                        ReturnType = CreateTypeNodeFromType(
+                        ReturnTypeNode = CreateTypeNodeFromType(
                                             ambiguousMethodCallExpression.Info.ReturnType!,
                                             ambiguousMethodCallExpression.Line,
                                             ambiguousMethodCallExpression.Column
@@ -470,7 +495,7 @@ namespace NEN
                 {
                     Arguments = ambiguousMethodCallExpression.Arguments,
                     Object = new ThisExpression {
-                        ReturnType = new NamedType {
+                        ReturnTypeNode = new NamedType {
                             Namespaces = [c.Name],
                             Name = "này",
                             CLRType = typeTable.GetValueOrDefault(c.Name),
@@ -481,7 +506,7 @@ namespace NEN
                         Column = ambiguousMethodCallExpression.Column
                     },
                     Name = ambiguousMethodCallExpression.Name,
-                    ReturnType = CreateTypeNodeFromType(
+                    ReturnTypeNode = CreateTypeNodeFromType(
                         ambiguousMethodCallExpression.Info.ReturnType, 
                         ambiguousMethodCallExpression.Line, 
                         ambiguousMethodCallExpression.Column
@@ -491,7 +516,7 @@ namespace NEN
                     Column = ambiguousMethodCallExpression.Column
                 };
             }
-            return ambiguousMethodCallExpression.ReturnType!;
+            return ambiguousMethodCallExpression.ReturnTypeNode!;
         }
 
         private void AnalyzeMethodCallExpression<T>(ClassNode c, MethodNode method, SymbolTable<TypeNode> localSymbolTable, ref T methodCallExpression, string methodFullName, Type? type = null) where T : AmbiguousMethodCallExpression
@@ -540,7 +565,7 @@ namespace NEN
             if (literalExpression.Value.StartsWith('"') && literalExpression.Value.EndsWith('"'))
             {
                 string[] namespaceAndName = PrimitiveType.String.Split(".");
-                literalExpression.ReturnType = new NamedType { 
+                literalExpression.ReturnTypeNode = new NamedType { 
                     Namespaces = namespaceAndName[0..^1],
                     Name = namespaceAndName[^1],
                     CLRType = module.CoreAssembly!.GetType(PrimitiveType.String), 
@@ -552,7 +577,7 @@ namespace NEN
             else if (literalExpression.Value.EndsWith('L'))
             {
                 string[] namespaceAndName = PrimitiveType.Int64.Split(".");
-                literalExpression.ReturnType = new NamedType { 
+                literalExpression.ReturnTypeNode = new NamedType { 
                     Namespaces = namespaceAndName[0..^1],
                     Name = namespaceAndName[^1],
                     CLRType = module.CoreAssembly!.GetType(PrimitiveType.Int64), 
@@ -564,7 +589,7 @@ namespace NEN
             else if (Int32.TryParse(literalExpression.Value, out _))
             {
                 string[] namespaceAndName = PrimitiveType.Int32.Split(".");
-                literalExpression.ReturnType = new NamedType {
+                literalExpression.ReturnTypeNode = new NamedType {
                     Namespaces = namespaceAndName[0..^1],
                     Name = namespaceAndName[^1],
                     CLRType = module.CoreAssembly!.GetType(PrimitiveType.Int32), 
@@ -576,14 +601,14 @@ namespace NEN
             {
                 throw new NotImplementedException();
             }
-            return literalExpression.ReturnType;
+            return literalExpression.ReturnTypeNode;
         }
 
         private Types.TypeNode AnalyzeVariableExpression(SymbolTable<Types.TypeNode> localSymbolTable,  VariableExpression variableExpression)
         {
             if (localSymbolTable.TryGetValue(variableExpression.Name, out var type))
             {
-                variableExpression.ReturnType = type;
+                variableExpression.ReturnTypeNode = type;
                 return type!;
             }
             else
@@ -606,7 +631,7 @@ namespace NEN
             var leftTypeFullName = leftType.CLRFullName;
             var rightTypeFullName = rightType.CLRFullName;
             if (leftTypeFullName != rightTypeFullName) throw new TypeDiscrepancyException(content, leftType, rightType, binaryExpression.Line, binaryExpression.Column);
-            binaryExpression.ReturnType = rightType;
+            binaryExpression.ReturnTypeNode = rightType;
             return rightType;
         }
 
@@ -627,7 +652,7 @@ namespace NEN
             switch (typeNode)
             {
                 case ArrayType arrayTypeNode:
-                    var arrayType = GetTypeFromTypeNode(arrayTypeNode.ElementType, line, column).MakeArrayType(1);
+                    var arrayType = GetTypeFromTypeNode(arrayTypeNode.ElementTypeNode, line, column).MakeArrayType(1);
                     if (!typeTable.TryAdd(typeNode.CLRFullName, arrayType))
                     {
                         throw new("Internal error");
@@ -677,7 +702,7 @@ namespace NEN
                 Type elementType = type.GetElementType()!;
                 return new ArrayType
                 {
-                    ElementType = CreateTypeNodeFromType(elementType, line, column),
+                    ElementTypeNode = CreateTypeNodeFromType(elementType, line, column),
                     Namespaces = namespaces,
                     Name = type.Name,
                     Column = column,

@@ -122,5 +122,19 @@ namespace NEN
                 return $"{contentLines[leftLine - 1]}\n" + new string('~', leftColumn - 1) + "^\n" + $"{contentLines[rightLine - 1]}\n" + new string('~', rightColumn - 1) + '^';
             }
         }
+
+        // Array indexing exceptions
+
+        public class IndexingOnNonArrayException : NENException
+        {
+            public IndexingOnNonArrayException() { }
+            public IndexingOnNonArrayException(string[] contentLines, string typeName, int line, int column) : base(contentLines, $"Không thể truy cập phần tử lên một kiểu dữ liệu không phải là mảng (Kiểu dữ liệu {typeName})", line, column) { }
+        }
+
+        public class InvalidArrayIndexingTypeException : NENException
+        {
+            public InvalidArrayIndexingTypeException() { }
+            public InvalidArrayIndexingTypeException(string[] contentLines, string typeName, int line, int column) : base(contentLines, $"Truy cập mảng chỉ chấp nhận kiểu số nguyên (Biểu thức là kiểu {typeName})", line, column) { }
+        }
     }
 }

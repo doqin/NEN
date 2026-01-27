@@ -1,0 +1,10 @@
+﻿
+sử_dụng System;
+
+lớp Chương_Trình
+    @Chính @Tĩnh
+    phương_thức Chính() -> Void
+        biến mf thuộc Int32[] gán tạo Int32[] { 15 };
+        biến i thuộc Int32 gán mf["0"];
+    kết_thúc
+kết_thúc

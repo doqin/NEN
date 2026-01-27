@@ -118,23 +118,23 @@ namespace NEN
             public required string Name { get; set; }
             public VariableNode[] Parameters { get; set; } = [];
             public StatementNode[] Statements { get; set; } = [];
-            public required TypeNode ReturnType { get; set; }
+            public required TypeNode ReturnTypeNode { get; set; }
             public MethodBuilder? MethodBuilder { get; set; }
             public override string ToString()
             {
                 string isEntryPoint = IsEntryPoint ? "(Hàm chính) " : "";
                 string isResolved = MethodBuilder == null ? "(*)" : "";
-                return Helper.GetTreeString<ASTNode>($"Phương thức: {isEntryPoint}({Attributes.ToString()}) {Name}{isResolved}({string.Join(", ", Parameters.Select(param => $"{param.Name} thuộc {param.Type}"))}) -> {ReturnType}", [.. Statements]);
+                return Helper.GetTreeString<ASTNode>($"Phương thức: {isEntryPoint}({Attributes.ToString()}) {Name}{isResolved}({string.Join(", ", Parameters.Select(param => $"{param.Name} thuộc {param.TypeNode}"))}) -> {ReturnTypeNode}", [.. Statements]);
             }
         }
 
         public class VariableNode : ASTNode // Used for both attributes and parameters
         {
             public required string Name { get; set; }
-            public required TypeNode Type { get; set; }
+            public required TypeNode TypeNode { get; set; }
             public override string ToString()
             {
-                return $"{Name} ({Type})";
+                return $"{Name} ({TypeNode})";
             }
         }
 
@@ -168,7 +168,7 @@ namespace NEN
 
         public class ArrayType : TypeNode
         {
-            public required TypeNode ElementType { get; set; }
+            public required TypeNode ElementTypeNode { get; set; }
             // For now: always 1
             public int Rank { get; set; } = 1;
 
@@ -178,9 +178,9 @@ namespace NEN
             public override string ToString()
             {
                 if (Rank == 1)
-                    return $"{ElementType}[*]";
+                    return $"{ElementTypeNode}[*]";
 
-                return $"{ElementType}[{new string(',', Rank - 1)}]";
+                return $"{ElementTypeNode}[{new string(',', Rank - 1)}]";
             }
         }
 
@@ -231,7 +231,7 @@ namespace NEN
         }
 
         public abstract class ExpressionNode : ASTNode { 
-            public TypeNode? ReturnType { get; set; }
+            public TypeNode? ReturnTypeNode { get; set; }
         }
 
         public class BinaryExpression : ExpressionNode
@@ -241,11 +241,11 @@ namespace NEN
             public required ExpressionNode Right { get; set; }
             public override string ToString()
             {
-                if (ReturnType != null)
+                if (ReturnTypeNode != null)
                 {
                     var str = Helper.GetTreeString<object>(null, [Left, Operator, Right]);
                     var lines = str.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
-                    lines[0] = $"{lines[0]} -> {ReturnType}";
+                    lines[0] = $"{lines[0]} -> {ReturnTypeNode}";
                     return string.Join("\n", lines);
                 }
                 return Helper.GetTreeString<object>(null, [Left, Operator, Right]);
@@ -264,9 +264,9 @@ namespace NEN
             public required string Value { get; set; }
             public override string ToString()
             {
-                if (ReturnType != null)
+                if (ReturnTypeNode != null)
                 {
-                    return $"{Value} ({ReturnType})";
+                    return $"{Value} ({ReturnTypeNode})";
                 }
                 return Value;
             }
@@ -278,9 +278,9 @@ namespace NEN
             public bool IsLoading { get; set; } = true;
             public override string ToString()
             {
-                if (ReturnType != null)
+                if (ReturnTypeNode != null)
                 {
-                    return $"{Name} ({ReturnType})";
+                    return $"{Name} ({ReturnTypeNode})";
                 }
                 return Name;
             }
@@ -294,19 +294,19 @@ namespace NEN
             public override string ToString()
             {
                 string isResolved = Info == null ? "(*)" : "";
-                string returnType = ReturnType == null ? "" : $" -> {ReturnType}";
+                string returnType = ReturnTypeNode == null ? "" : $" -> {ReturnTypeNode}";
                 return Helper.GetTreeString($"Gọi hàm(*): {Name}{isResolved}{returnType}", Arguments);
             }
         }
 
         public class StaticMethodCallExpression : AmbiguousMethodCallExpression
         {
-            public required NamedType Type { get; set; }
+            public required NamedType TypeNode { get; set; }
             public override string ToString()
             {
                 string isResolved = Info == null ? "(*)" : "";
-                string returnType = ReturnType == null ? "" : $" -> {ReturnType}";
-                return Helper.GetTreeString($"Gọi hàm: {Type.FullName}{isResolved}{returnType}", Arguments);
+                string returnType = ReturnTypeNode == null ? "" : $" -> {ReturnTypeNode}";
+                return Helper.GetTreeString($"Gọi hàm: {TypeNode.FullName}{isResolved}{returnType}", Arguments);
             }
         }
 
@@ -316,8 +316,8 @@ namespace NEN
             public override string ToString()
             {
                 string isResolved = Info == null ? "(*)" : "";
-                string namespaceAndType = Object.ReturnType == null ? "" : $"{Object.ReturnType?.FullName}";
-                string returnType = ReturnType == null ? "" : $" -> {ReturnType}";
+                string namespaceAndType = Object.ReturnTypeNode == null ? "" : $"{Object.ReturnTypeNode?.FullName}";
+                string returnType = ReturnTypeNode == null ? "" : $" -> {ReturnTypeNode}";
                 return Helper.GetTreeString($"Gọi hàm: {namespaceAndType}{isResolved}{returnType}", [Object, ..Arguments]);
             }
         }
@@ -337,7 +337,18 @@ namespace NEN
             public override string ToString()
             {
                 string size = Size == null ? "tự động" : Size.ToString()!; 
-                return Helper.GetTreeString($"Khởi tạo mảng {ReturnType} ({size})", Elements);
+                return Helper.GetTreeString($"Khởi tạo mảng {ReturnTypeNode} ({size})", Elements);
+            }
+        }
+
+        public class ArrayIndexingExpression : ExpressionNode
+        {
+            public required ExpressionNode Array { get; set; }
+            public required ExpressionNode Index { get; set; }
+            public bool IsLoading { get; set; } = true;
+            public override string ToString()
+            {
+                return Helper.GetTreeString($"Truy cập phần tử -> {ReturnTypeNode}", [Index]);
             }
         }
     }
