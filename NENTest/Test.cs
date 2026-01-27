@@ -42,7 +42,7 @@ namespace NENTest
         {
             string fileName = "ParserTest";
             (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
-            PrintTokens(tokens);
+            // PrintTokens(tokens);
             var parser = new Parser(fileName, lines, tokens);
             var module = parser.Parse();
             Console.WriteLine($"Parser result:\n{module}");

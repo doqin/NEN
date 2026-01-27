@@ -151,7 +151,7 @@ namespace NEN
                     }
                     break;
                 case ArrayIndexingExpression arrayIndexingExpression:
-                    var elementType = Lower(arrayIndexingExpression.ReturnTypeNode!);
+                    var elementType = LowerTypeNode(arrayIndexingExpression.ReturnTypeNode!);
                     AssembleExpression(ilGenerator, parameters, localSymbolTable, arrayIndexingExpression.Index); // Load the index onto the stack
                     AssembleExpression(ilGenerator, parameters, localSymbolTable, assignmentStatement.Source);
                     if (elementType.IsValueType)
@@ -177,7 +177,7 @@ namespace NEN
         {
             var variable = variableDeclarationStatement.Variable;
             var type = variable.TypeNode;
-            var localBuilder = ilGenerator.DeclareLocal(Lower(type));
+            var localBuilder = ilGenerator.DeclareLocal(LowerTypeNode(type));
             localBuilder.SetLocalSymInfo(variable.Name);
             ilGenerator.MarkSequencePoint(documentWriter, variable.Line, variable.Column, variable.Line, variable.Column + 1);
             localSymbolTable.TryAdd(variable.Name, localBuilder);
@@ -217,7 +217,7 @@ namespace NEN
             AssembleExpression(ilGenerator, parameters, localSymbolTable, arrayIndexingExpression.Array); // Load the array onto the stack
             if (!arrayIndexingExpression.IsLoading) return; // Don't load unless specified
             AssembleExpression(ilGenerator, parameters, localSymbolTable, arrayIndexingExpression.Index); // Load the index onto the stack
-            Type elementType = Lower(arrayIndexingExpression.ReturnTypeNode!);
+            Type elementType = LowerTypeNode(arrayIndexingExpression.ReturnTypeNode!);
             if (elementType.IsValueType)
             {
                 ilGenerator.Emit(OpCodes.Ldelem, elementType);
@@ -231,14 +231,14 @@ namespace NEN
         private void AssembleNewArrayExpression(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, NewArrayExpression newArrayExpression)
         {
             AssembleExpression(ilGenerator, parameters, localSymbolTable, newArrayExpression.Size!);
-            Type arrayElementType = Lower(((ArrayType)newArrayExpression.ReturnTypeNode!).ElementTypeNode);
+            Type arrayElementType = LowerTypeNode(((ArrayType)newArrayExpression.ReturnTypeNode!).ElementTypeNode);
             ilGenerator.Emit(OpCodes.Newarr, arrayElementType);
             for (int i = 0; i < newArrayExpression.Elements.Length; i++)
             {
                 ilGenerator.Emit(OpCodes.Dup); // Load a reference to the array onto the stack
                 ilGenerator.Emit(OpCodes.Ldc_I4, i); // Load the index onto the stack
                 AssembleExpression(ilGenerator, parameters, localSymbolTable, newArrayExpression.Elements[i]); // Load value or reference onto the stack
-                Type elementType = Lower(newArrayExpression.Elements[i].ReturnTypeNode!);
+                Type elementType = LowerTypeNode(newArrayExpression.Elements[i].ReturnTypeNode!);
                 if (elementType.IsValueType && arrayElementType.IsValueType)
                 {
                     var line = newArrayExpression.Elements[i].ReturnTypeNode!.Line;
@@ -260,7 +260,7 @@ namespace NEN
         private void AssembleBoxExpression(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, BoxExpression boxExpression)
         {
             AssembleExpression(ilGenerator, parameters, localSymbolTable, boxExpression.Expression);
-            ilGenerator.Emit(OpCodes.Box, Lower(boxExpression.ReturnTypeNode!));
+            ilGenerator.Emit(OpCodes.Box, LowerTypeNode(boxExpression.ReturnTypeNode!));
         }
 
         private void AssembleThisExpression(ILGenerator ilGenerator)
@@ -274,7 +274,17 @@ namespace NEN
             {
                 AssembleExpression(ilGenerator, parameters, localSymbolTable, argument);
             }
-            ilGenerator.Emit(OpCodes.Call, staticMethodCallExpression.MethodInfo!);
+            switch(staticMethodCallExpression.MethodInfo!)
+            {
+                case MethodInfo methodInfo:
+                    ilGenerator.Emit(OpCodes.Call, methodInfo!);
+                    break;
+                case ConstructorInfo constructorInfo:
+                    ilGenerator.Emit(OpCodes.Call, constructorInfo!);
+                    break;
+                default:
+                    throw new NotImplementedException();
+            }
         }
 
         private void AssembleStandardMethodCallExpression(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, StandardMethodCallExpression standardMethodCallExpression)
@@ -284,7 +294,17 @@ namespace NEN
             {
                 AssembleExpression(ilGenerator, parameters, localSymbolTable, argument);
             }
-            ilGenerator.Emit(OpCodes.Call, standardMethodCallExpression.MethodInfo!);
+            switch (standardMethodCallExpression.MethodInfo!)
+            {
+                case MethodInfo methodInfo:
+                    ilGenerator.Emit(OpCodes.Call, methodInfo!);
+                    break;
+                case ConstructorInfo constructorInfo:
+                    ilGenerator.Emit(OpCodes.Call, constructorInfo!);
+                    break;
+                default:
+                    throw new NotImplementedException();
+            }
         }
 
         private void AssembleVariableExpression( ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, VariableExpression variableExpression)
@@ -337,15 +357,15 @@ namespace NEN
 
         private void AssembleLiteralExpression( ILGenerator ilGenerator, LiteralExpression literalExpression)
         {
-            if (Lower(literalExpression.ReturnTypeNode!).FullName == PrimitiveType.String)
+            if (LowerTypeNode(literalExpression.ReturnTypeNode!).FullName == PrimitiveType.String)
             {
                 ilGenerator.Emit(OpCodes.Ldstr, literalExpression.Value);
             }
-            else if (Lower(literalExpression.ReturnTypeNode!).FullName == PrimitiveType.Int64)
+            else if (LowerTypeNode(literalExpression.ReturnTypeNode!).FullName == PrimitiveType.Int64)
             {
                 ilGenerator.Emit(OpCodes.Ldc_I8, Int64.Parse(literalExpression.Value));
             }
-            else if (Lower(literalExpression.ReturnTypeNode!).FullName == PrimitiveType.Int32)
+            else if (LowerTypeNode(literalExpression.ReturnTypeNode!).FullName == PrimitiveType.Int32)
             {
                 ilGenerator.Emit(OpCodes.Ldc_I4, Int32.Parse(literalExpression.Value));
             }
@@ -357,12 +377,12 @@ namespace NEN
 
         /* Helpers */
 
-        static private Type Lower(TypeNode typeNode)
+        static private Type LowerTypeNode(TypeNode typeNode)
         {
             return typeNode switch
             {
                 NamedType namedType => namedType.CLRType!,
-                ArrayType arrayType => Lower(arrayType.ElementTypeNode).MakeArrayType(1),
+                ArrayType arrayType => LowerTypeNode(arrayType.ElementTypeNode).MakeArrayType(1),
                 _ => throw new NotImplementedException()
             };
         }

@@ -14,8 +14,13 @@ lớp Chương_Trình
 
         biến người thuộc Người gán tạo Người { 
             Tên gán "Nguyễn Văn A",
-            Tuổi gán 10
+            Tuổi gán 25
         };
+
+        người.Tên gán "Nguyễn Thị B";
+        người.Tuổi gán 63;
+
+        Người::Số_Người gán 15;
 
         Console::WriteLine(người.Tên);
 
@@ -39,11 +44,13 @@ lớp Người
         Test2();
     kết_thúc
 
+    @Tĩnh @Công_Khai thuộc_tính Số_Người thuộc Int32 gán 10;
+
     @Công_Khai thuộc_tính Tên thuộc String;
 
     @Công_Khai thuộc_tính Tuổi thuộc Int32;
 
-    thuộc_tính giấu thuộc Int gán 15;
+    thuộc_tính giấu thuộc Int32 gán 15;
 
     phương_thức Test1() -> Void
         Console::WriteLine("Test1");

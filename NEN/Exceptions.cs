@@ -75,12 +75,6 @@ namespace NEN
             public MethodCallFromOutsideException(string[] contentLines, int line, int column) : base(contentLines, $"Không thể gọi phương thức ngoài một phương thức", line, column) { }
         }
 
-        public class FieldInitializationOutsideDefaultConstructorException : NENException
-        {
-            public FieldInitializationOutsideDefaultConstructorException() { }
-            public FieldInitializationOutsideDefaultConstructorException(string[] contentLines, int line, int column) : base(contentLines, $"Không thể khởi tạo thuộc tính trực tiếp ở khai báo nếu phương thức khởi tạo đối tượng đã được định nghĩa", line, column) { }
-        }
-
         public class StaticIllegalAccessmentException : NENException
         {
             public StaticIllegalAccessmentException() { }
@@ -147,6 +141,20 @@ namespace NEN
         {
             public InvalidArrayIndexingTypeException() { }
             public InvalidArrayIndexingTypeException(string[] contentLines, string typeName, int line, int column) : base(contentLines, $"Truy cập mảng chỉ chấp nhận kiểu số nguyên (Biểu thức là kiểu {typeName})", line, column) { }
+        }
+
+        // Field exceptions
+
+        public class FieldInitializationOutsideDefaultConstructorException : NENException
+        {
+            public FieldInitializationOutsideDefaultConstructorException() { }
+            public FieldInitializationOutsideDefaultConstructorException(string[] contentLines, int line, int column) : base(contentLines, $"Không thể khởi tạo thuộc tính trực tiếp ở khai báo nếu phương thức khởi tạo đối tượng đã được định nghĩa", line, column) { }
+        }
+
+        public class InvalidFieldAccessmentException : NENException
+        {
+            public InvalidFieldAccessmentException() { }
+            public InvalidFieldAccessmentException(string[] contentLines, string fieldName, int line, int column) : base(contentLines, $"Không thể truy cập thuộc tính '{fieldName}' vì nó không tồn tại hoặc không công khai", line, column) { }
         }
     }
 }
