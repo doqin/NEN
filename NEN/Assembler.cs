@@ -274,7 +274,7 @@ namespace NEN
             {
                 AssembleExpression(ilGenerator, parameters, localSymbolTable, argument);
             }
-            ilGenerator.Emit(OpCodes.Call, staticMethodCallExpression.Info!);
+            ilGenerator.Emit(OpCodes.Call, staticMethodCallExpression.MethodInfo!);
         }
 
         private void AssembleStandardMethodCallExpression(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, StandardMethodCallExpression standardMethodCallExpression)
@@ -284,7 +284,7 @@ namespace NEN
             {
                 AssembleExpression(ilGenerator, parameters, localSymbolTable, argument);
             }
-            ilGenerator.Emit(OpCodes.Call, standardMethodCallExpression.Info!);
+            ilGenerator.Emit(OpCodes.Call, standardMethodCallExpression.MethodInfo!);
         }
 
         private void AssembleVariableExpression( ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, VariableExpression variableExpression)

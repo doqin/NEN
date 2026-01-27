@@ -1,7 +1,7 @@
 ﻿sử_dụng System;
 
 lớp Chương_Trình
-    @Chính @Tĩnh
+    @Công_Khai @Chính @Tĩnh
     phương_thức Chính() -> Void
         biến str thuộc String gán "Xin chào";
         biến str2 thuộc String gán "OK";
@@ -11,6 +11,13 @@ lớp Chương_Trình
         biến e thuộc Int64 gán 2L *32L / 4L;
         b gán 10 + 2;
         biến f thuộc Int32 gán 25 + b;
+
+        biến người thuộc Người gán tạo Người { 
+            Tên gán "Nguyễn Văn A",
+            Tuổi gán 10
+        };
+
+        Console::WriteLine(người.Tên);
 
         biến mảng thuộc Int32[] gán tạo Int32[3];
         biến mảng1 thuộc Int32[] gán tạo Int32[] { 0, 1, 2, 3, 4 };
@@ -22,7 +29,7 @@ lớp Chương_Trình
     kết_thúc
 kết_thúc
 
-lớp Phụ
+lớp Người
     phương_thức Test(
         a thuộc String, 
         b thuộc Int32
@@ -31,6 +38,12 @@ lớp Phụ
         Test1();
         Test2();
     kết_thúc
+
+    @Công_Khai thuộc_tính Tên thuộc String;
+
+    @Công_Khai thuộc_tính Tuổi thuộc Int32;
+
+    thuộc_tính giấu thuộc Int gán 15;
 
     phương_thức Test1() -> Void
         Console::WriteLine("Test1");

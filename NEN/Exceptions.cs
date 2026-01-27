@@ -69,6 +69,18 @@ namespace NEN
             }
         }
 
+        public class MethodCallFromOutsideException : NENException
+        {
+            public MethodCallFromOutsideException() { }
+            public MethodCallFromOutsideException(string[] contentLines, int line, int column) : base(contentLines, $"Không thể gọi phương thức ngoài một phương thức", line, column) { }
+        }
+
+        public class FieldInitializationOutsideDefaultConstructorException : NENException
+        {
+            public FieldInitializationOutsideDefaultConstructorException() { }
+            public FieldInitializationOutsideDefaultConstructorException(string[] contentLines, int line, int column) : base(contentLines, $"Không thể khởi tạo thuộc tính trực tiếp ở khai báo nếu phương thức khởi tạo đối tượng đã được định nghĩa", line, column) { }
+        }
+
         public class StaticIllegalAccessmentException : NENException
         {
             public StaticIllegalAccessmentException() { }

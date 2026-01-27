@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace NEN
 {
@@ -89,7 +90,7 @@ namespace NEN
             public string[] AvailableNamespaces { get; set; } = [];
             public override string ToString()
             {
-                return Helper.GetTreeString<ASTNode>($"Mô đun: {Name}", [..UsingNamespaces, ..Classes]);
+                return Helper.GetTreeString<ASTNode>($"Mô đun: {Name}", [.. UsingNamespaces, .. Classes]);
             }
         }
 
@@ -102,29 +103,66 @@ namespace NEN
         public class ClassNode : ASTNode
         {
             public required string Name { get; set; }
+            public FieldDeclarationStatement[] Fields { get; set; } = [];
             public MethodNode[] Methods { get; set; } = [];
             public TypeBuilder? TypeBuilder { get; set; }
+            public ConstructorNode[]? Constructors { get; set; }
+            public ConstructorNode? GetDefaultConstructor()
+            {
+                return Constructors?.First(e => e.Parameters.Length == 0);
+            }
             public override string ToString()
             {
                 string isResolved = TypeBuilder == null ? "(*)" : "";
-                return Helper.GetTreeString($"Lớp: {Name}{isResolved}", Methods);
+                return Helper.GetTreeString<ASTNode>($"Lớp: {Name}{isResolved}", [.. Fields, .. Methods]);
             }
         }
 
-        public class MethodNode : ASTNode
+        public abstract class MethodBase : ASTNode
+        {
+            public MethodAttributes MethodAttributes { get; set; } = MethodAttributes.Private;
+            public VariableNode[] Parameters { get; set; } = [];
+            public required TypeNode ReturnTypeNode { get; set; }
+            public StatementNode[] Statements { get; set; } = [];
+            public abstract System.Reflection.MethodBase? GetMethodInfo();
+        }
+
+        public class MethodNode : MethodBase
         {
             public bool IsEntryPoint { get; set; } = false;
-            public MethodAttributes Attributes { get; set; } = MethodAttributes.Public;
-            public required string Name { get; set; }
-            public VariableNode[] Parameters { get; set; } = [];
-            public StatementNode[] Statements { get; set; } = [];
-            public required TypeNode ReturnTypeNode { get; set; }
+            public required string MethodName { get; set; }
             public MethodBuilder? MethodBuilder { get; set; }
+            public override System.Reflection.MethodBase? GetMethodInfo()
+            {
+                return MethodBuilder;
+            }
             public override string ToString()
             {
                 string isEntryPoint = IsEntryPoint ? "(Hàm chính) " : "";
                 string isResolved = MethodBuilder == null ? "(*)" : "";
-                return Helper.GetTreeString<ASTNode>($"Phương thức: {isEntryPoint}({Attributes.ToString()}) {Name}{isResolved}({string.Join(", ", Parameters.Select(param => $"{param.Name} thuộc {param.TypeNode}"))}) -> {ReturnTypeNode}", [.. Statements]);
+                string parameters = string.Join(", ", Parameters.Select(param => $"{param.Name} thuộc {param.TypeNode}"));
+                return Helper.GetTreeString<ASTNode>(
+                    $"Phương thức: {isEntryPoint}({MethodAttributes}) {MethodName}{isResolved}({parameters}) -> {ReturnTypeNode}", 
+                    [.. Statements]
+                    );
+            }
+        }
+
+        public class ConstructorNode : MethodBase
+        {
+            public ConstructorBuilder? ConstructorBuilder { get; set; }
+            public override System.Reflection.MethodBase? GetMethodInfo()
+            {
+                return ConstructorBuilder;
+            }
+            public override string ToString()
+            {
+                string isResolved = ConstructorBuilder == null ? "(*)" : "";
+                string parameters = string.Join(", ", Parameters.Select(param => $"{param.Name} thuộc {param.TypeNode}"));
+                return Helper.GetTreeString(
+                    $"Phương thức tạo đối tượng: ({MethodAttributes}) {isResolved}({parameters}) -> {ReturnTypeNode}",
+                    [.. Statements]
+                    );
             }
         }
 
@@ -160,7 +198,7 @@ namespace NEN
             {
                 if (CLRType == null)
                 {
-                    return $"{string.Join("::", [..Namespaces, Name])}(*)";
+                    return $"{string.Join("::", [.. Namespaces, Name])}(*)";
                 }
                 return CLRType.FullName ?? string.Join("::", [.. Namespaces, Name]);
             }
@@ -211,6 +249,20 @@ namespace NEN
             }
         }
 
+        public class FieldDeclarationStatement : VariableDeclarationStatement
+        {
+            public FieldInfo? FieldInfo { set; get; }
+            public FieldAttributes FieldAttributes { get; set; } = FieldAttributes.Private;
+            public override string ToString()
+            {
+                if (InitialValue != null)
+                {
+                    return Helper.GetTreeString($"Khai báo thuộc tính: ({FieldAttributes}) {Variable} gán", [InitialValue]);
+                }
+                return $"Khai báo thuộc tính: {Variable}";
+            }
+        }
+
         public class AssignmentStatement : StatementNode
         {
             public required ExpressionNode Destination { get; set; }
@@ -230,7 +282,7 @@ namespace NEN
             }
         }
 
-        public abstract class ExpressionNode : ASTNode { 
+        public abstract class ExpressionNode : ASTNode {
             public TypeNode? ReturnTypeNode { get; set; }
         }
 
@@ -288,14 +340,14 @@ namespace NEN
 
         public class AmbiguousMethodCallExpression : ExpressionNode // For unresolved methods
         {
-            public MethodInfo? Info { get; set; }
-            public required string Name { get; set; }
+            public System.Reflection.MethodBase? MethodInfo { get; set; }
+            public required string MethodName { get; set; }
             public required ExpressionNode[] Arguments { get; set; }
             public override string ToString()
             {
-                string isResolved = Info == null ? "(*)" : "";
+                string isResolved = MethodInfo == null ? "(*)" : "";
                 string returnType = ReturnTypeNode == null ? "" : $" -> {ReturnTypeNode}";
-                return Helper.GetTreeString($"Gọi hàm(*): {Name}{isResolved}{returnType}", Arguments);
+                return Helper.GetTreeString($"Gọi hàm(*): {MethodName}{isResolved}{returnType}", Arguments);
             }
         }
 
@@ -304,7 +356,7 @@ namespace NEN
             public required NamedType TypeNode { get; set; }
             public override string ToString()
             {
-                string isResolved = Info == null ? "(*)" : "";
+                string isResolved = MethodInfo == null ? "(*)" : "";
                 string returnType = ReturnTypeNode == null ? "" : $" -> {ReturnTypeNode}";
                 return Helper.GetTreeString($"Gọi hàm: {TypeNode.FullName}{isResolved}{returnType}", Arguments);
             }
@@ -315,10 +367,10 @@ namespace NEN
             public required ExpressionNode Object { get; set; }
             public override string ToString()
             {
-                string isResolved = Info == null ? "(*)" : "";
+                string isResolved = MethodInfo == null ? "(*)" : "";
                 string namespaceAndType = Object.ReturnTypeNode == null ? "" : $"{Object.ReturnTypeNode?.FullName}";
                 string returnType = ReturnTypeNode == null ? "" : $" -> {ReturnTypeNode}";
-                return Helper.GetTreeString($"Gọi hàm: {namespaceAndType}{isResolved}{returnType}", [Object, ..Arguments]);
+                return Helper.GetTreeString($"Gọi hàm: {namespaceAndType}{isResolved}{returnType}", [Object, .. Arguments]);
             }
         }
 
@@ -336,7 +388,7 @@ namespace NEN
             public required ExpressionNode[] Elements { get; set; }
             public override string ToString()
             {
-                string size = Size == null ? "tự động" : Size.ToString()!; 
+                string size = Size == null ? "tự động" : Size.ToString()!;
                 return Helper.GetTreeString($"Khởi tạo mảng {ReturnTypeNode} ({size})", Elements);
             }
         }
@@ -349,6 +401,44 @@ namespace NEN
             public override string ToString()
             {
                 return Helper.GetTreeString($"Truy cập phần tử -> {ReturnTypeNode}", [Index]);
+            }
+        }
+
+
+        public class NewObjectExpression : ExpressionNode
+        {
+            public required AssignmentStatement[] FieldInitializations { get; set; } // sometimes you gotta use statements inside an expression lol
+            public override string ToString()
+            {
+                return Helper.GetTreeString($"Khởi tạo đối tượng kiểu {ReturnTypeNode}", FieldInitializations);
+            }
+        }
+
+        public abstract class FieldAccessmentExpression : ExpressionNode {
+            public FieldInfo? FieldInfo { get; set; }
+            public required string FieldName { get; set; }
+            public bool IsLoading { get; set; } = true;
+            public override string ToString()
+            {
+                return $"Truy cập thuộc tính {FieldName}";
+            }
+        }
+
+        public class StandardFieldAccessmentExpression : FieldAccessmentExpression
+        {
+            public required ExpressionNode Object { get; set; }
+            
+        }
+
+        public class StaticFieldAccessmentExpression : FieldAccessmentExpression
+        {
+            public required TypeNode TypeNode { get; set; }
+        }
+
+        public class DuplicateExpression : ExpressionNode {
+            public override string ToString()
+            {
+                return "Sao chép đối tượng";
             }
         }
     }
