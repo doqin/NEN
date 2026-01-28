@@ -56,16 +56,34 @@ namespace NEN
             var (line, column) = GetCurrentPosition();
             var classIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên lớp");
             List<MethodNode> methods = [];
+            List<FieldDeclarationStatement> fields = [];
             while (Current() != null && Current()!.Value != "kết_thúc")
             {
                 var token = Consume();
                 switch (token!.Value)
                 {
                     case "@":
-                        methods.Add(ParseMarker());
+                        var (left, right) = ParseMarker();
+                        if (left != null)
+                        {
+                            methods.Add(left);
+                        }
+                        else if (right != null)
+                        {
+                            fields.Add(right);
+                            ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ";");
+                        }
+                        else
+                        {
+                            throw new("Internal error");
+                        }
                         break;
                     case "phương_thức":
                         methods.Add(ParseMethod());
+                        break;
+                    case "thuộc_tính":
+                        fields.Add(ParseFieldDeclarationStatement());
+                        ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ";");
                         break;
                     default:
                         UnexpectedHelper(token);
@@ -74,14 +92,14 @@ namespace NEN
             }
             if (Current() == null) OutOfTokenHelper("kết_thúc");
             Consume();
-            return new ClassNode { Name = classIdentifier!.Value, Methods = [.. methods], Line = line, Column = column };
+            return new ClassNode { Name = classIdentifier!.Value, Methods = [.. methods], Fields = [..fields], Line = line, Column = column };
         }
 
         private static readonly string[] markers = [
-            "Chính", "Tĩnh"    
+            "Chính", "Tĩnh", "Công_Khai"
         ];
 
-        private MethodNode ParseMarker(MethodAttributes methodAttributes = MethodAttributes.Public, bool isEntryPoint = false)
+        private (MethodNode?, FieldDeclarationStatement?) ParseMarker(MethodAttributes methodAttributes = MethodAttributes.Private, FieldAttributes fieldAttributes = FieldAttributes.Private, bool isEntryPoint = false)
         {
             var (line, column) = GetCurrentPosition();
             var annotationIdentifier = ConsumeOrThrow(TokenType.Identifier, "thuộc tính phương thức");
@@ -92,9 +110,19 @@ namespace NEN
                     if (isEntryPoint == true) throw new RedefinedException(content, "@Chính", line, column);
                     isEntryPoint = true;
                     break;
+                case "Công_Khai":
+                    if (methodAttributes.HasFlag(MethodAttributes.Public)) throw new RedefinedException(content, "@Công_Khai", line, column);
+                    methodAttributes &= ~MethodAttributes.Private;
+                    methodAttributes |= MethodAttributes.Public;
+                    if (fieldAttributes.HasFlag(FieldAttributes.Public)) throw new RedefinedException(content, "@Công_Khai", line, column);
+                    fieldAttributes &= ~FieldAttributes.Private;
+                    fieldAttributes |= FieldAttributes.Public;
+                    break;
                 case "Tĩnh":
                     if (methodAttributes.HasFlag(MethodAttributes.Static)) throw new RedefinedException(content, "@Tĩnh", line, column);
-                    methodAttributes |= MethodAttributes.Static; 
+                    methodAttributes |= MethodAttributes.Static;
+                    if (fieldAttributes.HasFlag(FieldAttributes.Static)) throw new RedefinedException(content, "@Tĩnh", line, column);
+                    fieldAttributes |= FieldAttributes.Static;
                     break;
                 default:
                     throw new NotImplementedException();
@@ -103,15 +131,17 @@ namespace NEN
             switch(token.Value)
             {
                 case "@":
-                    return ParseMarker(methodAttributes, isEntryPoint);
+                    return ParseMarker(methodAttributes, fieldAttributes, isEntryPoint);
                 case "phương_thức":
-                    return ParseMethod(methodAttributes, isEntryPoint);
+                    return (ParseMethod(methodAttributes, isEntryPoint), null);
+                case "thuộc_tính":
+                    return (null, ParseFieldDeclarationStatement(fieldAttributes));
                 default:
                     throw new ExpectedException(content, "phương_thức", GetCurrentLine(), GetCurrentColumn());
             }
         }
 
-        private MethodNode ParseMethod(MethodAttributes methodAttributes = MethodAttributes.Public, bool isEntryPoint = false)
+        private MethodNode ParseMethod(MethodAttributes methodAttributes = MethodAttributes.Private, bool isEntryPoint = false)
         {
             var (line, column) = GetCurrentPosition();
             var methodIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên phương thức");
@@ -137,7 +167,21 @@ namespace NEN
             }
             if (Current() == null) OutOfTokenHelper("kết_thúc");
             Consume();
-            return new MethodNode { IsEntryPoint = isEntryPoint, Attributes = methodAttributes, Name = methodIdentifier.Value, Parameters = [.. parameters], ReturnTypeNode = returnTypeIdentifier, Statements = [.. statements], Line = line, Column = column };
+            return new MethodNode { IsEntryPoint = isEntryPoint, MethodAttributes = methodAttributes, MethodName = methodIdentifier.Value, Parameters = [.. parameters], ReturnTypeNode = returnTypeIdentifier, Statements = [.. statements], Line = line, Column = column };
+        }
+
+        private FieldDeclarationStatement ParseFieldDeclarationStatement(FieldAttributes fieldAttributes = FieldAttributes.Private)
+        {
+            var (line, column) = GetCurrentPosition();
+            var fieldDeclaration = ParseVariableDeclarationStatement(line, column);
+            return new FieldDeclarationStatement
+            {
+                Line = line,
+                Column = column,
+                FieldAttributes = fieldAttributes,
+                Variable = fieldDeclaration.Variable,
+                InitialValue = fieldDeclaration.InitialValue
+            };
         }
 
         private StatementNode ParseStatement()
@@ -191,7 +235,7 @@ namespace NEN
             return [.. arguments];
         }
 
-        private StatementNode ParseVariableDeclarationStatement(int line, int column)
+        private VariableDeclarationStatement ParseVariableDeclarationStatement(int line, int column)
         {
             var variableIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên biến");
             ConsumeOrThrowIfNotEqual(TokenType.Keyword, "thuộc");
@@ -263,7 +307,7 @@ namespace NEN
                     if (Current()?.Value == "(")
                     {
                         var arguments = ParseArguments();
-                        expression = new AmbiguousMethodCallExpression { Name = token.Value, Arguments = arguments, Line = line, Column = column };
+                        expression = new AmbiguousMethodCallExpression { MethodName = token.Value, Arguments = arguments, Line = line, Column = column };
                     }
                     else if (Current()?.Value == "::")
                     {
@@ -302,7 +346,7 @@ namespace NEN
             {
                 if (Current()?.Value == ".")
                 {
-                    expression = ParseStandardMethodCallExpression(expression!);
+                    expression = ParseStandardMethodCallOrFieldAccessmentExpression(expression!);
                 }
                 else
                 {
@@ -312,20 +356,31 @@ namespace NEN
             return expression!;
         }
 
-        private ExpressionNode ParseStandardMethodCallExpression(ExpressionNode objectNode)
+        private ExpressionNode ParseStandardMethodCallOrFieldAccessmentExpression(ExpressionNode objectNode)
         {
             ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ".");
             var (line, column) = GetCurrentPosition();
             var identifier = ConsumeOrThrow(TokenType.Identifier, "tên thuộc tính/tên phương thức");
             if (Current() != null && Current()?.Value != "(")
             {
-                throw new NotImplementedException();
+                return new StandardFieldAccessmentExpression { 
+                    Object = objectNode, 
+                    FieldName = identifier.Value, 
+                    Line = line, 
+                    Column = column 
+                };
             }
             var arguments = ParseArguments();
-            return new StandardMethodCallExpression { Object = objectNode, Name = identifier.Value, Arguments = arguments, Line = line, Column = column };
+            return new StandardMethodCallExpression { 
+                Object = objectNode, 
+                MethodName = identifier.Value, 
+                Arguments = arguments, 
+                Line = line, 
+                Column = column 
+            };
         }
 
-        private ExpressionNode ParseArrayIndexingExpression(ExpressionNode objectNode)
+        private ArrayIndexingExpression ParseArrayIndexingExpression(ExpressionNode objectNode)
         {
             ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "[");
             var (line, column) = GetCurrentPosition();
@@ -385,6 +440,39 @@ namespace NEN
                         Line = line, 
                         Column = column 
                     };
+                case NamedType namedType:
+                    List<AssignmentStatement> assignments = [];
+                    if (Current()?.Value == "{")
+                    {
+                        ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "{");
+                        while (Current() != null && Current()?.Value != "}")
+                        {
+                            var (assignmentLine, assignmentColumn) = GetCurrentPosition();
+                            var fieldIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên thuộc tính");
+                            ConsumeOrThrowIfNotEqual(TokenType.Keyword, "gán");
+                            var value = ParseExpression(0);
+                            assignments.Add(new AssignmentStatement { 
+                                Destination = new StandardFieldAccessmentExpression {
+                                    ReturnTypeNode = namedType,
+                                    Object = new DuplicateExpression { ReturnTypeNode = namedType, Line = assignmentLine, Column = assignmentColumn },
+                                    FieldName = fieldIdentifier.Value,
+                                    Line = assignmentLine,
+                                    Column = assignmentColumn
+                                },
+                                Source = value,
+                                Line = assignmentLine,
+                                Column = assignmentColumn
+                            });
+                            if (Current() != null && Current()?.Value != "}") ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ",");
+                        }
+                        ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "}");
+                    }
+                    return new NewObjectExpression { 
+                        ReturnTypeNode = namedType, 
+                        FieldInitializations = [..assignments] , 
+                        Line = line, 
+                        Column = column 
+                    };
                 default:
                     throw new NotImplementedException();
             }
@@ -428,14 +516,20 @@ namespace NEN
             };
             if (Current() != null && Current()?.Value != "(")
             {
-                throw new NotImplementedException();
+                return new StaticFieldAccessmentExpression
+                {
+                    TypeNode = type,
+                    FieldName = identifier[^1],
+                    Line = line,
+                    Column = column
+                };
             }
             var arguments = ParseArguments();
             return new StaticMethodCallExpression
             {
                 TypeNode = type,
                 Arguments = arguments,
-                Name = identifier[^1],
+                MethodName = identifier[^1],
                 Line = line,
                 Column = column
             };

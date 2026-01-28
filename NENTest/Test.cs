@@ -31,7 +31,7 @@ namespace NENTest
         {
             string fileName = "ParserTest";
             (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
-            PrintTokens(tokens);
+            // PrintTokens(tokens);
             var parser = new Parser(fileName, lines, tokens);
             var module = parser.Parse();
             Console.WriteLine($"Parser result:\n{module}");
@@ -42,7 +42,7 @@ namespace NENTest
         {
             string fileName = "ParserTest";
             (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
-            PrintTokens(tokens);
+            // PrintTokens(tokens);
             var parser = new Parser(fileName, lines, tokens);
             var module = parser.Parse();
             Console.WriteLine($"Parser result:\n{module}");
@@ -56,7 +56,7 @@ namespace NENTest
         {
             string fileName = "AssemblerTest";
             (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
-            PrintTokens(tokens);
+            // PrintTokens(tokens);
             var parser = new Parser(fileName, lines, tokens);
             var module = parser.Parse();
             Console.WriteLine($"Kết quả Parser:\n{module}");
@@ -68,13 +68,16 @@ namespace NENTest
             Console.WriteLine($"Hoàn thành biên dịch! OK");
         }
 
-        static private void GeneralStaticAnalyzerTest<T>(string fileName) where T : NENException
+        static private void GeneralStaticAnalyzerTest<T>(string fileName, bool printTokens = false) where T : NENException
         {
             (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
             PrintTokens(tokens);
             var parser = new Parser(fileName, lines, tokens);
             var module = parser.Parse();
-            Console.WriteLine($"Parser result:\n{module}");
+            if (printTokens)
+            {
+                Console.WriteLine($"Parser result:\n{module}");
+            }
             var analyzer = new StaticAnalyzer(lines, module, fileName, []);
             try
             {
@@ -91,7 +94,7 @@ namespace NENTest
         static private void GeneralAssemblerTest<T>(string fileName) where T : NENException
         {
             (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
-            PrintTokens(tokens);
+            // PrintTokens(tokens);
             var parser = new Parser(fileName, lines, tokens);
             var module = parser.Parse();
             Console.WriteLine($"Parser result:\n{module}");
@@ -177,6 +180,12 @@ namespace NENTest
         public void InvalidArrayIndexingTypeTest()
         {
             GeneralStaticAnalyzerTest<InvalidArrayIndexingTypeException>("InvalidArrayIndexingTypeTest");
+        }
+
+        [TestMethod]
+        public void InvalidFieldAccessmentTest()
+        {
+            GeneralStaticAnalyzerTest<InvalidFieldAccessmentException>("InvalidFieldAccessmentTest");
         }
 
         [TestMethod]
@@ -433,6 +442,10 @@ namespace NENTest
             mainGen.Emit(OpCodes.Ldloc_1);
             mainGen.Emit(OpCodes.Ldfld, nameFld);
             mainGen.Emit(OpCodes.Call, writeLineMethod!);
+
+            //FieldInfo field = tb.DefineField("basd", intType, FieldAttributes.Static | FieldAttributes.Public);
+            //(field.IsStatic)
+            //mainGen.Emit(OpCodes.Ld)
 
             mainGen.Emit(OpCodes.Ret);
             tb.CreateType();

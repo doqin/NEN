@@ -1,0 +1,20 @@
+﻿
+sử_dụng System;
+
+lớp Chương_Trình
+    @Công_Khai @Chính @Tĩnh
+    phương_thức Chính() -> Void
+        biến m thuộc Int32 gán 15;
+        biến n thuộc Người gán tạo Người {
+            Tên gán "Dawg",
+            Tuổi gán 3,
+            tên_chủ gán "Doqin"
+        };
+    kết_thúc
+kết_thúc
+
+lớp Người
+    @Công_Khai thuộc_tính Tên thuộc String;
+    @Công_Khai thuộc_tính Tuổi thuộc Int32;
+    thuộc_tính tên_chủ thuộc String;
+kết_thúc

@@ -9,7 +9,7 @@ namespace NEN
         {
             var content = File.ReadAllText(filePath);
             //content = content.Replace("\t", "    ");
-            var lines = content.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+            var lines = content.Split(['\n']);
             var regex = LexerRegex();
             List<Token> tokens = [];
             foreach (var (value, i) in lines.Select((value, i) => (value, i + 1)))
@@ -56,7 +56,7 @@ namespace NEN
         private static bool AnalyseKeyword( Token token)
         {
             string[] keywords = [
-                "lớp", "phương_thức", "quay_lại", "trả_về", "kết_thúc", "sử_dụng", "biến", "hằng", "gán", "thuộc", "tạo"
+                "lớp", "phương_thức", "quay_lại", "trả_về", "kết_thúc", "sử_dụng", "biến", "hằng", "gán", "thuộc", "tạo", "thuộc_tính"
             ];
             if (keywords.Contains(token.Value))
             {

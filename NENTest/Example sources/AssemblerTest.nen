@@ -15,7 +15,7 @@ lớp Chương_Trình
         c gán 10L;
 
         biến mảng1 thuộc String[] gán tạo String[3] { "mảng", "của", "mảng" };
-        biến mảng2 thuộc Int32[] gán tạo Int32[] { 0, 1, 2, 3, 4 };
+        biến mảng2 thuộc Int32[] gán tạo Int32[] { 0, b, 2, 3, 4 };
         biến mảng_của_mảng thuộc String[][] gán tạo String[][] {
             tạo String[] { "Đây", "là" },
             mảng1
@@ -34,12 +34,63 @@ lớp Chương_Trình
         Console::WriteLine(d);
         Console::WriteLine("1 + 1 = {0}", 1 + 1);
         Phụ::Test("Foo");
+
+        biến người thuộc Người gán tạo Người { 
+            Tên gán "Nguyễn Văn A",
+            Tuổi gán 25
+        };
+        người.Tên gán "Nguyễn Thị B";
+        người.Tuổi gán 63;
+        Người::Số_Người gán 1;
+        Console::WriteLine(người.Tên);
+        người.Chào();
+
+        biến mảng_người thuộc Người[] gán tạo Người[] {
+            tạo Người {
+                Tên gán "A",
+            },
+            tạo Người {
+                Tuổi gán 0,
+            },
+            tạo Người {
+                Tên gán "C",
+                Tuổi gán 34
+            }
+        };
+        Console::WriteLine(mảng_người[0].Tên);
     kết_thúc
 kết_thúc
 
 lớp Phụ
-    @Tĩnh
+    @Tĩnh @Công_Khai
     phương_thức Test(a thuộc String) -> Void
         Console::WriteLine("{0} Bar!", a);
+    kết_thúc
+kết_thúc
+
+lớp Người
+    @Công_Khai
+    phương_thức Chào() -> Void
+        Console::WriteLine("Chào bạn, tôi là {0}", Tên);
+        Console::WriteLine("Tôi có một thuộc tính giấu! Giá trị của nó là {0}", giấu);
+        Test1();
+        Test2();
+    kết_thúc
+
+    @Tĩnh @Công_Khai thuộc_tính Số_Người thuộc Int32 gán 10;
+
+    @Công_Khai thuộc_tính Tên thuộc String;
+
+    @Công_Khai thuộc_tính Tuổi thuộc Int32;
+
+    thuộc_tính giấu thuộc Int32 gán 15;
+
+    phương_thức Test1() -> Void
+        Console::WriteLine("Test1");
+    kết_thúc
+
+    @Tĩnh
+    phương_thức Test2() -> Void
+        Console::WriteLine("Test2");
     kết_thúc
 kết_thúc

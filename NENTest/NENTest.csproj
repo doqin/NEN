@@ -45,6 +45,9 @@
     <None Update="Example sources\IndexingOnNonArrayTest.nen">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Example sources\InvalidFieldAccessmentTest.nen">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Example sources\UnresolvedTypeTest.nen">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
