@@ -977,7 +977,10 @@ namespace NEN
             switch (typeNode)
             {
                 case ArrayType arrayTypeNode:
-                    var arrayType = GetTypeFromTypeNode(arrayTypeNode.ElementTypeNode).MakeArrayType(1);
+                    var elementType = GetTypeFromTypeNode(arrayTypeNode.ElementTypeNode);
+                    var arrayType = arrayTypeNode.Rank == 1
+                        ? elementType.MakeArrayType()
+                        : elementType.MakeArrayType(arrayTypeNode.Rank);
                     if (!typeTable.TryAdd(typeNode.CLRFullName, arrayType))
                     {
                         throw new("Internal error");

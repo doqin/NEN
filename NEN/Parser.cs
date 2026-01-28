@@ -413,7 +413,7 @@ namespace NEN
                 {
                     ElementTypeNode = type,
                     Namespaces = type.Namespaces,
-                    Name = $"{type.Name}[*]",
+                    Name = $"{type.Name}[]",
                     Line = line,
                     Column = column
                 };
@@ -496,7 +496,7 @@ namespace NEN
                 {
                     ElementTypeNode = type,
                     Namespaces = type.Namespaces,
-                    Name = $"{type.Name}[*]",
+                    Name = $"{type.Name}[]",
                     Line = line,
                     Column = column
                 };

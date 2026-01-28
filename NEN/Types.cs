@@ -216,7 +216,7 @@ namespace NEN
             public override string ToString()
             {
                 if (Rank == 1)
-                    return $"{ElementTypeNode}[*]";
+                    return $"{ElementTypeNode}[]";
 
                 return $"{ElementTypeNode}[{new string(',', Rank - 1)}]";
             }
