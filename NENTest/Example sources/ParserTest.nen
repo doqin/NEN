@@ -29,8 +29,13 @@ lớp Chương_Trình
         mảng[1];
 
         Console::WriteLine("1 + 1 = {0}", 1 + 1);
-        biến là_sai thuộc Boolean gán str2.Contains("H");
-        biến là_sao thuộc Boolean gán str2.Contains("K").Equals(là_sai);
+
+        biến là_đúng thuộc Boolean gán đúng;
+        biến là_sai thuộc Boolean gán sai;
+        biến là_đúng_hay_sai thuộc Boolean gán 5 = 1 hoặc b = 12;
+        Console::WriteLine(là_đúng);
+        Console::WriteLine(là_sai);
+        Console::WriteLine(là_đúng_hay_sai);
     kết_thúc
 kết_thúc
 

@@ -24,14 +24,6 @@ namespace NEN
             Unknown = 0 // for further analysis
         };
 
-        public class Operator
-        {
-            public static readonly string Plus = "+";
-            public static readonly string Minus = "-";
-            public static readonly string Multiply = "*";
-            public static readonly string Divide = "/";
-        }
-
         public class Token
         {
             public required TokenType Type { get; set; }
@@ -143,6 +135,7 @@ namespace NEN
             public static readonly string Int32 = "System.Int32";
             public static readonly string Int64 = "System.Int64";
             public static readonly string String = "System.String";
+            public static readonly string Boolean = "System.Boolean";
         }
 
         public abstract class TypeNode : ASTNode
@@ -348,7 +341,7 @@ namespace NEN
             {
                 string isResolved = MethodInfo == null ? "(*)" : "";
                 string returnType = ReturnTypeNode == null ? "" : $" -> {ReturnTypeNode}";
-                return Helper.GetTreeString($"Gọi hàm: {TypeNode.FullName}{isResolved}{returnType}", Arguments);
+                return Helper.GetTreeString($"Gọi hàm: {TypeNode.FullName}::{MethodName}{isResolved}{returnType}", Arguments);
             }
         }
 
@@ -360,7 +353,7 @@ namespace NEN
                 string isResolved = MethodInfo == null ? "(*)" : "";
                 string namespaceAndType = Object.ReturnTypeNode == null ? "" : $"{Object.ReturnTypeNode?.FullName}";
                 string returnType = ReturnTypeNode == null ? "" : $" -> {ReturnTypeNode}";
-                return Helper.GetTreeString($"Gọi hàm: {namespaceAndType}{isResolved}{returnType}", [Object, .. Arguments]);
+                return Helper.GetTreeString($"Gọi hàm: {namespaceAndType}::{MethodName}{isResolved}{returnType}", [Object, .. Arguments]);
             }
         }
 

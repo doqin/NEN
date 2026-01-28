@@ -605,10 +605,18 @@ namespace NEN
 
         private static readonly Dictionary<string, int> precedences = new()
         {
-            { Operator.Plus, 1 },
-            { Operator.Minus, 1},
-            { Operator.Multiply, 2 },
-            { Operator.Divide, 2 },
+            { "hoặc", 1 },
+            { "và", 2 },
+            { "=", 3 },
+            { "!=", 3 },
+            { "<=", 4 },
+            { "<", 4 },
+            { ">=", 4 },
+            { ">", 4 },
+            { "+", 5 },
+            { "-", 5 },
+            { "*", 6 },
+            { "/", 6 },
         };
 
         private int CurrentPrecedence()

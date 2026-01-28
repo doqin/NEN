@@ -4,11 +4,21 @@ sử_dụng System;
 lớp Chương_Trình
     @Chính @Tĩnh
     phương_thức Chính() -> Void
+        Phụ::Test("Foo");
+        Phụ::Kiểm_Tra_Khởi_Tạo_Đối_Tượng();
+        Phụ::Kiểm_Tra_Gọi_Hàm();
+        Phụ::Kiểm_Tra_Kiểu_Luận_Lý();
+    kết_thúc
+kết_thúc
+
+lớp Phụ
+    @Tĩnh @Công_Khai
+    phương_thức Test(a thuộc String) -> Void
+        Console::WriteLine("{0} Bar!", a);
         biến bro thuộc String gán "mọi người";
         biến str2 thuộc String gán "OK";
         biến int32 thuộc Int32 gán 3;
         biến int64 thuộc Int64 gán 5L;
-        biến a thuộc Int32 gán 1 + 2 + 3;
         biến b thuộc Int32 gán 1 * 3 * (10 + 3) * 4 / 5;
         biến c thuộc Int64 gán 2L *32L / 4L;
         biến d thuộc Int64 gán c * (25L + 62L);
@@ -33,16 +43,6 @@ lớp Chương_Trình
         Console::WriteLine("Yo chào {0}", bro);
         Console::WriteLine(d);
         Console::WriteLine("1 + 1 = {0}", 1 + 1);
-        Phụ::Test("Foo");
-        Phụ::Kiểm_Tra_Khởi_Tạo_Đối_Tượng();
-        Phụ::Kiểm_Tra_Gọi_Hàm();
-    kết_thúc
-kết_thúc
-
-lớp Phụ
-    @Tĩnh @Công_Khai
-    phương_thức Test(a thuộc String) -> Void
-        Console::WriteLine("{0} Bar!", a);
     kết_thúc
 
     @Tĩnh @Công_Khai
@@ -83,6 +83,18 @@ lớp Phụ
         biến m thuộc String[] gán tạo String[] { "Đây", "là", "một", "test" };
         Console::WriteLine(String::Join(" ", m));
         Console::WriteLine("5 + 10 = {0}", Phụ::Cộng(5, 10));
+    kết_thúc
+
+    @Tĩnh @Công_Khai
+    phương_thức Kiểm_Tra_Kiểu_Luận_Lý() -> Void
+        biến a thuộc Int32 gán 12;
+        biến là_đúng thuộc Boolean gán đúng;
+        biến là_sai thuộc Boolean gán sai;
+        biến là_đúng_hay_sai thuộc Boolean gán 5 = 1 hoặc a = 12;
+        Console::WriteLine(là_đúng);
+        Console::WriteLine(là_sai);
+        Console::WriteLine(là_đúng_hay_sai);
+        Console::WriteLine(a = 4 hoặc 5 >= 3 + 1);
     kết_thúc
 kết_thúc
 

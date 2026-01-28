@@ -1,5 +1,6 @@
 ﻿using NEN.Exceptions;
 using NEN.Types;
+using System.ComponentModel.Design;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Reflection.Metadata.Ecma335;
@@ -892,6 +893,18 @@ namespace NEN
                     Column = literalExpression.Column 
                 };
             }
+            else if (literalExpression.Value == "đúng" || literalExpression.Value == "sai")
+            {
+                string[] namespaceAndName = PrimitiveType.Boolean.Split(".");
+                literalExpression.ReturnTypeNode = new NamedType
+                {
+                    Namespaces = namespaceAndName[0..^1],
+                    Name = namespaceAndName[^1],
+                    CLRType = module.CoreAssembly!.GetType(PrimitiveType.Boolean),
+                    Line = literalExpression.Line,
+                    Column = literalExpression.Column
+                };
+            }
             else
             {
                 throw new NotImplementedException();
@@ -999,7 +1012,28 @@ namespace NEN
             var leftTypeFullName = leftType.CLRFullName;
             var rightTypeFullName = rightType.CLRFullName;
             if (leftTypeFullName != rightTypeFullName) throw new TypeDiscrepancyException(content, leftType, rightType, binaryExpression.Line, binaryExpression.Column);
-            binaryExpression.ReturnTypeNode = rightType;
+            
+            if (binaryExpression.Operator == "và" || 
+                binaryExpression.Operator == "hoặc" ||
+                binaryExpression.Operator == "=" ||
+                binaryExpression.Operator == "!=" ||
+                binaryExpression.Operator == "<" ||
+                binaryExpression.Operator == "<=" ||
+                binaryExpression.Operator == ">" ||
+                binaryExpression.Operator == ">="
+            )
+            {
+                string[] namespaceAndName = PrimitiveType.Boolean.Split(".");
+                binaryExpression.ReturnTypeNode = new NamedType
+                {
+                    Namespaces = namespaceAndName[0..^1],
+                    Name = namespaceAndName[^1],
+                    CLRType = module.CoreAssembly!.GetType(PrimitiveType.Boolean),
+                    Line = binaryExpression.Line,
+                    Column = binaryExpression.Column
+                };
+            }
+            else binaryExpression.ReturnTypeNode = rightType;
             return rightType;
         }
 

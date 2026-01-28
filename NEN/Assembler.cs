@@ -355,21 +355,63 @@ namespace NEN
         {
             AssembleExpression( ilGenerator, binaryExpression.Left);
             AssembleExpression( ilGenerator, binaryExpression.Right);
-            if (binaryExpression.Operator == Operator.Plus)
+            if (binaryExpression.Operator == "+")
             {
                 ilGenerator.Emit(OpCodes.Add);
             }
-            else if (binaryExpression.Operator == Operator.Minus)
+            else if (binaryExpression.Operator == "-")
             {
                 ilGenerator.Emit(OpCodes.Sub);
             }
-            else if (binaryExpression.Operator == Operator.Multiply)
+            else if (binaryExpression.Operator == "*")
             {
                 ilGenerator.Emit(OpCodes.Mul);
             }
-            else if (binaryExpression.Operator == Operator.Divide)
+            else if (binaryExpression.Operator == "/")
             {
                 ilGenerator.Emit(OpCodes.Div);
+            }
+            else if (binaryExpression.Operator == "và")
+            {
+                ilGenerator.Emit(OpCodes.And);
+            }
+            else if (binaryExpression.Operator == "hoặc")
+            {
+                ilGenerator.Emit(OpCodes.Or);
+            }
+            else if (binaryExpression.Operator == "<")
+            {
+                ilGenerator.Emit(OpCodes.Clt);
+            }
+            else if (binaryExpression.Operator == "<=")
+            {
+                ilGenerator.Emit(OpCodes.Clt);
+                AssembleExpression(ilGenerator, binaryExpression.Left);
+                AssembleExpression(ilGenerator, binaryExpression.Right);
+                ilGenerator.Emit(OpCodes.Ceq);
+                ilGenerator.Emit(OpCodes.Or);
+            }
+            else if (binaryExpression.Operator == ">")
+            {
+                ilGenerator.Emit(OpCodes.Cgt);
+            }
+            else if (binaryExpression.Operator == ">=")
+            {
+                ilGenerator.Emit(OpCodes.Cgt);
+                AssembleExpression(ilGenerator, binaryExpression.Left);
+                AssembleExpression(ilGenerator, binaryExpression.Right);
+                ilGenerator.Emit(OpCodes.Ceq);
+                ilGenerator.Emit(OpCodes.Or);
+            }
+            else if (binaryExpression.Operator == "=")
+            {
+                ilGenerator.Emit(OpCodes.Ceq);
+            }
+            else if (binaryExpression.Operator == "!=")
+            {
+                ilGenerator.Emit(OpCodes.Ceq);
+                ilGenerator.Emit(OpCodes.Ldc_I4_1);
+                ilGenerator.Emit(OpCodes.Xor);
             }
             else
             {
@@ -390,6 +432,14 @@ namespace NEN
             else if (LowerTypeNode(literalExpression.ReturnTypeNode!).FullName == PrimitiveType.Int32)
             {
                 ilGenerator.Emit(OpCodes.Ldc_I4, Int32.Parse(literalExpression.Value));
+            }
+            else if (LowerTypeNode(literalExpression.ReturnTypeNode!).FullName == PrimitiveType.Boolean)
+            {
+                if (literalExpression.Value == "đúng")
+                    ilGenerator.Emit(OpCodes.Ldc_I4_1);
+                else if (literalExpression.Value == "sai")
+                    ilGenerator.Emit(OpCodes.Ldc_I4_0);
+                else throw new NotImplementedException();
             }
             else
             {
