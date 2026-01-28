@@ -195,6 +195,8 @@ namespace NEN
                     {
                         case "biến":
                             return ParseVariableDeclarationStatement(line, column);
+                        case "trả_về":
+                            return ParseReturnStatement(line, column);
                         default:
                             UnexpectedHelper(token);
                             throw new();
@@ -202,6 +204,21 @@ namespace NEN
                 default:
                     return ParseExpressionStatementOrAssignmentStatement();
             }
+        }
+
+        private ReturnStatement ParseReturnStatement(int line, int column)
+        {
+            if (Current()?.Value == ";") 
+                return new ReturnStatement { 
+                    Line = line, 
+                    Column = column 
+                };
+            var expression = ParseExpression(0);
+            return new ReturnStatement { 
+                Expression = expression, 
+                Line = line, 
+                Column = column 
+            };
         }
 
         private StatementNode ParseExpressionStatementOrAssignmentStatement()

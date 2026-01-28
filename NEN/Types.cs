@@ -224,6 +224,15 @@ namespace NEN
 
         public abstract class StatementNode : ASTNode { }
 
+        public class ReturnStatement : StatementNode
+        {
+            public ExpressionNode? Expression { get; set; }
+            public override string ToString()
+            {
+                return Helper.GetTreeString($"Trả về:", [Expression]);
+            }
+        }
+
         public class UsingNamespaceStatement : StatementNode
         {
             public required string[] Namespace;

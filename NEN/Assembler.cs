@@ -125,18 +125,22 @@ namespace NEN
         {
             switch (statement)
             {
-                case VariableDeclarationStatement variableDeclarationStatement:
-                    AssembleVariableDeclarationStatement( ilGenerator, parameters, localSymbolTable, variableDeclarationStatement);
-                    break;
-                case ExpressionStatement expressionStatement:
-                    AssembleExpressionStatement(ilGenerator, parameters, localSymbolTable, expressionStatement);
-                    break;
-                case AssignmentStatement assignmentStatement:
-                    AssembleAssignmentStatement(ilGenerator, parameters, localSymbolTable, assignmentStatement);
-                    break;
+                case VariableDeclarationStatement variableDeclarationStatement: AssembleVariableDeclarationStatement( ilGenerator, parameters, localSymbolTable, variableDeclarationStatement); break;
+                case ExpressionStatement expressionStatement: AssembleExpressionStatement(ilGenerator, parameters, localSymbolTable, expressionStatement); break;
+                case AssignmentStatement assignmentStatement: AssembleAssignmentStatement(ilGenerator, parameters, localSymbolTable, assignmentStatement); break;
+                case ReturnStatement returnStatement: AssembleReturnStatement(ilGenerator, parameters, localSymbolTable, returnStatement); break;
                 default:
                     throw new NotImplementedException();
             }
+        }
+
+        private void AssembleReturnStatement(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, ReturnStatement returnStatement)
+        {
+            if (returnStatement.Expression != null)
+            {
+                AssembleExpression(ilGenerator, parameters, localSymbolTable, returnStatement.Expression);
+            }
+            ilGenerator.Emit(OpCodes.Ret);
         }
 
         private void AssembleAssignmentStatement(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, AssignmentStatement assignmentStatement)

@@ -56,6 +56,7 @@ lớp Phụ
         Người::Số_Người gán 1;
         Console::WriteLine(người.Tên);
         người.Chào();
+        người.Chào(".NET 9");
 
         biến mảng_người thuộc Người[] gán tạo Người[] {
             tạo Người {
@@ -73,9 +74,15 @@ lớp Phụ
     kết_thúc
 
     @Tĩnh @Công_Khai
+    phương_thức Cộng(a thuộc Int32, b thuộc Int32) -> Int32
+        trả_về a + b;
+    kết_thúc
+
+    @Tĩnh @Công_Khai
     phương_thức Kiểm_Tra_Gọi_Hàm() -> Void
         biến m thuộc String[] gán tạo String[] { "Đây", "là", "một", "test" };
         Console::WriteLine(String::Join(" ", m));
+        Console::WriteLine("5 + 10 = {0}", Phụ::Cộng(5, 10));
     kết_thúc
 kết_thúc
 
@@ -86,6 +93,11 @@ lớp Người
         Console::WriteLine("Tôi có một thuộc tính giấu! Giá trị của nó là {0}", giấu);
         Test1();
         Test2();
+    kết_thúc
+
+    @Công_Khai
+    phương_thức Chào(tên thuộc String) -> Void
+        Console::WriteLine("Chào bạn {0}!", tên);
     kết_thúc
 
     @Tĩnh @Công_Khai thuộc_tính Số_Người thuộc Int32 gán 10;

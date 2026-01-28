@@ -199,8 +199,29 @@ namespace NEN
                 case VariableDeclarationStatement variableDeclarationStatement: AnalyzeVariableDeclarationStatement(c, localSymbolTable,  variableDeclarationStatement); break;
                 case ExpressionStatement expressionStatement: AnalyzeExpressionStatement(c, localSymbolTable, ref expressionStatement); break;
                 case AssignmentStatement assignmentStatement: AnalyzeAssignmentStatement(c, localSymbolTable, assignmentStatement); break;
+                case ReturnStatement returnStatement: AnalyzeReturnStatement(c, localSymbolTable, returnStatement); break;
                 default: throw new NotImplementedException();
             }
+        }
+
+        private void AnalyzeReturnStatement(ClassNode c, SymbolTable<TypeNode> localSymbolTable, ReturnStatement returnStatement)
+        {
+            if (currentMethod == null)
+            {
+                throw new("Internal error");
+            }
+            TypeNode type = CreateTypeNodeFromType(
+                module.CoreAssembly!.GetType("System.Void")!, 
+                returnStatement.Line, 
+                returnStatement.Column
+            );
+            if (returnStatement.Expression != null)
+            {
+                var expression = returnStatement.Expression;
+                type = AnalyzeExpression(c, localSymbolTable, ref expression);
+                returnStatement.Expression = expression;
+            }
+            AnalyzeTypes(currentMethod.ReturnTypeNode, type);
         }
 
         private void AnalyzeAssignmentStatement(ClassNode c, SymbolTable<TypeNode> localSymbolTable, AssignmentStatement assignmentStatement)
