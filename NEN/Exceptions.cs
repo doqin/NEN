@@ -156,5 +156,17 @@ namespace NEN
             public InvalidFieldAccessmentException() { }
             public InvalidFieldAccessmentException(string[] contentLines, string fieldName, int line, int column) : base(contentLines, $"Không thể truy cập thuộc tính '{fieldName}' vì nó không tồn tại hoặc không công khai", line, column) { }
         }
+
+        public class InvalidMethodCallException : NENException
+        {
+            public InvalidMethodCallException() { }
+            public InvalidMethodCallException(string[] contentLines, string methodName, Type[] signature, int line, int column) : base(contentLines, $"Không thể gọi phương thức {methodName}({string.Join(", ", signature.Select(t => t.FullName))}) vì nó không tồn tại hoặc không công khai", line, column) { }
+        }
+
+        public class UnresolvedConstructorException : NENException
+        {
+            public UnresolvedConstructorException() { }
+            public UnresolvedConstructorException(string[] contentLines, string typeName, Type[] signature, int line, int column) : base(contentLines, $"Không thể tìm thấy phương thức khởi tạo {typeName}({string.Join(", ", signature.Select(t => t.FullName))})", line, column) { }
+        }
     }
 }

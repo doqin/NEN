@@ -84,11 +84,25 @@ namespace NEN
 
         private void AssembleType(ClassNode c)
         {
+            foreach(var constructor in c.Constructors ?? [])
+            {
+                AssembleConstructor(c.TypeBuilder, constructor);
+            }
             foreach(var method in c.Methods)
             {
                 AssembleMethod(c.TypeBuilder!, method);
             }
             c.TypeBuilder!.CreateType();
+        }
+
+        private void AssembleConstructor(TypeBuilder? typeBuilder, ConstructorNode constructor)
+        {
+            var ilGenerator = constructor.ConstructorBuilder!.GetILGenerator();
+            foreach(var statement in constructor.Statements)
+            {
+                AssembleStatement(ilGenerator, constructor.Parameters, new(), statement);
+            }
+            ilGenerator.Emit(OpCodes.Ret);
         }
 
         private void AssembleMethod( TypeBuilder typeBuilder, MethodNode method)
@@ -163,7 +177,15 @@ namespace NEN
                         ilGenerator.Emit(OpCodes.Stelem_Ref);
                     }
                     break;
-                    default:
+                case StandardFieldAccessmentExpression standardFieldAccessmentExpression:
+                    AssembleExpression(ilGenerator, parameters, localSymbolTable, assignmentStatement.Source);
+                    ilGenerator.Emit(OpCodes.Stfld, standardFieldAccessmentExpression.FieldInfo!);
+                    break;
+                case StaticFieldAccessmentExpression staticFieldAccessmentExpression:
+                    AssembleExpression(ilGenerator, parameters, localSymbolTable, assignmentStatement.Source);
+                    ilGenerator.Emit(OpCodes.Stsfld, staticFieldAccessmentExpression.FieldInfo!);
+                    break;
+                default:
                     throw new NotImplementedException();
             }
         }
@@ -205,11 +227,42 @@ namespace NEN
                 case StandardMethodCallExpression standardMethodCallExpression: AssembleStandardMethodCallExpression( ilGenerator, parameters, localSymbolTable, standardMethodCallExpression); break;
                 case StaticMethodCallExpression staticMethodCallExpression: AssembleStaticMethodCallExpression(ilGenerator, parameters, localSymbolTable, staticMethodCallExpression); break;
                 case ThisExpression: AssembleThisExpression(ilGenerator);  break;
+                case DuplicateExpression _: AssembleDuplicateExpression(ilGenerator); break;
                 case BoxExpression boxExpression: AssembleBoxExpression(ilGenerator, parameters, localSymbolTable, boxExpression); break;
                 case NewArrayExpression newArrayExpression: AssembleNewArrayExpression(ilGenerator, parameters, localSymbolTable, newArrayExpression); break;
+                case NewObjectExpression newObjectExpression: AssembleNewObjectExpression(ilGenerator, parameters, localSymbolTable, newObjectExpression); break;
                 case ArrayIndexingExpression arrayIndexingExpression: AssembleArrayIndexingExpression(ilGenerator, parameters, localSymbolTable, arrayIndexingExpression); break;
+                case StandardFieldAccessmentExpression standardFieldAccessmentExpression: AssembleStandardFieldAccessmentExpression(ilGenerator, parameters, localSymbolTable, standardFieldAccessmentExpression); break;
+                case StaticFieldAccessmentExpression staticFieldAccessmentExpression: AssembleStaticFieldAccessmentExpression(ilGenerator, staticFieldAccessmentExpression); break;
                 default: throw new NotImplementedException();
             }
+        }
+
+        private void AssembleNewObjectExpression(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, NewObjectExpression newObjectExpression)
+        {
+            ilGenerator.Emit(OpCodes.Newobj, newObjectExpression.ConstructorInfo!);
+            foreach(var initialization in newObjectExpression.FieldInitializations)
+            {
+                AssembleAssignmentStatement(ilGenerator, parameters, localSymbolTable, initialization);
+            }
+        }
+
+        private void AssembleStaticFieldAccessmentExpression(ILGenerator ilGenerator, StaticFieldAccessmentExpression staticFieldAccessmentExpression)
+        {
+            if (staticFieldAccessmentExpression.IsLoading == false) return;
+            ilGenerator.Emit(OpCodes.Ldsfld, staticFieldAccessmentExpression.FieldInfo!);
+        }
+
+        private void AssembleStandardFieldAccessmentExpression(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, StandardFieldAccessmentExpression standardFieldAccessmentExpression)
+        {
+            AssembleExpression(ilGenerator, parameters, localSymbolTable, standardFieldAccessmentExpression.Object);
+            if (standardFieldAccessmentExpression.IsLoading == false) return;
+            ilGenerator.Emit(OpCodes.Ldfld, standardFieldAccessmentExpression.FieldInfo!);
+        }
+
+        private void AssembleDuplicateExpression(ILGenerator ilGenerator)
+        {
+            ilGenerator.Emit(OpCodes.Dup);
         }
 
         private void AssembleArrayIndexingExpression(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, ArrayIndexingExpression arrayIndexingExpression)

@@ -56,7 +56,7 @@ namespace NENTest
         {
             string fileName = "AssemblerTest";
             (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
-            PrintTokens(tokens);
+            // PrintTokens(tokens);
             var parser = new Parser(fileName, lines, tokens);
             var module = parser.Parse();
             Console.WriteLine($"Kết quả Parser:\n{module}");
@@ -94,7 +94,7 @@ namespace NENTest
         static private void GeneralAssemblerTest<T>(string fileName) where T : NENException
         {
             (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
-            PrintTokens(tokens);
+            // PrintTokens(tokens);
             var parser = new Parser(fileName, lines, tokens);
             var module = parser.Parse();
             Console.WriteLine($"Parser result:\n{module}");
@@ -180,6 +180,12 @@ namespace NENTest
         public void InvalidArrayIndexingTypeTest()
         {
             GeneralStaticAnalyzerTest<InvalidArrayIndexingTypeException>("InvalidArrayIndexingTypeTest");
+        }
+
+        [TestMethod]
+        public void InvalidFieldAccessmentTest()
+        {
+            GeneralStaticAnalyzerTest<InvalidFieldAccessmentException>("InvalidFieldAccessmentTest");
         }
 
         [TestMethod]

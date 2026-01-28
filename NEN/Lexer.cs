@@ -9,7 +9,7 @@ namespace NEN
         {
             var content = File.ReadAllText(filePath);
             //content = content.Replace("\t", "    ");
-            var lines = content.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+            var lines = content.Split(['\n']);
             var regex = LexerRegex();
             List<Token> tokens = [];
             foreach (var (value, i) in lines.Select((value, i) => (value, i + 1)))

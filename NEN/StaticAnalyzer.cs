@@ -12,6 +12,7 @@ namespace NEN
         private readonly string[] content = contentLines;
         private readonly Dictionary<string, Type> typeTable = [];
         private readonly Dictionary<(string, Type[]), MethodInfo> moduleMethods = new(new MethodSignatureComparer());
+        private readonly Dictionary<(string, Type[]), ConstructorInfo> moduleConstructors = new(new MethodSignatureComparer());
         private readonly Dictionary<string, FieldInfo> moduleFields = new();
         private readonly Types.Module module = module;
         private NEN.Types.MethodBase? currentMethod = null;
@@ -48,6 +49,15 @@ namespace NEN
                         throw new("Internal error");
                     }
                 }
+                // Decide if type needs to generate a default constructor
+                var fieldsWithInitialization = c.Fields.Where(f => f.InitialValue != null).ToArray();
+                if (c.Constructors != null && fieldsWithInitialization.Length > 0)
+                    throw new FieldInitializationOutsideDefaultConstructorException(
+                        contentLines,
+                        fieldsWithInitialization.First().Line,
+                        fieldsWithInitialization.First().Column
+                    );
+                if (c.Constructors == null && fieldsWithInitialization.Length > 0) GenerateDefaultConstructor(c);
             }
             // Define every module in the classes
             List<SymbolTable<TypeNode>[]> lsLsSt = [];
@@ -158,21 +168,13 @@ namespace NEN
 
         private void AnalyzeClass(ClassNode c, SymbolTable<TypeNode>[] localSymbolTableList)
         {
-            var fieldsWithInitialization = c.Fields.Where(f => f.InitialValue != null).ToArray();
-            if (c.Constructors != null && fieldsWithInitialization.Length > 0) 
-                throw new FieldInitializationOutsideDefaultConstructorException(
-                    contentLines, 
-                    fieldsWithInitialization.First().Line, 
-                    fieldsWithInitialization.First().Column
-                );
-            if (c.Constructors == null) GenerateDefaultConstructor(c);
             for (int i = 0; i < c.Methods.Length; i++)
             {
                 AnalyzeMethod(c, c.Methods[i], localSymbolTableList[i]);
                 VariableNode[] parameters = c.Methods[i].MethodBuilder!.IsStatic ? c.Methods[i].Parameters :
                     [ new VariableNode {
                         Name = "này",
-                        TypeNode = StaticAnalyzer.CreateTypeNodeFromType(c.TypeBuilder!, c.Methods[i].ReturnTypeNode.Line, c.Methods[i].ReturnTypeNode.Column),
+                        TypeNode = CreateTypeNodeFromType(c.TypeBuilder!, c.Methods[i].ReturnTypeNode.Line, c.Methods[i].ReturnTypeNode.Column),
                         Column = c.Methods[i].ReturnTypeNode.Line,
                         Line = c.Methods[i].ReturnTypeNode.Column
                     },..c.Methods[i].Parameters];
@@ -260,7 +262,7 @@ namespace NEN
             }
         }
 
-        private void AnalyzeTypes(TypeNode leftNode, TypeNode rightNode)
+        private bool AnalyzeTypes(TypeNode leftNode, TypeNode rightNode)
         {
             Type left = GetTypeFromTypeNode(leftNode);
             Type right = GetTypeFromTypeNode(rightNode);
@@ -271,6 +273,7 @@ namespace NEN
             {
                 throw new TypeDiscrepancyException(content, leftNode, rightNode, leftNode.Line, leftNode.Column);
             }
+            return true;
         }
 
         private TypeNode AnalyzeExpression(ClassNode c, SymbolTable<Types.TypeNode> localSymbolTable, ref ExpressionNode expression)
@@ -425,8 +428,27 @@ namespace NEN
             {
                 AnalyzeAssignmentStatement(c, localSymbolTable, statement);
             }
-            var returnType = GetTypeFromTypeNode(
-                newObjectExpression.ReturnTypeNode!);
+            var returnType = GetTypeFromTypeNode(newObjectExpression.ReturnTypeNode!);
+            if (moduleConstructors.TryGetValue((returnType.FullName!, []), out var constructorInfo))
+            {
+                newObjectExpression.ConstructorInfo = constructorInfo;
+            }
+            else
+            {
+                try
+                {
+                    newObjectExpression.ConstructorInfo = returnType.GetConstructor([]);
+                }
+                catch (Exception) { }
+            }
+            if (newObjectExpression.ConstructorInfo == null) 
+                throw new UnresolvedConstructorException(
+                    content, 
+                    returnType.FullName!, 
+                    [], 
+                    newObjectExpression.Line, 
+                    newObjectExpression.Column
+                );
             newObjectExpression.ReturnTypeNode = CreateTypeNodeFromType(
                 returnType,
                 newObjectExpression.ReturnTypeNode!.Line,
@@ -744,6 +766,29 @@ namespace NEN
                     )
                 )
                 {
+                    var isFromSameOrParentType = false;
+                    if (type != null)
+                    {
+                        try
+                        {
+                            isFromSameOrParentType = AnalyzeTypes(
+                            CreateTypeNodeFromType(methodInfo.DeclaringType!, methodCallExpression.Line, methodCallExpression.Column),
+                        CreateTypeNodeFromType(type!, methodCallExpression.Line, methodCallExpression.Column)
+                            );
+                        } catch(Exception) { }
+                    }
+                    else
+                    {
+                        isFromSameOrParentType = true;
+                    }
+                    if (!methodInfo.IsPublic && !isFromSameOrParentType
+                    ) throw new InvalidMethodCallException(
+                        content,
+                        methodCallExpression.MethodName,
+                        [.. argumentTypes],
+                        methodCallExpression.Line,
+                        methodCallExpression.Column
+                    );
                     methodCallExpression.MethodInfo = methodInfo;
                 }
                 else
@@ -751,9 +796,18 @@ namespace NEN
                     methodCallExpression.MethodInfo = type?.GetMethod(
                         methodCallExpression.MethodName,
                         [.. argumentTypes]
-                    ) ?? throw new UnresolvedIdentifierException(
+                    ) ?? throw new InvalidMethodCallException(
                         content,
                         methodCallExpression.MethodName,
+                        [..argumentTypes],
+                        methodCallExpression.Line,
+                        methodCallExpression.Column
+                    );
+
+                    if (!methodCallExpression.MethodInfo.IsPublic) throw new InvalidMethodCallException(
+                        content,
+                        methodCallExpression.MethodName,
+                        [.. argumentTypes],
                         methodCallExpression.Line,
                         methodCallExpression.Column
                     );
@@ -860,7 +914,6 @@ namespace NEN
                         },
                         FieldName = field.Variable.Name,
                         FieldInfo = field.FieldInfo,
-                        IsLoading = false,
                         Line = expression.Line,
                         Column = expression.Column
                     };

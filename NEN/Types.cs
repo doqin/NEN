@@ -114,7 +114,7 @@ namespace NEN
             public override string ToString()
             {
                 string isResolved = TypeBuilder == null ? "(*)" : "";
-                return Helper.GetTreeString<ASTNode>($"Lớp: {Name}{isResolved}", [.. Fields, .. Methods]);
+                return Helper.GetTreeString<ASTNode>($"Lớp: {Name}{isResolved}", [.. Fields, ..Constructors ?? [], .. Methods]);
             }
         }
 
@@ -408,9 +408,11 @@ namespace NEN
         public class NewObjectExpression : ExpressionNode
         {
             public required AssignmentStatement[] FieldInitializations { get; set; } // sometimes you gotta use statements inside an expression lol
+            public ConstructorInfo? ConstructorInfo { get; set; }
             public override string ToString()
             {
-                return Helper.GetTreeString($"Khởi tạo đối tượng kiểu {ReturnTypeNode}", FieldInitializations);
+                string isResolved = ConstructorInfo == null ? "(*)" : "";
+                return Helper.GetTreeString($"Khởi tạo đối tượng kiểu {ReturnTypeNode}{isResolved}", FieldInitializations);
             }
         }
 
@@ -418,21 +420,26 @@ namespace NEN
             public FieldInfo? FieldInfo { get; set; }
             public required string FieldName { get; set; }
             public bool IsLoading { get; set; } = true;
-            public override string ToString()
-            {
-                return $"Truy cập thuộc tính {FieldName}";
-            }
         }
 
         public class StandardFieldAccessmentExpression : FieldAccessmentExpression
         {
             public required ExpressionNode Object { get; set; }
-            
+            public override string ToString()
+            {
+                string isResolved = FieldInfo == null ? "(*)" : "";
+                return Helper.GetTreeString($"Truy cập thuộc tính {FieldName}{isResolved}", [Object]);
+            }
         }
 
         public class StaticFieldAccessmentExpression : FieldAccessmentExpression
         {
             public required TypeNode TypeNode { get; set; }
+            public override string ToString()
+            {
+                string isResolved = FieldInfo == null ? "(*)" : "";
+                return $"Truy cập thuộc tính {TypeNode}::{FieldName}{isResolved}";
+            }
         }
 
         public class DuplicateExpression : ExpressionNode {

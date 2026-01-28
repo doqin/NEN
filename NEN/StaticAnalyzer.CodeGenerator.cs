@@ -100,6 +100,10 @@ namespace NEN
             {
                 AnalyzeStatement(c, new(), statement);
             }
+            if (!moduleConstructors.TryAdd((c.Name, []), defaultConstructor.ConstructorBuilder))
+            {
+                throw new("Internal error");
+            }
             currentMethod = null;
         }
     }
