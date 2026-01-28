@@ -13,9 +13,9 @@ namespace NEN
         private readonly Dictionary<string, Type> typeTable = [];
         private readonly Dictionary<(string, Type[]), MethodInfo> moduleMethods = new(new MethodSignatureComparer());
         private readonly Dictionary<(string, Type[]), ConstructorInfo> moduleConstructors = new(new MethodSignatureComparer());
-        private readonly Dictionary<string, FieldInfo> moduleFields = new();
+        private readonly Dictionary<string, FieldInfo> moduleFields = [];
         private readonly Types.Module module = module;
-        private NEN.Types.MethodBase? currentMethod = null;
+        private Types.MethodBase? currentMethod = null;
 
         public void Analyze()
         {
@@ -60,10 +60,10 @@ namespace NEN
                 if (c.Constructors == null && fieldsWithInitialization.Length > 0) GenerateDefaultConstructor(c);
             }
             // Define every module in the classes
-            List<SymbolTable<TypeNode>[]> lsLsSt = [];
+            List<Dictionary<string, (TypeNode, LocalBuilder)>[]> lsLsSt = [];
             foreach (var c in module.Classes)
             {
-                List<SymbolTable<TypeNode>> lsSt = [];
+                List<Dictionary<string, (TypeNode, LocalBuilder)>> lsSt = [];
                 foreach (var method in c.Methods)
                 {
                     lsSt.Add(DefineMethod(c, method));
@@ -111,9 +111,9 @@ namespace NEN
             }
         }
 
-        private SymbolTable<TypeNode> DefineMethod(ClassNode c, MethodNode method)
+        private Dictionary<string, (TypeNode, LocalBuilder)> DefineMethod(ClassNode c, MethodNode method)
         {
-            SymbolTable<TypeNode> localSymbolTable = new();
+            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable = new();
             var type = GetTypeFromTypeNode(
                 method.ReturnTypeNode);
             method.ReturnTypeNode = CreateTypeNodeFromType(type, method.ReturnTypeNode.Line, method.ReturnTypeNode.Column);
@@ -122,7 +122,7 @@ namespace NEN
             {
                 var paramType = GetTypeFromTypeNode(parameter.TypeNode);
                 parameter.TypeNode = CreateTypeNodeFromType(paramType, parameter.TypeNode.Line, parameter.TypeNode.Column);
-                if (!localSymbolTable.TryAdd(parameter.Name, parameter.TypeNode))
+                if (method.Parameters.Where(p => p.Name == parameter.Name).ToArray().Length > 1)
                 {
                     throw new RedefinedException(content, parameter.Name, parameter.Line, parameter.Column);
                 }
@@ -166,7 +166,7 @@ namespace NEN
             usingNamespaceStatement.IsResolved = true;
         }
 
-        private void AnalyzeClass(ClassNode c, SymbolTable<TypeNode>[] localSymbolTableList)
+        private void AnalyzeClass(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)>[] localSymbolTableList)
         {
             for (int i = 0; i < c.Methods.Length; i++)
             {
@@ -182,7 +182,7 @@ namespace NEN
             }
         }
 
-        private void AnalyzeMethod(ClassNode c, MethodNode method, SymbolTable<TypeNode> localSymbolTable)
+        private void AnalyzeMethod(ClassNode c, MethodNode method, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable)
         {
             currentMethod = method;
             foreach (var statement in method.Statements)
@@ -192,7 +192,7 @@ namespace NEN
             currentMethod = null;
         }
 
-        private void AnalyzeStatement(ClassNode c, SymbolTable<TypeNode> localSymbolTable, StatementNode statement)
+        private void AnalyzeStatement(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, StatementNode statement)
         {
             switch(statement)
             {
@@ -204,7 +204,7 @@ namespace NEN
             }
         }
 
-        private void AnalyzeReturnStatement(ClassNode c, SymbolTable<TypeNode> localSymbolTable, ReturnStatement returnStatement)
+        private void AnalyzeReturnStatement(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, ReturnStatement returnStatement)
         {
             if (currentMethod == null)
             {
@@ -224,7 +224,7 @@ namespace NEN
             AnalyzeTypes(currentMethod.ReturnTypeNode, type);
         }
 
-        private void AnalyzeAssignmentStatement(ClassNode c, SymbolTable<TypeNode> localSymbolTable, AssignmentStatement assignmentStatement)
+        private void AnalyzeAssignmentStatement(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, AssignmentStatement assignmentStatement)
         {
             var dest = assignmentStatement.Destination;
             var destType = AnalyzeExpression(c, localSymbolTable, ref dest);
@@ -249,21 +249,23 @@ namespace NEN
             AnalyzeTypes(destType, srcType);
         }
 
-        private void AnalyzeExpressionStatement(ClassNode c, SymbolTable<TypeNode> localSymbolTable, ref ExpressionStatement expressionStatement)
+        private void AnalyzeExpressionStatement(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, ref ExpressionStatement expressionStatement)
         {
             var expression = expressionStatement.Expression;
             AnalyzeExpression(c, localSymbolTable, ref expression);
             expressionStatement.Expression = expression;
         }
 
-        private void AnalyzeVariableDeclarationStatement(ClassNode c, SymbolTable<Types.TypeNode> localSymbolTable,  VariableDeclarationStatement variableDeclarationStatement)
+        private void AnalyzeVariableDeclarationStatement(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable,  VariableDeclarationStatement variableDeclarationStatement)
         {
-            if (localSymbolTable.TryGetValue(variableDeclarationStatement.Variable.Name, out _))
+            if (
+                localSymbolTable.TryGetValue(variableDeclarationStatement.Variable.Name, out _) || 
+                currentMethod?.Parameters.FirstOrDefault(p => p.Name == variableDeclarationStatement.Variable.Name) != null
+            )
             {
                 throw new RedefinedException(content, variableDeclarationStatement.Variable.Name, variableDeclarationStatement.Variable.Line, variableDeclarationStatement.Variable.Column);
             }
-            var type = GetTypeFromTypeNode(
-                variableDeclarationStatement.Variable.TypeNode);
+            var type = GetTypeFromTypeNode(variableDeclarationStatement.Variable.TypeNode);
             variableDeclarationStatement.Variable.TypeNode = CreateTypeNodeFromType(
                 type, 
                 variableDeclarationStatement.Variable.TypeNode.Line, 
@@ -277,7 +279,22 @@ namespace NEN
                 variableDeclarationStatement.InitialValue = expr;
                 AnalyzeTypes(variableDeclarationStatement.Variable.TypeNode, expr.ReturnTypeNode!);
             }
-            if (!localSymbolTable.TryAdd(variableDeclarationStatement.Variable.Name, variableDeclarationStatement.Variable.TypeNode))
+            var methodBase = currentMethod!.GetMethodInfo();
+            switch(methodBase)
+            {
+                case MethodBuilder methodBuilder:
+                    var localBuilder = methodBuilder.GetILGenerator().DeclareLocal(type);
+                    localBuilder.SetLocalSymInfo(variableDeclarationStatement.Variable.Name);
+                    variableDeclarationStatement.LocalBuilder = localBuilder;
+                    break;
+                default:
+                    throw new("Internal error");
+            }
+            if (!localSymbolTable.TryAdd(
+                variableDeclarationStatement.Variable.Name, 
+                (variableDeclarationStatement.Variable.TypeNode, variableDeclarationStatement.LocalBuilder)
+                )
+            )
             {
                 throw new RedefinedException(content, variableDeclarationStatement.Variable.Name, variableDeclarationStatement.Variable.Line, variableDeclarationStatement.Variable.Column);
             }
@@ -297,7 +314,7 @@ namespace NEN
             return true;
         }
 
-        private TypeNode AnalyzeExpression(ClassNode c, SymbolTable<Types.TypeNode> localSymbolTable, ref ExpressionNode expression)
+        private TypeNode AnalyzeExpression(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, ref ExpressionNode expression)
         {
             switch(expression)
             {
@@ -336,7 +353,7 @@ namespace NEN
             return thisExpression.ReturnTypeNode;
         }
 
-        private TypeNode AnalyzeBoxExpression(ClassNode c, SymbolTable<TypeNode> localSymbolTable, BoxExpression boxExpression)
+        private TypeNode AnalyzeBoxExpression(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, BoxExpression boxExpression)
         {
             var expr = boxExpression.Expression;
             var type = AnalyzeExpression(c, localSymbolTable, ref expr);
@@ -345,7 +362,7 @@ namespace NEN
             return type;
         }
 
-        private TypeNode AnalyzeStaticFieldAccessmentExpression(ClassNode c, SymbolTable<TypeNode> localSymbolTable, StaticFieldAccessmentExpression staticFieldAccessmentExpression)
+        private TypeNode AnalyzeStaticFieldAccessmentExpression(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, StaticFieldAccessmentExpression staticFieldAccessmentExpression)
         {
             var fieldType = GetTypeFromTypeNode(staticFieldAccessmentExpression.TypeNode);
             staticFieldAccessmentExpression.TypeNode = CreateTypeNodeFromType(
@@ -394,7 +411,7 @@ namespace NEN
             return staticFieldAccessmentExpression.ReturnTypeNode;
         }
 
-        private TypeNode AnalyzeStandardFieldAccessmentExpression(ClassNode c, SymbolTable<TypeNode> localSymbolTable, StandardFieldAccessmentExpression standardFieldAccessmentExpression)
+        private TypeNode AnalyzeStandardFieldAccessmentExpression(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, StandardFieldAccessmentExpression standardFieldAccessmentExpression)
         {
             var fieldObject = standardFieldAccessmentExpression.Object;
             var objectTypeNode = AnalyzeExpression(c, localSymbolTable, ref fieldObject);
@@ -443,7 +460,7 @@ namespace NEN
             return standardFieldAccessmentExpression.ReturnTypeNode;
         }
 
-        private TypeNode AnalyzeNewObjectExpression(ClassNode c, SymbolTable<TypeNode> localSymbolTable, NewObjectExpression newObjectExpression)
+        private TypeNode AnalyzeNewObjectExpression(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, NewObjectExpression newObjectExpression)
         {
             foreach(var statement in newObjectExpression.FieldInitializations)
             {
@@ -478,7 +495,7 @@ namespace NEN
             return newObjectExpression.ReturnTypeNode;
         }
 
-        private TypeNode AnalyzeArrayIndexingExpression(ClassNode c, SymbolTable<TypeNode> localSymbolTable, ArrayIndexingExpression arrayIndexingExpression)
+        private TypeNode AnalyzeArrayIndexingExpression(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, ArrayIndexingExpression arrayIndexingExpression)
         {
             var arrayNode = arrayIndexingExpression.Array;
             AnalyzeExpression(c, localSymbolTable, ref arrayNode);
@@ -499,7 +516,7 @@ namespace NEN
             return arrayIndexingExpression.ReturnTypeNode;
         }
 
-        private TypeNode AnalyzeNewArrayExpression(ClassNode c, SymbolTable<TypeNode> localSymbolTable, ref NewArrayExpression newArrayExpression)
+        private TypeNode AnalyzeNewArrayExpression(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, ref NewArrayExpression newArrayExpression)
         {
             int? size = null;
             Type type = GetTypeFromTypeNode(newArrayExpression.ReturnTypeNode!);
@@ -630,7 +647,7 @@ namespace NEN
             }
         }
 
-        private TypeNode AnalyzeStandardMethodCallExpression(ClassNode c, SymbolTable<TypeNode> localSymbolTable, ref StandardMethodCallExpression standardMethodCallExpression)
+        private TypeNode AnalyzeStandardMethodCallExpression(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, ref StandardMethodCallExpression standardMethodCallExpression)
         {
             if (currentMethod == null)
             {
@@ -669,7 +686,7 @@ namespace NEN
             return standardMethodCallExpression.ReturnTypeNode;
         }
 
-        private TypeNode AnalyzeStaticMethodCallExpression(ClassNode c, SymbolTable<TypeNode> localSymbolTable, StaticMethodCallExpression staticMethodCallExpression)
+        private TypeNode AnalyzeStaticMethodCallExpression(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, StaticMethodCallExpression staticMethodCallExpression)
         {
             staticMethodCallExpression.TypeNode.CLRType = GetTypeFromTypeNode(
                 staticMethodCallExpression.TypeNode);
@@ -692,7 +709,7 @@ namespace NEN
         /// <returns></returns>
         /// <exception cref="MethodCallFromOutsideException"></exception>
         /// <exception cref="StaticIllegalAccessmentException"></exception>
-        private TypeNode AnalyzeAmbiguousMethodCallExpression(ClassNode c, SymbolTable<TypeNode> localSymbolTable, ref AmbiguousMethodCallExpression ambiguousMethodCallExpression)
+        private TypeNode AnalyzeAmbiguousMethodCallExpression(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, ref AmbiguousMethodCallExpression ambiguousMethodCallExpression)
         {
             if (currentMethod == null)
             {
@@ -765,7 +782,7 @@ namespace NEN
             return ambiguousMethodCallExpression.ReturnTypeNode!;
         }
 
-        private void AnalyzeMethodCallExpression<T>(ClassNode c, SymbolTable<TypeNode> localSymbolTable, ref T methodCallExpression, string methodFullName, Type? type = null) where T : AmbiguousMethodCallExpression
+        private void AnalyzeMethodCallExpression<T>(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, ref T methodCallExpression, string methodFullName, Type? type = null) where T : AmbiguousMethodCallExpression
         {
             // Analyze the argument expressions
             List<Type> argumentTypes = [];
@@ -890,10 +907,24 @@ namespace NEN
         /// <param name="expression"></param>
         /// <returns></returns>
         /// <exception cref="UnresolvedIdentifierException"></exception>
-        private Types.TypeNode AnalyzeVariableExpression(ClassNode c, SymbolTable<Types.TypeNode> localSymbolTable, ref ExpressionNode expression)
+        private Types.TypeNode AnalyzeVariableExpression(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, ref ExpressionNode expression)
         {
             var variableExpression = (VariableExpression)expression;
             var variableName = variableExpression.Name;
+            var argument = currentMethod?.Parameters.Select((p, i) => (p, i)).FirstOrDefault(e =>  e.p.Name == variableName);
+            if (argument?.p != null)
+            {
+                expression = new ArgumentExpression
+                {
+                    Name = variableName,
+                    Index = argument?.i,
+                    ReturnTypeNode = argument?.p.TypeNode,
+                    Line = variableExpression.Line,
+                    Column = variableExpression.Column,
+                    IsLoading = variableExpression.IsLoading
+                };
+                return expression.ReturnTypeNode!;
+            }
             var field = c.Fields.FirstOrDefault(f => f.Variable.Name == variableName);
             if (field != null)
             {
@@ -942,10 +973,11 @@ namespace NEN
                     return expression.ReturnTypeNode;
                 }
             }
-            if (localSymbolTable.TryGetValue(variableExpression.Name, out var type))
+            if (localSymbolTable.TryGetValue(variableExpression.Name, out var res))
             {
-                variableExpression.ReturnTypeNode = type;
-                return type!;
+                variableExpression.ReturnTypeNode = res.Item1;
+                variableExpression.LocalBuilder = res.Item2;
+                return res.Item1!;
             }
             else
             {
@@ -953,7 +985,7 @@ namespace NEN
             }
         }
 
-        private Types.TypeNode AnalyzeBinaryExpression(ClassNode c, SymbolTable<Types.TypeNode> localSymbolTable, BinaryExpression binaryExpression)
+        private Types.TypeNode AnalyzeBinaryExpression(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, BinaryExpression binaryExpression)
         {
             var left = binaryExpression.Left;
             var right = binaryExpression.Right;

@@ -472,6 +472,78 @@ namespace NENTest
             arrarr2[1] = new int[] { 1231, 12312312, 123123 };
         }
 
+        [TestMethod]
+        public void BranchingTest()
+        {
+            var assemblyName = "BranchingTest";
+            var (ab, context, coreAssembly) = CreateAssembly(assemblyName, []);
+            var mb = ab.DefineDynamicModule(assemblyName);
+            var voidType = coreAssembly!.GetType("System.Void")!;
+            var intType = coreAssembly!.GetType("System.Int32")!;
+            var stringType = coreAssembly!.GetType("System.String")!;
+            var consoleType = coreAssembly!.GetType("System.Console")!;
+            var writeLineMethod = consoleType.GetMethod("WriteLine", [stringType])!;
+            var tb = mb.DefineType(assemblyName, TypeAttributes.Public | TypeAttributes.Class);
+            var mainMethod = tb.DefineMethod(
+                "Main",
+                MethodAttributes.Public | MethodAttributes.Static,
+                voidType,
+                null
+            );
+            var mainGen = mainMethod.GetILGenerator();
+            mainGen.Emit(OpCodes.Ldstr, "This is before the if");
+            mainGen.Emit(OpCodes.Call, writeLineMethod);
+            var elseifLabel = mainGen.DefineLabel();
+            var elseLabel = mainGen.DefineLabel();
+            var endLabel = mainGen.DefineLabel();
+
+            // first if instructions
+            mainGen.BeginScope();
+            mainGen.Emit(OpCodes.Ldc_I4, 5);
+            mainGen.Emit(OpCodes.Ldc_I4, 3);
+            mainGen.Emit(OpCodes.Ceq);
+            mainGen.Emit(OpCodes.Ldc_I4_1);
+            mainGen.Emit(OpCodes.Bne_Un, elseifLabel);
+            
+            mainGen.Emit(OpCodes.Ldstr, "this is the first if branch!");
+            mainGen.Emit(OpCodes.Call, writeLineMethod);
+            mainGen.Emit(OpCodes.Br, endLabel);
+            mainGen.EndScope();
+            // else if instructions
+            mainGen.MarkLabel(elseifLabel);
+            mainGen.BeginScope();
+            mainGen.Emit(OpCodes.Ldc_I4, 1);
+            mainGen.Emit(OpCodes.Ldc_I4, 1);
+            mainGen.Emit(OpCodes.Ceq);
+            mainGen.Emit(OpCodes.Ldc_I4_1);
+            mainGen.Emit(OpCodes.Bne_Un, elseLabel);
+            var local = mainGen.DeclareLocal(stringType);
+            var local2 = mainGen.DeclareLocal(stringType);
+            mainGen.Emit(OpCodes.Ldstr, "from else if");
+            mainGen.Emit(OpCodes.Stloc, local);
+            mainGen.Emit(OpCodes.Ldstr, "local2");
+            mainGen.Emit(OpCodes.Stloc, local2);
+            mainGen.Emit(OpCodes.Ldstr, "this is the second if branch");
+            mainGen.Emit(OpCodes.Call, writeLineMethod);
+            mainGen.Emit(OpCodes.Br, endLabel);
+            mainGen.EndScope();
+            // else instructions
+            mainGen.MarkLabel(elseLabel);
+            mainGen.BeginScope();
+            mainGen.Emit(OpCodes.Ldstr, "this is the else branch!");
+            mainGen.Emit(OpCodes.Call, writeLineMethod);
+            mainGen.Emit(OpCodes.Br, endLabel);
+            mainGen.EndScope();
+            mainGen.MarkLabel(endLabel);
+
+            mainGen.Emit(OpCodes.Ldstr, "from end");
+            mainGen.Emit(OpCodes.Stloc, local2);
+
+            mainGen.Emit(OpCodes.Ret);
+            tb.CreateType();
+            SaveAssemblyWithEntrypoint(ab, mainMethod, assemblyName);
+        }
+
         private static void SaveAssemblyWithEntrypoint(PersistedAssemblyBuilder ab, MethodBuilder mainMethod, string assemblyName)
         {
             MetadataBuilder metadataBuilder = ab.GenerateMetadata(out BlobBuilder ilStream, out BlobBuilder fieldData, out MetadataBuilder pdbBuilder);

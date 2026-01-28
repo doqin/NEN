@@ -40,44 +40,6 @@ namespace NEN
             public required int Column { get; set; }
         }
 
-        internal class SymbolTable<V>
-        {
-            private readonly Dictionary<string, (V builder, int index)> _dict = [];
-            private int _nextIndex = 0;
-
-            public bool TryAdd(string key, V value)
-            {
-                if (_dict.TryAdd(key, (value, _nextIndex)))
-                {
-                    _nextIndex++;
-                    return true;
-                }
-                return false;
-            }
-
-            public bool TryGetValue(string key, out V? value)
-            {
-                if (_dict.TryGetValue(key, out var entry))
-                {
-                    value = entry.builder;
-                    return true;
-                }
-                value = default;
-                return false;
-            }
-
-            public bool TryGetIndex(string key, out int index)
-            {
-                if (_dict.TryGetValue(key, out var entry))
-                {
-                    index = entry.index;
-                    return true;
-                }
-                index = -1;
-                return false;
-            }
-        }
-
         public class Module
         {
             public required string Name { get; set; }
@@ -248,6 +210,7 @@ namespace NEN
         {
             public required VariableNode Variable { set; get; }
             public ExpressionNode? InitialValue { set; get; }
+            public LocalBuilder? LocalBuilder { set; get; }
             public override string ToString()
             {
                 if (InitialValue != null)
@@ -337,13 +300,31 @@ namespace NEN
         {
             public required string Name { get; set; }
             public bool IsLoading { get; set; } = true;
+            public LocalBuilder? LocalBuilder { get; set; }
             public override string ToString()
             {
+                var isResolved = LocalBuilder == null ? "(*)" : "";
                 if (ReturnTypeNode != null)
                 {
-                    return $"{Name} ({ReturnTypeNode})";
+                    return $"{Name}{isResolved} ({ReturnTypeNode})";
                 }
-                return Name;
+                return $"{Name}{isResolved}";
+            }
+        }
+
+        public class ArgumentExpression : ExpressionNode
+        {
+            public required string Name { get; set; }
+            public bool IsLoading { get; set; } = true;
+            public int? Index { get; set; }
+            public override string ToString()
+            {
+                var isResolved = Index == null ? "(*)" : "";
+                if (ReturnTypeNode != null)
+                {
+                    return $"{Name}{isResolved} ({ReturnTypeNode})";
+                }
+                return $"{Name}{isResolved}";
             }
         }
 

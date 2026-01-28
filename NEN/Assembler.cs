@@ -100,7 +100,7 @@ namespace NEN
             var ilGenerator = constructor.ConstructorBuilder!.GetILGenerator();
             foreach(var statement in constructor.Statements)
             {
-                AssembleStatement(ilGenerator, constructor.Parameters, new(), statement);
+                AssembleStatement(ilGenerator, statement);
             }
             ilGenerator.Emit(OpCodes.Ret);
         }
@@ -113,65 +113,52 @@ namespace NEN
                 entryPointMethod = method.MethodBuilder;
             }
             var ilGenerator = method.MethodBuilder!.GetILGenerator();
-            SymbolTable<LocalBuilder> localSymbolTable = new();
             foreach(var statement in method.Statements)
             {
-                AssembleStatement( ilGenerator, method.Parameters, localSymbolTable, statement);
+                AssembleStatement(ilGenerator, statement);
             }
             ilGenerator.Emit(OpCodes.Ret);
         }
 
-        private void AssembleStatement( ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, StatementNode statement)
+        private void AssembleStatement( ILGenerator ilGenerator, StatementNode statement)
         {
             switch (statement)
             {
-                case VariableDeclarationStatement variableDeclarationStatement: AssembleVariableDeclarationStatement( ilGenerator, parameters, localSymbolTable, variableDeclarationStatement); break;
-                case ExpressionStatement expressionStatement: AssembleExpressionStatement(ilGenerator, parameters, localSymbolTable, expressionStatement); break;
-                case AssignmentStatement assignmentStatement: AssembleAssignmentStatement(ilGenerator, parameters, localSymbolTable, assignmentStatement); break;
-                case ReturnStatement returnStatement: AssembleReturnStatement(ilGenerator, parameters, localSymbolTable, returnStatement); break;
+                case VariableDeclarationStatement variableDeclarationStatement: AssembleVariableDeclarationStatement( ilGenerator, variableDeclarationStatement); break;
+                case ExpressionStatement expressionStatement: AssembleExpressionStatement(ilGenerator, expressionStatement); break;
+                case AssignmentStatement assignmentStatement: AssembleAssignmentStatement(ilGenerator, assignmentStatement); break;
+                case ReturnStatement returnStatement: AssembleReturnStatement(ilGenerator, returnStatement); break;
                 default:
                     throw new NotImplementedException();
             }
         }
 
-        private void AssembleReturnStatement(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, ReturnStatement returnStatement)
+        private void AssembleReturnStatement(ILGenerator ilGenerator, ReturnStatement returnStatement)
         {
             if (returnStatement.Expression != null)
             {
-                AssembleExpression(ilGenerator, parameters, localSymbolTable, returnStatement.Expression);
+                AssembleExpression(ilGenerator, returnStatement.Expression);
             }
             ilGenerator.Emit(OpCodes.Ret);
         }
 
-        private void AssembleAssignmentStatement(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, AssignmentStatement assignmentStatement)
+        private void AssembleAssignmentStatement(ILGenerator ilGenerator, AssignmentStatement assignmentStatement)
         {
-            AssembleExpression(ilGenerator, parameters, localSymbolTable, assignmentStatement.Destination);
+            AssembleExpression(ilGenerator, assignmentStatement.Destination);
             switch (assignmentStatement.Destination)
             {
                 case VariableExpression variableExpression:
-                    AssembleExpression(ilGenerator, parameters, localSymbolTable, assignmentStatement.Source);
-                    for (int i = 0; i < parameters.Length; i++)
-                    {
-                        if (parameters[i].Name == variableExpression.Name)
-                        {
-                            ilGenerator.Emit(OpCodes.Starg_S, i);
-                            return;
-                        }
-                    }
-                    if (localSymbolTable.TryGetIndex(variableExpression.Name, out var localVariableIndex))
-                    {
-                        ilGenerator.Emit(OpCodes.Stloc_S, localVariableIndex);
-                    }
-                    else
-                    {
-                        // Usually should not happen as StaticAnalyzer already handles it
-                        throw new UnresolvedIdentifierException(content, variableExpression.Name, variableExpression.Line, variableExpression.Column);
-                    }
+                    AssembleExpression(ilGenerator, assignmentStatement.Source);
+                    ilGenerator.Emit(OpCodes.Stloc, variableExpression.LocalBuilder!);
+                    break;
+                case ArgumentExpression argumentExpression:
+                    AssembleExpression(ilGenerator, assignmentStatement.Source);
+                    ilGenerator.Emit(OpCodes.Starg, argumentExpression.Index!.Value);
                     break;
                 case ArrayIndexingExpression arrayIndexingExpression:
                     var elementType = LowerTypeNode(arrayIndexingExpression.ReturnTypeNode!);
-                    AssembleExpression(ilGenerator, parameters, localSymbolTable, arrayIndexingExpression.Index); // Load the index onto the stack
-                    AssembleExpression(ilGenerator, parameters, localSymbolTable, assignmentStatement.Source);
+                    AssembleExpression(ilGenerator, arrayIndexingExpression.Index); // Load the index onto the stack
+                    AssembleExpression(ilGenerator, assignmentStatement.Source);
                     if (elementType.IsValueType)
                     {
                         ilGenerator.Emit(OpCodes.Stelem, elementType); // Store the value onto the element specifed by the index
@@ -182,11 +169,11 @@ namespace NEN
                     }
                     break;
                 case StandardFieldAccessmentExpression standardFieldAccessmentExpression:
-                    AssembleExpression(ilGenerator, parameters, localSymbolTable, assignmentStatement.Source);
+                    AssembleExpression(ilGenerator, assignmentStatement.Source);
                     ilGenerator.Emit(OpCodes.Stfld, standardFieldAccessmentExpression.FieldInfo!);
                     break;
                 case StaticFieldAccessmentExpression staticFieldAccessmentExpression:
-                    AssembleExpression(ilGenerator, parameters, localSymbolTable, assignmentStatement.Source);
+                    AssembleExpression(ilGenerator, assignmentStatement.Source);
                     ilGenerator.Emit(OpCodes.Stsfld, staticFieldAccessmentExpression.FieldInfo!);
                     break;
                 default:
@@ -194,60 +181,54 @@ namespace NEN
             }
         }
 
-        private void AssembleExpressionStatement(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, ExpressionStatement expressionStatement)
+        private void AssembleExpressionStatement(ILGenerator ilGenerator, ExpressionStatement expressionStatement)
         {
-            AssembleExpression(ilGenerator, parameters, localSymbolTable, expressionStatement.Expression);
+            AssembleExpression(ilGenerator, expressionStatement.Expression);
         }
 
-        private void AssembleVariableDeclarationStatement( ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, VariableDeclarationStatement variableDeclarationStatement)
+        private void AssembleVariableDeclarationStatement( ILGenerator ilGenerator, VariableDeclarationStatement variableDeclarationStatement)
         {
-            var variable = variableDeclarationStatement.Variable;
-            var type = variable.TypeNode;
-            var localBuilder = ilGenerator.DeclareLocal(LowerTypeNode(type));
-            localBuilder.SetLocalSymInfo(variable.Name);
-            ilGenerator.MarkSequencePoint(documentWriter, variable.Line, variable.Column, variable.Line, variable.Column + 1);
-            localSymbolTable.TryAdd(variable.Name, localBuilder);
             if (variableDeclarationStatement.InitialValue != null)
             {
-                AssembleExpression( ilGenerator, parameters, localSymbolTable, variableDeclarationStatement.InitialValue);
-                if (localSymbolTable.TryGetIndex(variable.Name, out var index))
-                {
-                    ilGenerator.Emit(OpCodes.Stloc_S, index);
-                }
-                else
-                {
-                    throw new UnresolvedIdentifierException(content, variable.Name, variable.Line, variable.Column);
-                }
+                AssembleExpression( ilGenerator, variableDeclarationStatement.InitialValue);
+                ilGenerator.Emit(OpCodes.Stloc_S, variableDeclarationStatement.LocalBuilder!);
             }
         }
 
-        private void AssembleExpression( ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, ExpressionNode expression)
+        private void AssembleExpression( ILGenerator ilGenerator, ExpressionNode expression)
         {
             switch (expression)
             {
                 case LiteralExpression literalExpression: AssembleLiteralExpression( ilGenerator, literalExpression); break;
-                case VariableExpression variableExpression: AssembleVariableExpression( ilGenerator, parameters, localSymbolTable, variableExpression); break;
-                case BinaryExpression binaryExpression: AssembleBinaryExpression( ilGenerator, parameters, localSymbolTable, binaryExpression); break;
-                case StandardMethodCallExpression standardMethodCallExpression: AssembleStandardMethodCallExpression( ilGenerator, parameters, localSymbolTable, standardMethodCallExpression); break;
-                case StaticMethodCallExpression staticMethodCallExpression: AssembleStaticMethodCallExpression(ilGenerator, parameters, localSymbolTable, staticMethodCallExpression); break;
+                case VariableExpression variableExpression: AssembleVariableExpression( ilGenerator, variableExpression); break;
+                case BinaryExpression binaryExpression: AssembleBinaryExpression( ilGenerator, binaryExpression); break;
+                case StandardMethodCallExpression standardMethodCallExpression: AssembleStandardMethodCallExpression( ilGenerator, standardMethodCallExpression); break;
+                case StaticMethodCallExpression staticMethodCallExpression: AssembleStaticMethodCallExpression(ilGenerator, staticMethodCallExpression); break;
                 case ThisExpression: AssembleThisExpression(ilGenerator);  break;
                 case DuplicateExpression _: AssembleDuplicateExpression(ilGenerator); break;
-                case BoxExpression boxExpression: AssembleBoxExpression(ilGenerator, parameters, localSymbolTable, boxExpression); break;
-                case NewArrayExpression newArrayExpression: AssembleNewArrayExpression(ilGenerator, parameters, localSymbolTable, newArrayExpression); break;
-                case NewObjectExpression newObjectExpression: AssembleNewObjectExpression(ilGenerator, parameters, localSymbolTable, newObjectExpression); break;
-                case ArrayIndexingExpression arrayIndexingExpression: AssembleArrayIndexingExpression(ilGenerator, parameters, localSymbolTable, arrayIndexingExpression); break;
-                case StandardFieldAccessmentExpression standardFieldAccessmentExpression: AssembleStandardFieldAccessmentExpression(ilGenerator, parameters, localSymbolTable, standardFieldAccessmentExpression); break;
+                case BoxExpression boxExpression: AssembleBoxExpression(ilGenerator, boxExpression); break;
+                case NewArrayExpression newArrayExpression: AssembleNewArrayExpression(ilGenerator, newArrayExpression); break;
+                case NewObjectExpression newObjectExpression: AssembleNewObjectExpression(ilGenerator, newObjectExpression); break;
+                case ArrayIndexingExpression arrayIndexingExpression: AssembleArrayIndexingExpression(ilGenerator, arrayIndexingExpression); break;
+                case StandardFieldAccessmentExpression standardFieldAccessmentExpression: AssembleStandardFieldAccessmentExpression(ilGenerator, standardFieldAccessmentExpression); break;
                 case StaticFieldAccessmentExpression staticFieldAccessmentExpression: AssembleStaticFieldAccessmentExpression(ilGenerator, staticFieldAccessmentExpression); break;
+                case ArgumentExpression argumentExpression: AssembleArgumentExpression(ilGenerator, argumentExpression); break;
                 default: throw new NotImplementedException();
             }
         }
 
-        private void AssembleNewObjectExpression(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, NewObjectExpression newObjectExpression)
+        private void AssembleArgumentExpression(ILGenerator ilGenerator, ArgumentExpression argumentExpression)
+        {
+            if (!argumentExpression.IsLoading) return;
+            ilGenerator.Emit(OpCodes.Ldarg, argumentExpression.Index!.Value);
+        }
+
+        private void AssembleNewObjectExpression(ILGenerator ilGenerator, NewObjectExpression newObjectExpression)
         {
             ilGenerator.Emit(OpCodes.Newobj, newObjectExpression.ConstructorInfo!);
             foreach(var initialization in newObjectExpression.FieldInitializations)
             {
-                AssembleAssignmentStatement(ilGenerator, parameters, localSymbolTable, initialization);
+                AssembleAssignmentStatement(ilGenerator, initialization);
             }
         }
 
@@ -257,9 +238,9 @@ namespace NEN
             ilGenerator.Emit(OpCodes.Ldsfld, staticFieldAccessmentExpression.FieldInfo!);
         }
 
-        private void AssembleStandardFieldAccessmentExpression(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, StandardFieldAccessmentExpression standardFieldAccessmentExpression)
+        private void AssembleStandardFieldAccessmentExpression(ILGenerator ilGenerator, StandardFieldAccessmentExpression standardFieldAccessmentExpression)
         {
-            AssembleExpression(ilGenerator, parameters, localSymbolTable, standardFieldAccessmentExpression.Object);
+            AssembleExpression(ilGenerator, standardFieldAccessmentExpression.Object);
             if (standardFieldAccessmentExpression.IsLoading == false) return;
             ilGenerator.Emit(OpCodes.Ldfld, standardFieldAccessmentExpression.FieldInfo!);
         }
@@ -269,11 +250,11 @@ namespace NEN
             ilGenerator.Emit(OpCodes.Dup);
         }
 
-        private void AssembleArrayIndexingExpression(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, ArrayIndexingExpression arrayIndexingExpression)
+        private void AssembleArrayIndexingExpression(ILGenerator ilGenerator, ArrayIndexingExpression arrayIndexingExpression)
         {
-            AssembleExpression(ilGenerator, parameters, localSymbolTable, arrayIndexingExpression.Array); // Load the array onto the stack
+            AssembleExpression(ilGenerator, arrayIndexingExpression.Array); // Load the array onto the stack
             if (!arrayIndexingExpression.IsLoading) return; // Don't load unless specified
-            AssembleExpression(ilGenerator, parameters, localSymbolTable, arrayIndexingExpression.Index); // Load the index onto the stack
+            AssembleExpression(ilGenerator, arrayIndexingExpression.Index); // Load the index onto the stack
             Type elementType = LowerTypeNode(arrayIndexingExpression.ReturnTypeNode!);
             if (elementType.IsValueType)
             {
@@ -285,16 +266,16 @@ namespace NEN
             }
         }
 
-        private void AssembleNewArrayExpression(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, NewArrayExpression newArrayExpression)
+        private void AssembleNewArrayExpression(ILGenerator ilGenerator, NewArrayExpression newArrayExpression)
         {
-            AssembleExpression(ilGenerator, parameters, localSymbolTable, newArrayExpression.Size!);
+            AssembleExpression(ilGenerator, newArrayExpression.Size!);
             Type arrayElementType = LowerTypeNode(((ArrayType)newArrayExpression.ReturnTypeNode!).ElementTypeNode);
             ilGenerator.Emit(OpCodes.Newarr, arrayElementType);
             for (int i = 0; i < newArrayExpression.Elements.Length; i++)
             {
                 ilGenerator.Emit(OpCodes.Dup); // Load a reference to the array onto the stack
                 ilGenerator.Emit(OpCodes.Ldc_I4, i); // Load the index onto the stack
-                AssembleExpression(ilGenerator, parameters, localSymbolTable, newArrayExpression.Elements[i]); // Load value or reference onto the stack
+                AssembleExpression(ilGenerator, newArrayExpression.Elements[i]); // Load value or reference onto the stack
                 Type elementType = LowerTypeNode(newArrayExpression.Elements[i].ReturnTypeNode!);
                 if (elementType.IsValueType && arrayElementType.IsValueType)
                 {
@@ -314,9 +295,9 @@ namespace NEN
             return module.CoreAssembly!.GetType(typeName) ?? throw new UnresolvedTypeException(content, typeName, line, column);
         }
 
-        private void AssembleBoxExpression(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, BoxExpression boxExpression)
+        private void AssembleBoxExpression(ILGenerator ilGenerator, BoxExpression boxExpression)
         {
-            AssembleExpression(ilGenerator, parameters, localSymbolTable, boxExpression.Expression);
+            AssembleExpression(ilGenerator, boxExpression.Expression);
             ilGenerator.Emit(OpCodes.Box, LowerTypeNode(boxExpression.ReturnTypeNode!));
         }
 
@@ -325,11 +306,11 @@ namespace NEN
             ilGenerator.Emit(OpCodes.Ldarg_0); // Load {this} instance
         }
 
-        private void AssembleStaticMethodCallExpression(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, StaticMethodCallExpression staticMethodCallExpression)
+        private void AssembleStaticMethodCallExpression(ILGenerator ilGenerator, StaticMethodCallExpression staticMethodCallExpression)
         {
             foreach (var argument in staticMethodCallExpression.Arguments)
             {
-                AssembleExpression(ilGenerator, parameters, localSymbolTable, argument);
+                AssembleExpression(ilGenerator, argument);
             }
             switch(staticMethodCallExpression.MethodInfo!)
             {
@@ -344,12 +325,12 @@ namespace NEN
             }
         }
 
-        private void AssembleStandardMethodCallExpression(ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, StandardMethodCallExpression standardMethodCallExpression)
+        private void AssembleStandardMethodCallExpression(ILGenerator ilGenerator, StandardMethodCallExpression standardMethodCallExpression)
         {
-            AssembleExpression(ilGenerator, parameters, localSymbolTable, standardMethodCallExpression.Object);
+            AssembleExpression(ilGenerator, standardMethodCallExpression.Object);
             foreach (var argument in standardMethodCallExpression.Arguments)
             {
-                AssembleExpression(ilGenerator, parameters, localSymbolTable, argument);
+                AssembleExpression(ilGenerator, argument);
             }
             switch (standardMethodCallExpression.MethodInfo!)
             {
@@ -364,32 +345,16 @@ namespace NEN
             }
         }
 
-        private void AssembleVariableExpression( ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, VariableExpression variableExpression)
+        private void AssembleVariableExpression( ILGenerator ilGenerator, VariableExpression variableExpression)
         {
             if (!variableExpression.IsLoading) return;
-            for (int i = 0; i < parameters.Length; i++)
-            {
-                if (parameters[i].Name == variableExpression.Name)
-                {
-                    ilGenerator.Emit(OpCodes.Ldarg_S, i);
-                    return;
-                }
-            }
-            if (localSymbolTable.TryGetIndex(variableExpression.Name, out var localVariableIndex))
-            {
-                ilGenerator.Emit(OpCodes.Ldloc_S, localVariableIndex);
-            }
-            else
-            {
-                // Usually should not happen as StaticAnalyzer already handles it
-                throw new UnresolvedIdentifierException(content, variableExpression.Name, variableExpression.Line, variableExpression.Column);
-            }
+            ilGenerator.Emit(OpCodes.Ldloc_S, variableExpression.LocalBuilder!);
         }
 
-        private void AssembleBinaryExpression( ILGenerator ilGenerator, VariableNode[] parameters, SymbolTable<LocalBuilder> localSymbolTable, BinaryExpression binaryExpression)
+        private void AssembleBinaryExpression( ILGenerator ilGenerator, BinaryExpression binaryExpression)
         {
-            AssembleExpression( ilGenerator, parameters, localSymbolTable, binaryExpression.Left);
-            AssembleExpression( ilGenerator, parameters, localSymbolTable, binaryExpression.Right);
+            AssembleExpression( ilGenerator, binaryExpression.Left);
+            AssembleExpression( ilGenerator, binaryExpression.Right);
             if (binaryExpression.Operator == Operator.Plus)
             {
                 ilGenerator.Emit(OpCodes.Add);
