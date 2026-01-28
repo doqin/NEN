@@ -179,6 +179,23 @@ namespace NEN
 
         public abstract class StatementNode : ASTNode { }
 
+        public class IfStatement : StatementNode
+        {
+            public required ExpressionNode Condition { get; set; }
+            public required StatementNode[] IfClause { get; set; }
+            public required StatementNode[] ElseClause { get; set; }
+            public override string ToString()
+            {
+                return Helper.GetTreeString<object>(
+                    $"Nếu:", 
+                    [
+                        Condition,
+                        Helper.GetTreeString("Phần nếu:",IfClause), 
+                        Helper.GetTreeString("Phần không thì:", ElseClause)
+                        ]);
+            }
+        }
+
         public class ReturnStatement : StatementNode
         {
             public ExpressionNode? Expression { get; set; }

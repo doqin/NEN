@@ -197,6 +197,8 @@ namespace NEN
                             return ParseVariableDeclarationStatement(line, column);
                         case "trả_về":
                             return ParseReturnStatement(line, column);
+                        case "nếu":
+                            return ParseIfStatement(line, column);
                         default:
                             UnexpectedHelper(token);
                             throw new();
@@ -204,6 +206,40 @@ namespace NEN
                 default:
                     return ParseExpressionStatementOrAssignmentStatement();
             }
+        }
+
+        private IfStatement ParseIfStatement(int line, int column)
+        {
+            var condition = ParseExpression(0);
+            ConsumeOrThrowIfNotEqual(TokenType.Keyword, "thì");
+            List<StatementNode> ifClause = [];
+            while(Current() != null && Current()?.Value != "kết_thúc" && Current()?.Value != "không_thì")
+            {
+                ifClause.Add(ParseStatement());
+                ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ";");
+            }
+            List<StatementNode> elseClause = [];
+            if (Consume()?.Value == "không_thì")
+            {
+                while (Current() != null && Current()?.Value != "kết_thúc")
+                {
+                    elseClause.Add(ParseStatement());
+                    ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ";");
+                    if (elseClause.Count == 1 && elseClause[0].GetType().FullName!.Equals(typeof(IfStatement).FullName))
+                    {
+                        SetBack(); SetBack();
+                    }
+                }
+            }
+            else SetBack();
+            ConsumeOrThrowIfNotEqual(TokenType.Keyword, "kết_thúc");
+            return new IfStatement { 
+                Condition = condition,
+                IfClause = [..ifClause],
+                ElseClause = [..elseClause],
+                Line = line,
+                Column = column
+            };
         }
 
         private ReturnStatement ParseReturnStatement(int line, int column)

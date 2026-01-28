@@ -168,5 +168,10 @@ namespace NEN
             public UnresolvedConstructorException() { }
             public UnresolvedConstructorException(string[] contentLines, string typeName, Type[] signature, int line, int column) : base(contentLines, $"Không thể tìm thấy phương thức khởi tạo {typeName}({string.Join(", ", signature.Select(t => t.FullName))})", line, column) { }
         }
+
+        public class InvalidIfConditionTypeException : NENException { 
+            public InvalidIfConditionTypeException() { } 
+            public InvalidIfConditionTypeException(string[] contentLines, string typeName, int line, int column) : base(contentLines, $"Biểu thức điều kiện phải là kiểu lý luận (Biểu thức là kiểu {typeName})", line, column) { }
+        }
     }
 }

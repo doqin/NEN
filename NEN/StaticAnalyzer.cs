@@ -201,7 +201,30 @@ namespace NEN
                 case ExpressionStatement expressionStatement: AnalyzeExpressionStatement(c, localSymbolTable, ref expressionStatement); break;
                 case AssignmentStatement assignmentStatement: AnalyzeAssignmentStatement(c, localSymbolTable, assignmentStatement); break;
                 case ReturnStatement returnStatement: AnalyzeReturnStatement(c, localSymbolTable, returnStatement); break;
+                case IfStatement ifStatement: AnalyzeIfStatement(c, localSymbolTable, ifStatement); break;
                 default: throw new NotImplementedException();
+            }
+        }
+
+        private void AnalyzeIfStatement(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, IfStatement ifStatement)
+        {
+            var condition = ifStatement.Condition;
+            var conditionType = AnalyzeExpression(c, localSymbolTable, ref condition);
+            ifStatement.Condition = condition;
+            if (conditionType!.CLRFullName != PrimitiveType.Boolean) 
+                throw new InvalidIfConditionTypeException(
+                    content, 
+                    condition.ReturnTypeNode!.FullName, 
+                    condition.Line, 
+                    condition.Column
+                );
+            foreach (var statement in ifStatement.IfClause)
+            {
+                AnalyzeStatement(c, new(localSymbolTable), statement);
+            }
+            foreach (var statement in ifStatement.ElseClause)
+            {
+                AnalyzeStatement(c, new(localSymbolTable), statement);
             }
         }
 
@@ -1032,6 +1055,7 @@ namespace NEN
                     Line = binaryExpression.Line,
                     Column = binaryExpression.Column
                 };
+                return binaryExpression.ReturnTypeNode;
             }
             else binaryExpression.ReturnTypeNode = rightType;
             return rightType;

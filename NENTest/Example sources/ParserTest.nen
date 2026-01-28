@@ -36,6 +36,23 @@ lớp Chương_Trình
         Console::WriteLine(là_đúng);
         Console::WriteLine(là_sai);
         Console::WriteLine(là_đúng_hay_sai);
+
+        nếu 1 < 3 thì
+            Console::WriteLine("1 < 3!");
+        không_thì nếu 3 < 5 thì
+            Console::WriteLine("3 < 5!");
+        kết_thúc;
+
+        nếu đúng thì
+        không_thì
+        kết_thúc;
+
+        nếu đúng thì
+        không_thì
+            Console::WriteLine("sai");
+            nếu đúng thì
+            kết_thúc;
+        kết_thúc;
     kết_thúc
 kết_thúc
 

@@ -8,6 +8,7 @@ lớp Chương_Trình
         Phụ::Kiểm_Tra_Khởi_Tạo_Đối_Tượng();
         Phụ::Kiểm_Tra_Gọi_Hàm();
         Phụ::Kiểm_Tra_Kiểu_Luận_Lý();
+        Phụ::Kiểm_Tra_Nếu();
     kết_thúc
 kết_thúc
 
@@ -95,6 +96,35 @@ lớp Phụ
         Console::WriteLine(là_sai);
         Console::WriteLine(là_đúng_hay_sai);
         Console::WriteLine(a = 4 hoặc 5 >= 3 + 1);
+    kết_thúc
+
+    @Tĩnh @Công_Khai
+    phương_thức Kiểm_Tra_Nếu() -> Void
+        nếu 1 + 1 = 2 thì
+            Console::WriteLine("1 + 1 = 2");
+        không_thì
+            Console::WriteLine("Ủa sao vậy");
+        kết_thúc;
+
+        nếu đúng thì
+            Console::WriteLine("OK");
+        kết_thúc;
+
+        nếu sai thì
+        không_thì nếu đúng thì
+            nếu đúng thì
+                Console::WriteLine(đúng);
+            kết_thúc;
+            nếu đúng thì
+                Console::WriteLine(đúng);
+                nếu đúng thì
+                    Console::WriteLine(đúng);
+                kết_thúc;
+            kết_thúc;
+            nếu đúng thì
+                Console::WriteLine(đúng);
+            kết_thúc;
+        kết_thúc;
     kết_thúc
 kết_thúc
 
