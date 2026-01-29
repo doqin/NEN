@@ -10,7 +10,7 @@ namespace NEN
         private readonly Token[] tokens = tokens;
         private int index = 0;
         private readonly string[] content = contentLines;
-        public Types.Module Parse()
+        public ModulePart Parse()
         {
             List<ClassNode> classes = [];
             List<UsingNamespaceStatement> usingNamespaceStatements = [];
@@ -44,8 +44,9 @@ namespace NEN
                         throw new ExpectedException(content, "lớp", token.Line, token.Column);
                 }
             }
-            return new Types.Module { 
-                Name = moduleName, 
+            return new Types.ModulePart { 
+                SourceName = moduleName, 
+                Source = content,
                 Classes = [.. classes], 
                 UsingNamespaces = [.. usingNamespaceStatements.Distinct()] 
             };

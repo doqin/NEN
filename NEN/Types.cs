@@ -32,19 +32,31 @@ namespace NEN
             public required int Column { get; set; }
         }
 
+        public class ModulePart
+        {
+            public required string SourceName { get; set; }
+            public required string[] Source { get; set; }
+            public ClassNode[] Classes { get; set; } = [];
+            public UsingNamespaceStatement[] UsingNamespaces { get; set; } = [];
+            
+            public override string ToString()
+            {
+                return Helper.GetTreeString<ASTNode>($"Bộ phận mô đun: {SourceName}", [.. UsingNamespaces, .. Classes]);
+            }
+        }
+
         public class Module
         {
             public required string Name { get; set; }
-            public ClassNode[] Classes { get; set; } = [];
+            public required ModulePart[] ModuleParts { get; set; }
+            public string[] AvailableNamespaces { get; set; } = [];
             public MetadataLoadContext? MetadataLoadContext { get; set; }
             public Assembly? CoreAssembly { get; set; }
             public PersistedAssemblyBuilder? AssemblyBuilder { get; set; }
             public ModuleBuilder? ModuleBuilder { get; set; }
-            public UsingNamespaceStatement[] UsingNamespaces { get; set; } = [];
-            public string[] AvailableNamespaces { get; set; } = [];
             public override string ToString()
             {
-                return Helper.GetTreeString<ASTNode>($"Mô đun: {Name}", [.. UsingNamespaces, .. Classes]);
+                return Helper.GetTreeString($"Mô đun: {Name}", [..ModuleParts]);
             }
         }
 
@@ -318,7 +330,7 @@ namespace NEN
                 {
                     return $"{Value} ({ReturnTypeNode})";
                 }
-                return Value;
+                return $"{Value}(*)";
             }
         }
 

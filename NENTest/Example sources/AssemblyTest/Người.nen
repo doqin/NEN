@@ -1,0 +1,34 @@
+﻿
+sử_dụng System;
+
+lớp Người
+    @Công_Khai
+    phương_thức Chào() -> Void
+        Console::WriteLine("Chào bạn, tôi là {0}", Tên);
+        Console::WriteLine("Tôi có một thuộc tính giấu! Giá trị của nó là {0}", giấu);
+        Test1();
+        Test2();
+    kết_thúc
+
+    @Công_Khai
+    phương_thức Chào(tên thuộc String) -> Void
+        Console::WriteLine("Chào bạn {0}!", tên);
+    kết_thúc
+
+    @Tĩnh @Công_Khai thuộc_tính Số_Người thuộc Int32 gán 10;
+
+    @Công_Khai thuộc_tính Tên thuộc String;
+
+    @Công_Khai thuộc_tính Tuổi thuộc Int32;
+
+    thuộc_tính giấu thuộc Int32 gán 15;
+
+    phương_thức Test1() -> Void
+        Console::WriteLine("Test1");
+    kết_thúc
+
+    @Tĩnh
+    phương_thức Test2() -> Void
+        Console::WriteLine("Test2");
+    kết_thúc
+kết_thúc

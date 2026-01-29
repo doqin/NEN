@@ -1,0 +1,14 @@
+﻿
+sử_dụng System;
+
+lớp Chương_Trình
+    @Chính @Tĩnh
+    phương_thức Chính() -> Void
+        Phụ::Test("Foo");
+        Phụ::Kiểm_Tra_Khởi_Tạo_Đối_Tượng();
+        Phụ::Kiểm_Tra_Gọi_Hàm();
+        Phụ::Kiểm_Tra_Kiểu_Luận_Lý();
+        Phụ::Kiểm_Tra_Nếu();
+        Phụ::Kiểm_Tra_Trong_Khi();
+    kết_thúc
+kết_thúc

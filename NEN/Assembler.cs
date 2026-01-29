@@ -10,19 +10,21 @@ using System.Reflection.PortableExecutable;
 
 namespace NEN
 {
-    public class Assembler(string[] contentLines, Types.Module module)
+    public class Assembler(Types.Module module)
     {
         private readonly Types.Module module = module;
         private MethodBuilder? entryPointMethod;
-        private readonly string[] content = contentLines;
-        private readonly ISymbolDocumentWriter documentWriter = module.ModuleBuilder!.DefineDocument($"{module.AssemblyBuilder!.GetName().Name}.nen");
+        // private readonly ISymbolDocumentWriter documentWriter = module.ModuleBuilder!.DefineDocument($"{module.AssemblyBuilder!.GetName().Name}.nen");
 
         public void Assemble()
         {
             SetupTargetFramework();
-            foreach (var c in module.Classes)
+            foreach (var modulePart in module.ModuleParts)
             {
-                AssembleType(c);
+                foreach (var c in modulePart.Classes)
+                {
+                    AssembleType(modulePart, c);
+                }
             }
 
             MetadataBuilder metadataBuilder = module.AssemblyBuilder!.GenerateMetadata(out BlobBuilder ilStream, out BlobBuilder fieldData, out MetadataBuilder pdbBuilder);
@@ -82,7 +84,7 @@ namespace NEN
             File.WriteAllText(configName, jsonContent);
         }
 
-        private void AssembleType(ClassNode c)
+        private void AssembleType(ModulePart modulePart, ClassNode c)
         {
             foreach(var constructor in c.Constructors ?? [])
             {
@@ -90,7 +92,7 @@ namespace NEN
             }
             foreach(var method in c.Methods)
             {
-                AssembleMethod(c.TypeBuilder!, method);
+                AssembleMethod(modulePart, c.TypeBuilder!, method);
             }
             c.TypeBuilder!.CreateType();
         }
@@ -105,11 +107,11 @@ namespace NEN
             ilGenerator.Emit(OpCodes.Ret);
         }
 
-        private void AssembleMethod( TypeBuilder typeBuilder, MethodNode method)
+        private void AssembleMethod(ModulePart modulePart, TypeBuilder typeBuilder, MethodNode method)
         {   
             if (method.IsEntryPoint)
             {
-                if (entryPointMethod != null) throw new MultipleEntryPointException(content, method.Line, method.Column);
+                if (entryPointMethod != null) throw new MultipleEntryPointException(modulePart.Source, method.Line, method.Column);
                 entryPointMethod = method.MethodBuilder;
             }
             var ilGenerator = method.MethodBuilder!.GetILGenerator();
@@ -334,9 +336,9 @@ namespace NEN
             }
         }
 
-        private Type GetTypeFromName(string typeName, int line, int column)
+        private Type GetTypeFromName(ModulePart modulePart, string typeName, int line, int column)
         {
-            return module.CoreAssembly!.GetType(typeName) ?? throw new UnresolvedTypeException(content, typeName, line, column);
+            return module.CoreAssembly!.GetType(typeName) ?? throw new UnresolvedTypeException(modulePart.Source, typeName, line, column);
         }
 
         private void AssembleBoxExpression(ILGenerator ilGenerator, BoxExpression boxExpression)

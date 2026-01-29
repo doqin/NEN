@@ -5,7 +5,7 @@ namespace NEN
 {
     public partial class StaticAnalyzer
     {
-        private void GenerateDefaultConstructor(ClassNode c)
+        private void GenerateDefaultConstructor(ModulePart modulePart, ClassNode c)
         {
             var defaultConstructorBuilder = c.TypeBuilder!.DefineConstructor(
                 MethodAttributes.Public, 
@@ -98,7 +98,7 @@ namespace NEN
             // Analyze the initial values
             foreach (var statement in defaultConstructor.Statements)
             {
-                AnalyzeStatement(c, new(), statement);
+                AnalyzeStatement(modulePart, c, new(), statement);
             }
             if (!moduleConstructors.TryAdd((c.Name, []), defaultConstructor.ConstructorBuilder))
             {

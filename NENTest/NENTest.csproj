@@ -21,7 +21,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="Example sources\AssemblerTest.nen">
+    <None Update="Example sources\AssemblyTest\Người.nen">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Example sources\AssemblyTest\Phụ.nen">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Example sources\AssemblyTest\Chương_Trình.nen">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Example sources\ArraySizeDiscrepancyTest.nen">

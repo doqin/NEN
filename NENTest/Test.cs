@@ -1,6 +1,7 @@
 ﻿using Microsoft.Testing.Extensions.CodeCoverage;
 using NEN;
 using NEN.Exceptions;
+using NEN.Types;
 using System.Diagnostics.Metrics;
 using System.Diagnostics.SymbolStore;
 using System.IO.Enumeration;
@@ -44,26 +45,31 @@ namespace NENTest
             (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
             // PrintTokens(tokens);
             var parser = new Parser(fileName, lines, tokens);
-            var module = parser.Parse();
-            Console.WriteLine($"Parser result:\n{module}");
-            var analyzer = new StaticAnalyzer(lines, module, fileName, []);
+            var modulePart = parser.Parse();
+            Console.WriteLine($"Parser result:\n{modulePart}");
+            var analyzer = new StaticAnalyzer(fileName, [modulePart], []);
             analyzer.Analyze();
-            Console.WriteLine($"Static Analyzer result:\n{module}");
+            Console.WriteLine($"Static Analyzer result:\n{modulePart}");
         }
 
         [TestMethod]
         public void AssemblerTest()
         {
-            string fileName = "AssemblerTest";
-            (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
-            // PrintTokens(tokens);
-            var parser = new Parser(fileName, lines, tokens);
-            var module = parser.Parse();
-            Console.WriteLine($"Kết quả Parser:\n{module}");
-            var analyzer = new StaticAnalyzer(lines, module, fileName, []);
-            analyzer.Analyze();
+            string assemblyName = "AssemblerTest";
+            List<NEN.Types.ModulePart> moduleParts = [];
+            foreach (var fileName in Directory.GetFiles("Example sources\\AssemblyTest", "*.nen"))
+            {
+                (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize(fileName);
+                // PrintTokens(tokens);
+                var parser = new Parser(fileName, lines, tokens);
+                var modulePart = parser.Parse();
+                Console.WriteLine($"Kết quả Parser:\n{modulePart}");
+                moduleParts.Add(modulePart);
+            }
+            var analyzer = new StaticAnalyzer(assemblyName, [..moduleParts], []);
+            var module = analyzer.Analyze();
             Console.WriteLine($"Kết quả Static Analyzer:\n{module}");
-            var assembler = new Assembler(lines, module);
+            var assembler = new Assembler(module);
             assembler.Assemble();
             Console.WriteLine($"Hoàn thành biên dịch! OK");
         }
@@ -73,12 +79,12 @@ namespace NENTest
             (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
             PrintTokens(tokens);
             var parser = new Parser(fileName, lines, tokens);
-            var module = parser.Parse();
+            var modulePart = parser.Parse();
             if (printTokens)
             {
-                Console.WriteLine($"Parser result:\n{module}");
+                Console.WriteLine($"Parser result:\n{modulePart}");
             }
-            var analyzer = new StaticAnalyzer(lines, module, fileName, []);
+            var analyzer = new StaticAnalyzer(fileName, [modulePart], []);
             try
             {
                 analyzer.Analyze();
@@ -96,11 +102,11 @@ namespace NENTest
             (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
             // PrintTokens(tokens);
             var parser = new Parser(fileName, lines, tokens);
-            var module = parser.Parse();
-            Console.WriteLine($"Parser result:\n{module}");
-            var analyzer = new StaticAnalyzer(lines, module, fileName, []);
-            analyzer.Analyze();
-            var assembler = new Assembler(lines, module);
+            var modulePart = parser.Parse();
+            Console.WriteLine($"Parser result:\n{modulePart}");
+            var analyzer = new StaticAnalyzer(fileName, [modulePart], []);
+            var module = analyzer.Analyze();
+            var assembler = new Assembler(module);
             try
             {
                 assembler.Assemble();
