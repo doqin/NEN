@@ -9,6 +9,7 @@ lớp Chương_Trình
         Phụ::Kiểm_Tra_Gọi_Hàm();
         Phụ::Kiểm_Tra_Kiểu_Luận_Lý();
         Phụ::Kiểm_Tra_Nếu();
+        Phụ::Kiểm_Tra_Trong_Khi();
     kết_thúc
 kết_thúc
 
@@ -123,6 +124,24 @@ lớp Phụ
             kết_thúc;
             nếu đúng thì
                 Console::WriteLine(đúng);
+            kết_thúc;
+        kết_thúc;
+    kết_thúc
+
+    @Tĩnh @Công_Khai
+    phương_thức Kiểm_Tra_Trong_Khi() -> Void
+        biến a thuộc Int32 gán 0;
+        biến b thuộc Int32 gán 10;
+        trong_khi a < b thì
+            Console::WriteLine(a);
+            a gán a + 1;
+        kết_thúc;
+
+        trong_khi đúng thì
+            Console::WriteLine(b);
+            b gán b + 1;
+            nếu b > 20 thì
+                thoát;
             kết_thúc;
         kết_thúc;
     kết_thúc

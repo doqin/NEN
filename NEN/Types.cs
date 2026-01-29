@@ -196,6 +196,22 @@ namespace NEN
             }
         }
 
+        public class WhileStatement : StatementNode
+        {
+            public required ExpressionNode Condition { get; set; }
+            public required StatementNode[] Body { get; set; }
+            public Label? EndLabel { get; set; }
+            public override string ToString()
+            {
+                return Helper.GetTreeString<object>("Trong khi:", [Condition, Helper.GetTreeString("Nội dung:",[..Body])]);
+            }
+        }
+
+        public class BreakStatement : StatementNode
+        {
+            public Label? EndLabel { get; set; }
+        }
+
         public class ReturnStatement : StatementNode
         {
             public ExpressionNode? Expression { get; set; }

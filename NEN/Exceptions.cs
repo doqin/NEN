@@ -173,5 +173,11 @@ namespace NEN
             public InvalidIfConditionTypeException() { } 
             public InvalidIfConditionTypeException(string[] contentLines, string typeName, int line, int column) : base(contentLines, $"Biểu thức điều kiện phải là kiểu lý luận (Biểu thức là kiểu {typeName})", line, column) { }
         }
+
+        public class BreakOutsideLoopException : NENException
+        {
+            public BreakOutsideLoopException() { }
+            public BreakOutsideLoopException(string[] contentLines, int line, int column) : base(contentLines, $"'Thoát' chỉ có thể sử dụng trong một vòng lặp", line, column) { }
+        }
     }
 }

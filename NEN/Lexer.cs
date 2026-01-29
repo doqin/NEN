@@ -56,7 +56,8 @@ namespace NEN
         private static bool AnalyseKeyword( Token token)
         {
             string[] keywords = [
-                "lớp", "phương_thức", "quay_lại", "trả_về", "kết_thúc", "sử_dụng", "biến", "hằng", "gán", "thuộc", "tạo", "thuộc_tính", "nếu", "thì", "không_thì"
+                "lớp", "phương_thức", "quay_lại", "trả_về", "kết_thúc", "sử_dụng", "biến", "hằng", "gán", "thuộc", "tạo", "thuộc_tính", "nếu", "thì", "không_thì",
+                "trong_khi", "thoát"
             ];
             if (keywords.Contains(token.Value))
             {

@@ -129,9 +129,31 @@ namespace NEN
                 case AssignmentStatement assignmentStatement: AssembleAssignmentStatement(ilGenerator, assignmentStatement); break;
                 case ReturnStatement returnStatement: AssembleReturnStatement(ilGenerator, returnStatement); break;
                 case IfStatement ifStatement: AssembleIfStatement(ilGenerator, ifStatement); break;
+                case WhileStatement whileStatement: AssembleWhileStatement(ilGenerator, whileStatement); break;
+                case BreakStatement breakStatement: AssembleBreakStatement(ilGenerator, breakStatement); break;
                 default:
                     throw new NotImplementedException();
             }
+        }
+
+        private void AssembleBreakStatement(ILGenerator ilGenerator, BreakStatement breakStatement)
+        {
+            ilGenerator.Emit(OpCodes.Br, breakStatement.EndLabel!.Value);
+        }
+
+        private void AssembleWhileStatement(ILGenerator ilGenerator, WhileStatement whileStatement)
+        {
+            var startLabel = ilGenerator.DefineLabel();
+            ilGenerator.MarkLabel(startLabel);
+            AssembleExpression(ilGenerator, whileStatement.Condition);
+            ilGenerator.Emit(OpCodes.Ldc_I4_1);
+            ilGenerator.Emit(OpCodes.Bne_Un, whileStatement.EndLabel!.Value);
+            foreach (var statement in whileStatement.Body)
+            {
+                AssembleStatement(ilGenerator, statement);
+            }
+            ilGenerator.Emit(OpCodes.Br, startLabel);
+            ilGenerator.MarkLabel(whileStatement.EndLabel!.Value);
         }
 
         private void AssembleIfStatement(ILGenerator ilGenerator, IfStatement ifStatement)

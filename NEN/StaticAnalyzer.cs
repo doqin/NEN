@@ -193,7 +193,7 @@ namespace NEN
             currentMethod = null;
         }
 
-        private void AnalyzeStatement(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, StatementNode statement)
+        private void AnalyzeStatement(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, StatementNode statement, Label? endLabel = null)
         {
             switch(statement)
             {
@@ -201,12 +201,45 @@ namespace NEN
                 case ExpressionStatement expressionStatement: AnalyzeExpressionStatement(c, localSymbolTable, ref expressionStatement); break;
                 case AssignmentStatement assignmentStatement: AnalyzeAssignmentStatement(c, localSymbolTable, assignmentStatement); break;
                 case ReturnStatement returnStatement: AnalyzeReturnStatement(c, localSymbolTable, returnStatement); break;
-                case IfStatement ifStatement: AnalyzeIfStatement(c, localSymbolTable, ifStatement); break;
+                case IfStatement ifStatement: AnalyzeIfStatement(c, localSymbolTable, ifStatement, endLabel); break;
+                case WhileStatement whileStatement: AnalyzeWhileStatement(c, localSymbolTable, whileStatement); break;
+                case BreakStatement breakStatement: AnalyzeBreakStatement(breakStatement, endLabel); break;
                 default: throw new NotImplementedException();
             }
         }
 
-        private void AnalyzeIfStatement(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, IfStatement ifStatement)
+        private void AnalyzeBreakStatement(BreakStatement breakStatement, Label? endLabel)
+        {
+            breakStatement.EndLabel = endLabel ?? throw new BreakOutsideLoopException(content, breakStatement.Line, breakStatement.Column);
+        }
+
+        private void AnalyzeWhileStatement(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, WhileStatement whileStatement)
+        {
+            var condition = whileStatement.Condition;
+            var conditionType = AnalyzeExpression(c, localSymbolTable, ref condition);
+            whileStatement.Condition = condition;
+            if (conditionType!.CLRFullName != PrimitiveType.Boolean)
+                throw new InvalidIfConditionTypeException(
+                    content,
+                    condition.ReturnTypeNode!.FullName,
+                    condition.Line,
+                    condition.Column
+                );
+            switch (currentMethod!.GetMethodInfo())
+            {
+                case MethodBuilder methodBuilder:
+                    whileStatement.EndLabel = methodBuilder.GetILGenerator().DefineLabel();
+                    break;
+                default:
+                    throw new NotImplementedException();
+            }
+            foreach(var statement in whileStatement.Body)
+            {
+                AnalyzeStatement(c, new(localSymbolTable), statement, whileStatement.EndLabel);
+            }
+        }
+
+        private void AnalyzeIfStatement(ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, IfStatement ifStatement, Label? endLabel = null)
         {
             var condition = ifStatement.Condition;
             var conditionType = AnalyzeExpression(c, localSymbolTable, ref condition);
@@ -220,11 +253,11 @@ namespace NEN
                 );
             foreach (var statement in ifStatement.IfClause)
             {
-                AnalyzeStatement(c, new(localSymbolTable), statement);
+                AnalyzeStatement(c, new(localSymbolTable), statement, endLabel);
             }
             foreach (var statement in ifStatement.ElseClause)
             {
-                AnalyzeStatement(c, new(localSymbolTable), statement);
+                AnalyzeStatement(c, new(localSymbolTable), statement, endLabel);
             }
         }
 

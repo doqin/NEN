@@ -199,6 +199,10 @@ namespace NEN
                             return ParseReturnStatement(line, column);
                         case "nếu":
                             return ParseIfStatement(line, column);
+                        case "trong_khi":
+                            return ParseWhileStatement(line, column);
+                        case "thoát":
+                            return new BreakStatement { Line = line, Column = column };
                         default:
                             UnexpectedHelper(token);
                             throw new();
@@ -206,6 +210,26 @@ namespace NEN
                 default:
                     return ParseExpressionStatementOrAssignmentStatement();
             }
+        }
+
+        private StatementNode ParseWhileStatement(int line, int column)
+        {
+            var condition = ParseExpression(0);
+            ConsumeOrThrowIfNotEqual(TokenType.Keyword, "thì");
+            List<StatementNode> body = [];
+            while (Current() != null && Current()?.Value != "kết_thúc")
+            {
+                body.Add(ParseStatement());
+                ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ";");
+            }
+            ConsumeOrThrowIfNotEqual(TokenType.Keyword, "kết_thúc");
+            return new WhileStatement
+            {
+                Condition = condition,
+                Body = [.. body],
+                Line = line,
+                Column = column
+            };
         }
 
         private IfStatement ParseIfStatement(int line, int column)
