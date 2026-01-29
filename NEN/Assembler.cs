@@ -10,10 +10,11 @@ using System.Reflection.PortableExecutable;
 
 namespace NEN
 {
-    public class Assembler(Types.Module module)
+    public class Assembler(Types.Module module, string savePath = "")
     {
         private readonly Types.Module module = module;
         private MethodBuilder? entryPointMethod;
+        private readonly string savePath = string.IsNullOrWhiteSpace(savePath) ? "" : $"{savePath}/";
         // private readonly ISymbolDocumentWriter documentWriter = module.ModuleBuilder!.DefineDocument($"{module.AssemblyBuilder!.GetName().Name}.nen");
 
         public void Assemble()
@@ -63,7 +64,7 @@ namespace NEN
                 );
             BlobBuilder peBlob = new();
             peBuilder.Serialize(peBlob);
-            using FileStream fileStream = new($"{module.AssemblyBuilder!.GetName().Name}.dll", FileMode.Create, FileAccess.Write);
+            using FileStream fileStream = new($"{savePath}{module.AssemblyBuilder!.GetName().Name}.dll", FileMode.Create, FileAccess.Write);
             peBlob.WriteContentTo(fileStream);
         }
 
@@ -81,7 +82,7 @@ namespace NEN
                     }
                 }
                 """;
-            File.WriteAllText(configName, jsonContent);
+            File.WriteAllText($"{savePath}{configName}", jsonContent);
         }
 
         private void AssembleType(ModulePart modulePart, ClassNode c)

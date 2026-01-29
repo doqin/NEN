@@ -7,9 +7,7 @@ namespace NEN
     {
         public static (string[], Token[]) Tokenize(string filePath)
         {
-            var content = File.ReadAllText(filePath);
-            //content = content.Replace("\t", "    ");
-            var lines = content.Split(['\n']);
+            var lines = File.ReadAllLines(filePath);
             var regex = LexerRegex();
             List<Token> tokens = [];
             foreach (var (value, i) in lines.Select((value, i) => (value, i + 1)))
