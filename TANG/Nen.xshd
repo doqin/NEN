@@ -1,0 +1,54 @@
+﻿<?xml version="1.0"?>
+<SyntaxDefinition name="Nen"
+                  xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">
+
+	<!-- COLORS -->
+	<Color name="Keyword" foreground="#0000FF"/>
+	<Color name="Comment" foreground="#008000"/>
+	<Color name="String" foreground="#A31515"/>
+	<Color name="Marker" foreground="#267F99"/>
+	<Color name="Number" foreground="#098658"/>
+
+	<!-- RULES -->
+
+
+	<RuleSet>
+
+		<!-- COMMENTS -->
+		<Span color="Comment" begin="//" />
+		<Span color="Comment" begin="/\*" end="\*/" />
+
+		<!-- STRINGS -->
+		<Span color="String" begin="&quot;" end="&quot;" />
+
+		<Rule color="Marker">
+			@[^\s]+
+		</Rule>
+
+		<Rule color="Number">
+			\b\d+(\.\d+)?\b
+		</Rule>
+
+		<!-- KEYWORDS -->
+		<Keywords color="Keyword">
+			<Word>lớp</Word>
+			<Word>phương_thức</Word>
+			<Word>quay_lại</Word>
+			<Word>trả_về</Word>
+			<Word>kết_thúc</Word>
+			<Word>sử_dụng</Word>
+			<Word>biến</Word>
+			<Word>hằng</Word>
+			<Word>gán</Word>
+			<Word>thuộc</Word>
+			<Word>tạo</Word>
+			<Word>thuộc_tính</Word>
+			<Word>nếu</Word>
+			<Word>thì</Word>
+			<Word>không_thì</Word>
+			<Word>trong_khi</Word>
+			<Word>thoát</Word>
+		</Keywords>
+
+	</RuleSet>
+</SyntaxDefinition>
