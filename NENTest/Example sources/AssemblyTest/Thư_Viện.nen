@@ -8,4 +8,19 @@ lớp Thư_Viện
 	phương_thức Trừ (a thuộc Int32, b thuộc Int32) -> Int32
 		trả_về a - b;
 	kết_thúc
+	
+	@Tĩnh @Công_Khai
+	phương_thức Nhân(a thuộc Int32, b thuộc Int32) -> Int32
+		trả_về a * b;
+	kết_thúc
+	
+	@Tĩnh @Công_Khai
+	phương_thức Chia(a thuộc Int32, b thuộc Int32) -> Int32
+		trả_về a / b;
+	kết_thúc
+	
+	@Tĩnh @Công_Khai
+	phương_thức In(chuỗi thuộc String) -> Void
+		Console::WriteLine(chuỗi);
+	kết_thúc
 kết_thúc

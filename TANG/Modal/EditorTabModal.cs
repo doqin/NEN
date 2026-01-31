@@ -4,6 +4,7 @@ using ICSharpCode.AvalonEdit.Highlighting.Xshd;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
@@ -14,11 +15,80 @@ using System.Xml;
 
 namespace TANG.Modal
 {
-    internal class EditorTabItem
+    internal class EditorTabItem : INotifyPropertyChanged
     {
-        public required string Header { get; set; }
-        public required string Text { get; set; }
-        public required string Path { get; set; }
+        string header = string.Empty;
+        string text = string.Empty;
+        string path = string.Empty;
+        string lastSavedText = string.Empty;
+        bool isDirty;
+
+        public required string Header
+        {
+            get => header;
+            set
+            {
+                if (header == value) return;
+                header = value;
+                OnPropertyChanged(nameof(Header));
+                OnPropertyChanged(nameof(DisplayHeader));
+            }
+        }
+
+        public required string Text
+        {
+            get => text;
+            set
+            {
+                if (text == value) return;
+                text = value;
+                OnPropertyChanged(nameof(Text));
+                IsDirty = text != lastSavedText;
+            }
+        }
+
+        public required string Path
+        {
+            get => path;
+            set
+            {
+                if (path == value) return;
+                path = value;
+                OnPropertyChanged(nameof(Path));
+            }
+        }
+
+        public string LastSavedText
+        {
+            get => lastSavedText;
+            set
+            {
+                if (lastSavedText == value) return;
+                lastSavedText = value;
+                IsDirty = text != lastSavedText;
+            }
+        }
+
+        public bool IsDirty
+        {
+            get => isDirty;
+            private set
+            {
+                if (isDirty == value) return;
+                isDirty = value;
+                OnPropertyChanged(nameof(IsDirty));
+                OnPropertyChanged(nameof(DisplayHeader));
+            }
+        }
+
+        public string DisplayHeader => IsDirty ? $"* {Header}" : Header;
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
     }
     internal class EditorTabModal
     {
@@ -37,15 +107,16 @@ namespace TANG.Modal
             {
                 Header = tabName,
                 Text = content,
-                Path = path
+                Path = path,
+                LastSavedText = content
             };
             Tabs.Add(tabItem);
             tabControl.SelectedItem = tabItem;
         }
 
-        public void Remove(string tabName)
+        public void Remove(EditorTabItem tab)
         {
-            Tabs.Remove(Tabs.First(t => t.Header == tabName));
+            Tabs.Remove(tab);
         }
     }
 }

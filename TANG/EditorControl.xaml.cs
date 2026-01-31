@@ -2,6 +2,7 @@
 using ICSharpCode.AvalonEdit.CodeCompletion;
 using ICSharpCode.AvalonEdit.Highlighting;
 using ICSharpCode.AvalonEdit.Highlighting.Xshd;
+using ICSharpCode.AvalonEdit.Search;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -35,6 +36,7 @@ namespace TANG
             };
             textEditor.TextArea.TextEntered += textEditor_TextArea_TextEntered;
             textEditor.TextArea.TextEntering += textEditor_TextArea_TextEntering;
+            SearchPanel.Install(textEditor.TextArea);
             LoadHighlighting();
         }
 

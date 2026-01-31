@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:TANG"
         mc:Ignorable="d"
-        Title="T.Ả.N.G." Height="730" Width="1235"
+        Title="T.Ả.N.G." Height="730" Width="1044"
         xmlns:avalonedit="http://icsharpcode.net/sharpdevelop/avalonedit" Loaded="Window_Loaded">
     <Grid>
         <DockPanel>
@@ -40,7 +40,7 @@
                 <ToolBar Band="1" 
                          BandIndex="1" 
                          Margin="4" 
-                         Background="#00000000"
+                         Background="#FFFFFFFF"
                          BorderBrush="#FFACACAC" 
                          BorderThickness="1">
                     <Button Content="Quay lại"/>
@@ -59,7 +59,7 @@
                     <TabControl.ItemTemplate>
                         <DataTemplate>
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock x:Name="TabHeader" Text="{Binding Header}" MouseDown="TabHeader_MouseDown"/>
+                                <TextBlock x:Name="TabHeader" Text="{Binding DisplayHeader}" MouseDown="TabHeader_MouseDown"/>
                                 <Button  
                                         Content="✕" 
                                         Background="Transparent" 
@@ -87,6 +87,7 @@
                         <TreeView.ContextMenu>
                             <ContextMenu>
                                 <MenuItem x:Name="AddFile" Header="Tạo tệp mới" Click="AddFile_Click"/>
+                                <MenuItem x:Name="AddFolder" Header="Tạo thư mục" Click="AddFolder_Click"/>
                             </ContextMenu>
                         </TreeView.ContextMenu>
                     </TreeView>
