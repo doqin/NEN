@@ -73,6 +73,7 @@ lớp Phụ
         biến m thuộc String[] gán tạo String[] { "Đây", "là", "một", "test" };
         Console::WriteLine(String::Join(" ", m));
         Console::WriteLine("5 + 10 = {0}", Phụ::Cộng(5, 10));
+        Console::WriteLine("Sử dụng thư viện: 20 + 10 = {0}", Thư_Viện::Cộng(20, 10));
     kết_thúc
 
     @Tĩnh @Công_Khai

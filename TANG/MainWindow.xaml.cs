@@ -19,6 +19,7 @@ using System.Windows.Navigation;
 using System.Xml;
 using TANG.Modal;
 using System.Diagnostics;
+using ICSharpCode.AvalonEdit.CodeCompletion;
 
 namespace TANG
 {
@@ -27,9 +28,10 @@ namespace TANG
     /// </summary>
     public partial class MainWindow : Window
     {
-        private readonly OpenFolderDialog openFolderDialog = new();
-        private EditorTabModal editorTabViewModel;
-        private string workingDirectory;
+        readonly OpenFolderDialog openFolderDialog = new();
+        readonly SaveFileDialog saveFileDialog = new();
+        EditorTabModal editorTabViewModel;
+        string workingDirectory;
 
         public MainWindow()
         {
@@ -155,6 +157,17 @@ namespace TANG
                 UseShellExecute = false
             };
             Process.Start(psi);
+        }
+
+        private void AddFile_Click(object sender, RoutedEventArgs e)
+        {
+            var result = saveFileDialog.ShowDialog();
+            if (result == true)
+            {
+                File.Create(saveFileDialog.FileName);
+                explorer.Items.Clear();
+                AddTreeItem(explorer, workingDirectory);
+            }
         }
     }
 }

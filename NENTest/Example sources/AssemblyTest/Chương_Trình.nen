@@ -1,11 +1,9 @@
 
 sử_dụng System;
-sử_dụng System::Threading;
 
 lớp Chương_Trình
     @Chính @Tĩnh
     phương_thức Chính() -> Void
-    	Thread::Sleep(1000);
     	Console::WriteLine("Xin chào");
         Phụ::Test("Foo");
         Phụ::Kiểm_Tra_Khởi_Tạo_Đối_Tượng();

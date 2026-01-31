@@ -83,7 +83,12 @@
 
                 <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" Background="Transparent"/>
                 <GroupBox Header="Duyệt tệp tin" Grid.Column="2">
-                    <TreeView x:Name="explorer">
+                    <TreeView x:Name="explorer" BorderThickness="0">
+                        <TreeView.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem x:Name="AddFile" Header="Tạo tệp mới" Click="AddFile_Click"/>
+                            </ContextMenu>
+                        </TreeView.ContextMenu>
                     </TreeView>
                 </GroupBox>
 

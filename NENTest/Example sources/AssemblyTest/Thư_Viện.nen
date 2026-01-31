@@ -1,0 +1,11 @@
+lớp Thư_Viện
+	@Tĩnh @Công_Khai
+	phương_thức Cộng(a thuộc Int32, b thuộc Int32) -> Int32
+		trả_về a + b;
+	kết_thúc
+	
+	@Tĩnh @Công_Khai
+	phương_thức Trừ (a thuộc Int32, b thuộc Int32) -> Int32
+		trả_về a - b;
+	kết_thúc
+kết_thúc

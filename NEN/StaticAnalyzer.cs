@@ -868,17 +868,19 @@ namespace NEN
                     )
                 )
                 {
-                    var isFromSameOrParentType = false;
+                    bool isFromSameOrParentType;
                     if (type != null)
                     {
                         try
                         {
                             isFromSameOrParentType = AnalyzeTypes(
                                 modulePart,
-                            CreateTypeNodeFromType(methodInfo.DeclaringType!, methodCallExpression.Line, methodCallExpression.Column),
+                            CreateTypeNodeFromType(typeTable.GetValueOrDefault(c.Name)!, methodCallExpression.Line, methodCallExpression.Column),
                         CreateTypeNodeFromType(type!, methodCallExpression.Line, methodCallExpression.Column)
                             );
-                        } catch(Exception) { }
+                        } catch(Exception) {
+                            isFromSameOrParentType = false;
+                        }
                     }
                     else
                     {
