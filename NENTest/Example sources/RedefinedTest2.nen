@@ -13,7 +13,7 @@ kết_thúc
 
 lớp Phụ
     phương_thức Test(a thuộc System::String, b thuộc System::Int32) -> System::Void
-        biến c thuộc System::String gán "Hello";
-        biến c thuộc System::String gán "Hello";
+        biến abc thuộc System::String gán "Hello";
+        biến abc thuộc System::String gán "Hello";
     kết_thúc
 kết_thúc

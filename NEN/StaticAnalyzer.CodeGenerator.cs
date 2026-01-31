@@ -14,10 +14,17 @@ namespace NEN
             );
             var defaultConstructor = new ConstructorNode
             {
-                ReturnTypeNode = CreateTypeNodeFromType(defaultConstructorBuilder!.DeclaringType!, c.Line, c.Column),
+                ReturnTypeNode = CreateTypeNodeFromType(
+                    defaultConstructorBuilder!.DeclaringType!, 
+                    c.StartLine, 
+                    c.StartColumn,
+                    c.EndLine,
+                    c.EndColumn),
                 ConstructorBuilder = defaultConstructorBuilder,
-                Line = c.Line,
-                Column = c.Column
+                StartLine = c.StartLine,
+                StartColumn = c.StartColumn,
+                EndLine = c.EndLine,
+                EndColumn = c.EndColumn
             };
             if (c.Constructors != null) throw new("Internal error");
             c.Constructors = [defaultConstructor];
@@ -26,25 +33,38 @@ namespace NEN
             defaultConstructor.Statements = [ 
                 new ExpressionStatement {
                     Expression = new StandardMethodCallExpression {
-                        ReturnTypeNode = CreateTypeNodeFromType(objectType, c.Line, c.Column),
+                        ReturnTypeNode = CreateTypeNodeFromType(
+                            objectType, 
+                            c.StartLine, 
+                            c.StartColumn,
+                            c.EndLine,
+                            c.EndColumn),
                         Object = new ThisExpression {
                             ReturnTypeNode = new NamedType {
                                 Namespaces = [],
                                 Name = c.Name,
-                                Line = c.Line,
-                                Column = c.Column
+                                StartLine = c.StartLine,
+                                StartColumn = c.StartColumn,
+                                EndLine = c.EndLine,
+                                EndColumn = c.EndColumn
                             },
-                            Line = c.Line,
-                            Column = c.Column
+                            StartLine = c.StartLine,
+                            StartColumn = c.StartColumn,
+                            EndLine = c.EndLine,
+                            EndColumn = c.EndColumn
                         },
                         MethodName = "ObjectConstructor",
                         Arguments = [],
                         MethodInfo = objectType.GetConstructor(Type.EmptyTypes),
-                        Line = c.Line,
-                        Column = c.Column
+                        StartLine = c.StartLine,
+                        StartColumn = c.StartColumn,
+                        EndLine = c.EndLine,
+                        EndColumn = c.EndColumn
                     },
-                    Line = c.Line, 
-                    Column = c.Column
+                    StartLine = c.StartLine, 
+                    StartColumn = c.StartColumn,
+                    EndLine = c.EndLine,
+                    EndColumn = c.EndColumn
                 }, // Constructs an `object` type (the base for any reference type)
                 ..c.Fields.Where(f => f.InitialValue != null).Select(f =>
                 {
@@ -55,18 +75,24 @@ namespace NEN
                                 TypeNode = new NamedType {
                                     Namespaces = [], // TODO: change when namespaces are implemented
                                     Name = c.Name,
-                                    Line = c.Line,
-                                    Column = c.Column
+                                    StartLine = c.StartLine,
+                                    StartColumn = c.StartColumn,
+                                    EndLine = c.EndLine,
+                                    EndColumn = c.EndColumn
                                 },
                                 FieldName = f.Variable.Name,
                                 FieldInfo = f.FieldInfo,
                                 IsLoading = false,
-                                Line = f.Line,
-                                Column = f.Column
+                                StartLine = f.StartLine,
+                                StartColumn = f.StartColumn,
+                                EndLine = f.EndLine,
+                                EndColumn = f.EndColumn
                             },
                             Source = f.InitialValue!,
-                            Line = f.Line,
-                            Column = f.Column
+                            StartLine = f.StartLine,
+                            StartColumn = f.StartColumn,
+                            EndLine = f.EndLine,
+                            EndColumn = f.EndColumn
                         };                    }
                     else {
                         return new AssignmentStatement {
@@ -76,21 +102,29 @@ namespace NEN
                                     ReturnTypeNode = new NamedType {
                                         Namespaces = [],
                                         Name = c.Name,
-                                        Line = f.Line,
-                                        Column = f.Column
+                                        StartLine = f.StartLine,
+                                        StartColumn = f.StartColumn,
+                                        EndLine = f.EndLine,
+                                        EndColumn = f.EndColumn
                                     },
-                                    Line = f.Line,
-                                    Column = f.Column,
+                                    StartLine = f.StartLine,
+                                    StartColumn = f.StartColumn,
+                                    EndLine = f.EndLine,
+                                    EndColumn = f.EndColumn,
                                 },
                                 FieldName = f.Variable.Name,
                                 FieldInfo = f.FieldInfo,
                                 IsLoading = false,
-                                Line = f.Line,
-                                Column = f.Column
+                                StartLine = f.StartLine,
+                                StartColumn = f.StartColumn,
+                                EndLine = f.EndLine,
+                                EndColumn = f.EndColumn
                             },
                             Source = f.InitialValue!,
-                            Line = f.Line,
-                            Column = f.Column
+                            StartLine = f.StartLine,
+                            StartColumn = f.StartColumn,
+                            EndLine = f.EndLine,
+                            EndColumn = f.EndColumn
                         };
                     }
                 }) // assignments statements

@@ -112,7 +112,7 @@ namespace NEN
         {   
             if (method.IsEntryPoint)
             {
-                if (entryPointMethod != null) throw new MultipleEntryPointException(modulePart.Source, method.Line, method.Column);
+                if (entryPointMethod != null) throw new MultipleEntryPointException(modulePart.Source, method.StartLine, method.StartColumn, method.EndLine, method.EndColumn);
                 entryPointMethod = method.MethodBuilder;
             }
             var ilGenerator = method.MethodBuilder!.GetILGenerator();
@@ -326,8 +326,6 @@ namespace NEN
                 Type elementType = LowerTypeNode(newArrayExpression.Elements[i].ReturnTypeNode!);
                 if (elementType.IsValueType && arrayElementType.IsValueType)
                 {
-                    var line = newArrayExpression.Elements[i].ReturnTypeNode!.Line;
-                    var column = newArrayExpression.Elements[i].ReturnTypeNode!.Column;
                     ilGenerator.Emit(OpCodes.Stelem, elementType);
                 }
                 else
@@ -339,7 +337,7 @@ namespace NEN
 
         private Type GetTypeFromName(ModulePart modulePart, string typeName, int line, int column)
         {
-            return module.CoreAssembly!.GetType(typeName) ?? throw new UnresolvedTypeException(modulePart.Source, typeName, line, column);
+            return module.CoreAssembly!.GetType(typeName) ?? throw new UnresolvedTypeException(modulePart.Source, typeName, line, column, line, column);
         }
 
         private void AssembleBoxExpression(ILGenerator ilGenerator, BoxExpression boxExpression)

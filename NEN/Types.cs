@@ -28,8 +28,10 @@ namespace NEN
         {
             public required TokenType Type { get; set; }
             public required string Value { get; set; }
-            public required int Line { get; set; }
-            public required int Column { get; set; }
+            public required int StartLine { get; set; }
+            public required int StartColumn { get; set; }
+            public required int EndLine { get; set; }
+            public required int EndColumn { get; set; }
         }
 
         public class ModulePart
@@ -62,8 +64,10 @@ namespace NEN
 
         public abstract class ASTNode
         {
-            public required int Line { set; get; }
-            public required int Column { set; get; }
+            public required int StartLine { set; get; }
+            public required int StartColumn { set; get; }
+            public required int EndLine { set; get; }
+            public required int EndColumn { set; get; }
         }
 
         public class ClassNode : ASTNode

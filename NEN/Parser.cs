@@ -23,12 +23,14 @@ namespace NEN
                         switch (token.Value)
                         {
                             case "sử_dụng":
-                                var (namespaceIdentifiers, line, column) = ParseIdentifier();
+                                var (namespaceIdentifiers, startLine, startColumn, endLine, endColumn) = ParseIdentifier();
                                 usingNamespaceStatements.Add(
                                     new UsingNamespaceStatement {
                                         Namespace = namespaceIdentifiers,
-                                        Line = line,
-                                        Column = column,
+                                        StartLine = startLine,
+                                        StartColumn = startColumn,
+                                        EndLine = endLine,
+                                        EndColumn = endColumn,
                                     }
                                 );
                                 ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ";");
@@ -37,14 +39,14 @@ namespace NEN
                                 classes.Add(ParseClass());
                                 break;
                             default:
-                                throw new ExpectedException(content, "lớp", token.Line, token.Column);
+                                throw new ExpectedException(content, "lớp", token.StartLine, token.StartColumn, token.EndLine, token.EndColumn);
                         }
                         break;
                     default:
-                        throw new ExpectedException(content, "lớp", token.Line, token.Column);
+                        throw new ExpectedException(content, "lớp", token.StartLine, token.StartColumn, token.EndLine, token.EndColumn);
                 }
             }
-            return new Types.ModulePart { 
+            return new ModulePart { 
                 SourceName = moduleName, 
                 Source = content,
                 Classes = [.. classes], 
@@ -54,8 +56,9 @@ namespace NEN
 
         private ClassNode ParseClass()
         {
-            var (line, column) = GetCurrentPosition();
+            var (startLine, startColumn) = GetCurrentStartPosition();
             var classIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên lớp");
+            var (endLine, endColumn) = GetPreviousEndPosition();
             List<MethodNode> methods = [];
             List<FieldDeclarationStatement> fields = [];
             while (Current() != null && Current()!.Value != "kết_thúc")
@@ -93,7 +96,15 @@ namespace NEN
             }
             if (Current() == null) OutOfTokenHelper("kết_thúc");
             Consume();
-            return new ClassNode { Name = classIdentifier!.Value, Methods = [.. methods], Fields = [..fields], Line = line, Column = column };
+            return new ClassNode { 
+                Name = classIdentifier!.Value, 
+                Methods = [.. methods], 
+                Fields = [..fields], 
+                StartLine = startLine, 
+                StartColumn = startColumn,
+                EndLine = endLine,
+                EndColumn = endColumn 
+            };
         }
 
         private static readonly string[] markers = [
@@ -102,27 +113,27 @@ namespace NEN
 
         private (MethodNode?, FieldDeclarationStatement?) ParseMarker(MethodAttributes methodAttributes = MethodAttributes.Private, FieldAttributes fieldAttributes = FieldAttributes.Private, bool isEntryPoint = false)
         {
-            var (line, column) = GetCurrentPosition();
+            var (line, column) = GetCurrentStartPosition();
             var annotationIdentifier = ConsumeOrThrow(TokenType.Identifier, "thuộc tính phương thức");
-            if (!markers.Contains(annotationIdentifier.Value)) throw new ExpectedException(content, "thuộc tính phương thức", line, column);
+            if (!markers.Contains(annotationIdentifier.Value)) throw new ExpectedException(content, "thuộc tính phương thức", annotationIdentifier.StartLine, annotationIdentifier.StartColumn, annotationIdentifier.EndLine, annotationIdentifier.EndColumn);
             switch(annotationIdentifier.Value)
             {
                 case "Chính":
-                    if (isEntryPoint == true) throw new RedefinedException(content, "@Chính", line, column);
+                    if (isEntryPoint == true) throw new RedefinedException(content, "@Chính", annotationIdentifier.StartLine, annotationIdentifier.StartColumn, annotationIdentifier.EndLine, annotationIdentifier.EndColumn);
                     isEntryPoint = true;
                     break;
                 case "Công_Khai":
-                    if (methodAttributes.HasFlag(MethodAttributes.Public)) throw new RedefinedException(content, "@Công_Khai", line, column);
+                    if (methodAttributes.HasFlag(MethodAttributes.Public)) throw new RedefinedException(content, "@Công_Khai", annotationIdentifier.StartLine, annotationIdentifier.StartColumn, annotationIdentifier.EndLine, annotationIdentifier.EndColumn);
                     methodAttributes &= ~MethodAttributes.Private;
                     methodAttributes |= MethodAttributes.Public;
-                    if (fieldAttributes.HasFlag(FieldAttributes.Public)) throw new RedefinedException(content, "@Công_Khai", line, column);
+                    if (fieldAttributes.HasFlag(FieldAttributes.Public)) throw new RedefinedException(content, "@Công_Khai", annotationIdentifier.StartLine, annotationIdentifier.StartColumn, annotationIdentifier.EndLine, annotationIdentifier.EndColumn);
                     fieldAttributes &= ~FieldAttributes.Private;
                     fieldAttributes |= FieldAttributes.Public;
                     break;
                 case "Tĩnh":
-                    if (methodAttributes.HasFlag(MethodAttributes.Static)) throw new RedefinedException(content, "@Tĩnh", line, column);
+                    if (methodAttributes.HasFlag(MethodAttributes.Static)) throw new RedefinedException(content, "@Tĩnh", annotationIdentifier.StartLine, annotationIdentifier.StartColumn, annotationIdentifier.EndLine, annotationIdentifier.EndColumn);
                     methodAttributes |= MethodAttributes.Static;
-                    if (fieldAttributes.HasFlag(FieldAttributes.Static)) throw new RedefinedException(content, "@Tĩnh", line, column);
+                    if (fieldAttributes.HasFlag(FieldAttributes.Static)) throw new RedefinedException(content, "@Tĩnh", annotationIdentifier.StartLine, annotationIdentifier.StartColumn, annotationIdentifier.EndLine, annotationIdentifier.EndColumn);
                     fieldAttributes |= FieldAttributes.Static;
                     break;
                 default:
@@ -138,14 +149,16 @@ namespace NEN
                 case "thuộc_tính":
                     return (null, ParseFieldDeclarationStatement(fieldAttributes));
                 default:
-                    throw new ExpectedException(content, "phương_thức", GetCurrentLine(), GetCurrentColumn());
+                    var (el, ec) = GetCurrentEndPosition();
+                    throw new ExpectedException(content, "phương_thức", GetCurrentLine(), GetCurrentColumn(), el, ec);
             }
         }
 
         private MethodNode ParseMethod(MethodAttributes methodAttributes = MethodAttributes.Private, bool isEntryPoint = false)
         {
-            var (line, column) = GetCurrentPosition();
+            var (startLine, startColumn) = GetCurrentStartPosition();
             var methodIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên phương thức");
+            var (endLine, endColumn) = GetPreviousEndPosition();
             ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "(");
             // TODO: Parse parameters
             List<VariableNode> parameters = [];
@@ -154,7 +167,14 @@ namespace NEN
                 var parameterIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên tham số");
                 ConsumeOrThrowIfNotEqual(TokenType.Keyword, "thuộc");
                 var type = ParseType();
-                parameters.Add(new VariableNode { Name = parameterIdentifier.Value, TypeNode = type, Line = parameterIdentifier.Line, Column = parameterIdentifier.Column });
+                parameters.Add(new VariableNode { 
+                    Name = parameterIdentifier.Value, 
+                    TypeNode = type, 
+                    StartLine = parameterIdentifier.StartLine, 
+                    StartColumn = parameterIdentifier.StartColumn, 
+                    EndLine = parameterIdentifier.EndLine, 
+                    EndColumn = parameterIdentifier.EndColumn 
+                });
                 if (Current() != null && Current()!.Value != ")") ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ",");
             }
             ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ")");
@@ -168,17 +188,31 @@ namespace NEN
             }
             if (Current() == null) OutOfTokenHelper("kết_thúc");
             Consume();
-            return new MethodNode { IsEntryPoint = isEntryPoint, MethodAttributes = methodAttributes, MethodName = methodIdentifier.Value, Parameters = [.. parameters], ReturnTypeNode = returnTypeIdentifier, Statements = [.. statements], Line = line, Column = column };
+            return new MethodNode { 
+                IsEntryPoint = isEntryPoint, 
+                MethodAttributes = methodAttributes, 
+                MethodName = methodIdentifier.Value, 
+                Parameters = [.. parameters], 
+                ReturnTypeNode = returnTypeIdentifier, 
+                Statements = [.. statements], 
+                StartLine = startLine, 
+                StartColumn = startColumn,
+                EndLine = endLine,
+                EndColumn = endColumn 
+            };
         }
 
         private FieldDeclarationStatement ParseFieldDeclarationStatement(FieldAttributes fieldAttributes = FieldAttributes.Private)
         {
-            var (line, column) = GetCurrentPosition();
-            var fieldDeclaration = ParseVariableDeclarationStatement(line, column);
+            var (startLine, startColumn) = GetCurrentStartPosition();
+            var fieldDeclaration = ParseVariableDeclarationStatement(startLine, startColumn);
+            var (endLine, endColumn) = GetPreviousEndPosition();
             return new FieldDeclarationStatement
             {
-                Line = line,
-                Column = column,
+                StartLine = startLine,
+                StartColumn = startColumn,
+                EndLine = endLine,
+                EndColumn = endColumn,
                 FieldAttributes = fieldAttributes,
                 Variable = fieldDeclaration.Variable,
                 InitialValue = fieldDeclaration.InitialValue
@@ -187,7 +221,7 @@ namespace NEN
 
         private StatementNode ParseStatement()
         {
-            var (line, column) = GetCurrentPosition();
+            var (line, column) = GetCurrentStartPosition();
             var token = Consume(); // this token is guaranteed not null from ParseMethod()
             switch (token!.Type)
             {
@@ -203,7 +237,12 @@ namespace NEN
                         case "trong_khi":
                             return ParseWhileStatement(line, column);
                         case "thoát":
-                            return new BreakStatement { Line = line, Column = column };
+                            return new BreakStatement { 
+                                StartLine = token.StartLine, 
+                                StartColumn = token.StartColumn, 
+                                EndLine = token.EndLine, 
+                                EndColumn = token.EndColumn
+                            };
                         default:
                             UnexpectedHelper(token);
                             throw new();
@@ -213,7 +252,7 @@ namespace NEN
             }
         }
 
-        private StatementNode ParseWhileStatement(int line, int column)
+        private StatementNode ParseWhileStatement(int startLine, int startColumn)
         {
             var condition = ParseExpression(0);
             ConsumeOrThrowIfNotEqual(TokenType.Keyword, "thì");
@@ -224,16 +263,19 @@ namespace NEN
                 ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ";");
             }
             ConsumeOrThrowIfNotEqual(TokenType.Keyword, "kết_thúc");
+            var (endLine, endColumn) = GetPreviousEndPosition();
             return new WhileStatement
             {
                 Condition = condition,
                 Body = [.. body],
-                Line = line,
-                Column = column
+                StartLine = startLine,
+                StartColumn = startColumn,
+                EndLine = endLine,
+                EndColumn = endColumn
             };
         }
 
-        private IfStatement ParseIfStatement(int line, int column)
+        private IfStatement ParseIfStatement(int startLine, int startColumn)
         {
             var condition = ParseExpression(0);
             ConsumeOrThrowIfNotEqual(TokenType.Keyword, "thì");
@@ -258,44 +300,72 @@ namespace NEN
             }
             else SetBack();
             ConsumeOrThrowIfNotEqual(TokenType.Keyword, "kết_thúc");
+            var (endLine, endColumn) = GetPreviousEndPosition();
             return new IfStatement { 
                 Condition = condition,
                 IfClause = [..ifClause],
                 ElseClause = [..elseClause],
-                Line = line,
-                Column = column
+                StartLine = startLine,
+                StartColumn = startColumn,
+                EndLine = endLine,
+                EndColumn = endColumn
             };
         }
 
-        private ReturnStatement ParseReturnStatement(int line, int column)
+        private ReturnStatement ParseReturnStatement(int startLine, int startColumn)
         {
-            if (Current()?.Value == ";") 
-                return new ReturnStatement { 
-                    Line = line, 
-                    Column = column 
+            if (Current()?.Value == ";")
+            {
+                var (endLine_, endColumn_) = GetPreviousEndPosition();
+                return new ReturnStatement
+                {
+                    StartLine = startLine,
+                    StartColumn = startColumn,
+                    EndLine = endLine_,
+                    EndColumn = endColumn_
                 };
+            }
+                
             var expression = ParseExpression(0);
+            var (endLine, endColumn) = GetPreviousEndPosition();
             return new ReturnStatement { 
                 Expression = expression, 
-                Line = line, 
-                Column = column 
+                StartLine = startLine, 
+                StartColumn = startColumn,
+                EndLine = endLine,
+                EndColumn = endColumn 
             };
         }
 
         private StatementNode ParseExpressionStatementOrAssignmentStatement()
         {
             SetBack();
-            var (line, column) = GetCurrentPosition();
+            var (startLine, startColumn) = GetCurrentStartPosition();
             var dest = ParsePrimary();
             if (Current()?.Value == "gán")
             {
                 ConsumeOrThrowIfNotEqual(TokenType.Keyword, "gán");
                 var src = ParseExpression(0);
-                return new AssignmentStatement { Destination = dest, Source = src, Line = line, Column = column };
+                var (endLine, endColumn) = GetPreviousEndPosition();
+                return new AssignmentStatement { 
+                    Destination = dest, 
+                    Source = src, 
+                    StartLine = startLine, 
+                    StartColumn = startColumn,
+                    EndLine = endLine,
+                    EndColumn = endColumn 
+                };
             }
             else
             {
-                return new ExpressionStatement { Expression = dest, Line = line, Column = column };
+                var (endLine, endColumn) = GetPreviousEndPosition();
+                return new ExpressionStatement { 
+                    Expression = dest, 
+                    StartLine = startLine, 
+                    StartColumn = startColumn,
+                    EndLine = endLine,
+                    EndColumn = endColumn 
+                };
             }
         }
 
@@ -313,7 +383,7 @@ namespace NEN
             return [.. arguments];
         }
 
-        private VariableDeclarationStatement ParseVariableDeclarationStatement(int line, int column)
+        private VariableDeclarationStatement ParseVariableDeclarationStatement(int startLine, int startColumn)
         {
             var variableIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên biến");
             ConsumeOrThrowIfNotEqual(TokenType.Keyword, "thuộc");
@@ -324,24 +394,29 @@ namespace NEN
                 ConsumeOrThrowIfNotEqual(TokenType.Keyword, "gán"); // will never happen but ok
                 initialValue = ParseExpression(0);
             }
+            var (endLine, endColumn) = GetPreviousEndPosition();
             return new VariableDeclarationStatement
             {
                 Variable = new VariableNode
                 {
                     Name = variableIdentifier.Value,
                     TypeNode = typeIdentifier,
-                    Line = variableIdentifier.Line,
-                    Column = variableIdentifier.Column
+                    StartLine = variableIdentifier.StartLine,
+                    StartColumn = variableIdentifier.StartColumn,
+                    EndLine = variableIdentifier.EndLine,
+                    EndColumn = variableIdentifier.EndColumn
                 },
                 InitialValue = initialValue,
-                Line = line,
-                Column = column
+                StartLine = startLine,
+                StartColumn = startColumn,
+                EndLine = endLine,
+                EndColumn = endColumn
             };
         }
 
-        private (string[], int, int) ParseIdentifier()
+        private (string[], int, int, int, int) ParseIdentifier()
         {
-            var (line, column) = GetCurrentPosition();
+            var (startLine, startColumn) = GetCurrentStartPosition();
             List<string> identifiers = [];
             do
             {
@@ -350,12 +425,13 @@ namespace NEN
                 if (Current()?.Value != "::") break;
                 ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "::");
             } while (true);
-            return ([.. identifiers], line, column);
+            var (endLine, endColumn) = GetPreviousEndPosition();
+            return ([.. identifiers], startLine, startColumn, endLine, endColumn);
         }
 
         private ExpressionNode ParseExpression(int minPrecedence)
         {
-            var (line, column) = GetCurrentPosition();
+            var (startLine, startColumn) = GetCurrentStartPosition();
             ExpressionNode left = ParsePrimary();
             while(true)
             {
@@ -366,7 +442,16 @@ namespace NEN
                 }
                 var op = Consume()!; // should never be null
                 var right = ParseExpression(precedence + 1);
-                left = new BinaryExpression { Left = left, Operator = op.Value, Right = right, Line = line, Column = column };
+                var (endLine, endColumn) = GetPreviousEndPosition();
+                left = new BinaryExpression { 
+                    Left = left, 
+                    Operator = op.Value, 
+                    Right = right, 
+                    StartLine = startLine, 
+                    StartColumn = startColumn,
+                    EndLine = endLine,
+                    EndColumn = endColumn 
+                };
             }
             return left;
         }
@@ -374,18 +459,32 @@ namespace NEN
         private ExpressionNode ParsePrimary()
         {
             ExpressionNode? expression = null;
-            var (line, column) = GetCurrentPosition();
+            var (startLine, startColumn) = GetCurrentStartPosition();
             var token = ConsumeOrThrow(TokenType.Literal | TokenType.Identifier | TokenType.Punctuator | TokenType.Keyword, "biểu thức");
             switch (token.Type)
             {
                 case TokenType.Literal:
-                    expression = new LiteralExpression { Value = token.Value, Line = token.Line, Column = token.Column };
+                    expression = new LiteralExpression { 
+                        Value = token.Value, 
+                        StartLine = token.StartLine, 
+                        StartColumn = token.StartColumn,
+                        EndLine = token.EndLine,
+                        EndColumn = token.EndColumn 
+                    };
                     break;
                 case TokenType.Identifier:
                     if (Current()?.Value == "(")
                     {
+                        var (endLine, endColumn) = GetPreviousEndPosition();
                         var arguments = ParseArguments();
-                        expression = new AmbiguousMethodCallExpression { MethodName = token.Value, Arguments = arguments, Line = line, Column = column };
+                        expression = new AmbiguousMethodCallExpression { 
+                            MethodName = token.Value, 
+                            Arguments = arguments, 
+                            StartLine = startLine, 
+                            StartColumn = startColumn,
+                            EndLine = endLine,
+                            EndColumn = endColumn 
+                        };
                     }
                     else if (Current()?.Value == "::")
                     {
@@ -394,7 +493,13 @@ namespace NEN
                     }
                     else
                     {
-                        expression = new VariableExpression { Name = token.Value, Line = token.Line, Column = token.Column };
+                        expression = new VariableExpression { 
+                            Name = token.Value, 
+                            StartLine = token.StartLine, 
+                            StartColumn = token.StartColumn,
+                            EndLine = token.EndLine,
+                            EndColumn = token.EndColumn 
+                        };
                     }
                     break;
                 case TokenType.Punctuator:
@@ -437,15 +542,18 @@ namespace NEN
         private ExpressionNode ParseStandardMethodCallOrFieldAccessmentExpression(ExpressionNode objectNode)
         {
             ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ".");
-            var (line, column) = GetCurrentPosition();
+            var (startLine, startColumn) = GetCurrentStartPosition();
             var identifier = ConsumeOrThrow(TokenType.Identifier, "tên thuộc tính/tên phương thức");
+            var (endLine, endColumn) = GetPreviousEndPosition();
             if (Current() != null && Current()?.Value != "(")
             {
                 return new StandardFieldAccessmentExpression { 
                     Object = objectNode, 
                     FieldName = identifier.Value, 
-                    Line = line, 
-                    Column = column 
+                    StartLine = startLine, 
+                    StartColumn = startColumn,
+                    EndLine = endLine,
+                    EndColumn = endColumn
                 };
             }
             var arguments = ParseArguments();
@@ -453,29 +561,40 @@ namespace NEN
                 Object = objectNode, 
                 MethodName = identifier.Value, 
                 Arguments = arguments, 
-                Line = line, 
-                Column = column 
+                StartLine = startLine, 
+                StartColumn = startColumn,
+                EndLine = endLine,
+                EndColumn = endColumn 
             };
         }
 
         private ArrayIndexingExpression ParseArrayIndexingExpression(ExpressionNode objectNode)
         {
             ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "[");
-            var (line, column) = GetCurrentPosition();
+            var (line, column) = GetCurrentStartPosition();
             var indexNode = ParseExpression(0);
             ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "]");
-            return new ArrayIndexingExpression { Array = objectNode, Index = indexNode, Line = line, Column = column };
+            return new ArrayIndexingExpression { 
+                Array = objectNode, 
+                Index = indexNode, 
+                StartLine = line, 
+                StartColumn = column,
+                EndLine = line,
+                EndColumn = column 
+            };
         }
 
         private ExpressionNode ParseNewExpression()
         {
-            var (typeIdentifiers, line, column) = ParseIdentifier();
+            var (typeIdentifiers, startLine, startColumn, endLine, endColumn) = ParseIdentifier();
             TypeNode type = new NamedType
             {
                 Namespaces = typeIdentifiers[0..^1],
                 Name = typeIdentifiers[^1],
-                Line = line,
-                Column = column
+                StartLine = startLine,
+                StartColumn = startColumn,
+                EndLine = endLine,
+                EndColumn = endColumn
             };
             int nesting = 1;
             ExpressionNode? size = null;
@@ -492,8 +611,10 @@ namespace NEN
                     ElementTypeNode = type,
                     Namespaces = type.Namespaces,
                     Name = $"{type.Name}[]",
-                    Line = line,
-                    Column = column
+                    StartLine = startLine,
+                    StartColumn = startColumn,
+                    EndLine = endLine,
+                    EndColumn = endColumn
                 };
                 nesting++;
             }
@@ -515,8 +636,10 @@ namespace NEN
                         ReturnTypeNode = arrayType, 
                         Size = size, 
                         Elements = [..elements], 
-                        Line = line, 
-                        Column = column 
+                        StartLine = startLine, 
+                        StartColumn = startColumn,
+                        EndLine = endLine,
+                        EndColumn = endColumn 
                     };
                 case NamedType namedType:
                     List<AssignmentStatement> assignments = [];
@@ -525,21 +648,33 @@ namespace NEN
                         ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "{");
                         while (Current() != null && Current()?.Value != "}")
                         {
-                            var (assignmentLine, assignmentColumn) = GetCurrentPosition();
+                            var (startAssignmentLine, startAssignmentColumn) = GetCurrentStartPosition();
                             var fieldIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên thuộc tính");
+                            var (endFieldLine, endFieldColumn) = GetPreviousEndPosition();
                             ConsumeOrThrowIfNotEqual(TokenType.Keyword, "gán");
                             var value = ParseExpression(0);
+                            var (endAssignmentLine, endAssignmentColumn) = GetPreviousEndPosition();
                             assignments.Add(new AssignmentStatement { 
                                 Destination = new StandardFieldAccessmentExpression {
                                     ReturnTypeNode = namedType,
-                                    Object = new DuplicateExpression { ReturnTypeNode = namedType, Line = assignmentLine, Column = assignmentColumn },
+                                    Object = new DuplicateExpression { 
+                                        ReturnTypeNode = namedType, 
+                                        StartLine = startAssignmentLine, 
+                                        StartColumn = startAssignmentColumn,
+                                        EndLine = endFieldLine,
+                                        EndColumn = endFieldColumn
+                                    },
                                     FieldName = fieldIdentifier.Value,
-                                    Line = assignmentLine,
-                                    Column = assignmentColumn
+                                    StartLine = startAssignmentLine,
+                                    StartColumn = startAssignmentColumn,
+                                    EndLine = endFieldLine,
+                                    EndColumn = endFieldColumn
                                 },
                                 Source = value,
-                                Line = assignmentLine,
-                                Column = assignmentColumn
+                                StartLine = startAssignmentLine,
+                                StartColumn = startAssignmentColumn,
+                                EndLine = endAssignmentLine,
+                                EndColumn = endAssignmentColumn
                             });
                             if (Current() != null && Current()?.Value != "}") ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ",");
                         }
@@ -548,8 +683,10 @@ namespace NEN
                     return new NewObjectExpression { 
                         ReturnTypeNode = namedType, 
                         FieldInitializations = [..assignments] , 
-                        Line = line, 
-                        Column = column 
+                        StartLine = startLine, 
+                        StartColumn = startColumn,
+                        EndLine = endLine,
+                        EndColumn = endColumn 
                     };
                 default:
                     throw new NotImplementedException();
@@ -558,13 +695,15 @@ namespace NEN
 
         private TypeNode ParseType()
         {
-            var (typeIdentifiers, line, column) = ParseIdentifier();
+            var (typeIdentifiers, startLine, startColumn, endLine, endColumn) = ParseIdentifier();
             TypeNode type = new NamedType
             {
                 Namespaces = typeIdentifiers[0..^1],
                 Name = typeIdentifiers[^1],
-                Line = line,
-                Column = column
+                StartLine = startLine,
+                StartColumn = startColumn,
+                EndLine = endLine,
+                EndColumn = endColumn
             };
             while (Current()?.Value == "[")
             {
@@ -575,8 +714,10 @@ namespace NEN
                     ElementTypeNode = type,
                     Namespaces = type.Namespaces,
                     Name = $"{type.Name}[]",
-                    Line = line,
-                    Column = column
+                    StartLine = startLine,
+                    StartColumn = startColumn,
+                    EndLine = endLine,
+                    EndColumn = endColumn
                 };
             }
             return type;
@@ -584,13 +725,15 @@ namespace NEN
 
         private ExpressionNode ParseStaticAccessment()
         {
-            var (identifier, line, column) = ParseIdentifier();
+            var (identifier, startLine, startColumn, endLine, endColumn) = ParseIdentifier();
             NamedType type = new()
             {
                 Namespaces = identifier[0..^2],
                 Name = identifier[^2],
-                Line = line,
-                Column = column
+                StartLine = startLine,
+                StartColumn = startColumn,
+                EndLine = endLine,
+                EndColumn = endColumn
             };
             if (Current() != null && Current()?.Value != "(")
             {
@@ -598,8 +741,10 @@ namespace NEN
                 {
                     TypeNode = type,
                     FieldName = identifier[^1],
-                    Line = line,
-                    Column = column
+                    StartLine = startLine,
+                    StartColumn = startColumn,
+                    EndLine = endColumn,
+                    EndColumn = endColumn
                 };
             }
             var arguments = ParseArguments();
@@ -608,8 +753,10 @@ namespace NEN
                 TypeNode = type,
                 Arguments = arguments,
                 MethodName = identifier[^1],
-                Line = line,
-                Column = column
+                StartLine = startLine,
+                StartColumn = startColumn,
+                EndLine = endLine,
+                EndColumn = endColumn
             };
         }
 
@@ -617,14 +764,14 @@ namespace NEN
 
         private void UnexpectedHelper(Token token)
         {
-            throw new UnexpectedException(content, token.Value, token.Line, token.Column);
+            throw new UnexpectedException(content, token.Value, token.StartLine, token.StartColumn, token.EndLine, token.EndColumn);
         }
 
         private Token ConsumeOrThrow(TokenType expectedTokenTypes, string expected)
         {
             var token = Consume();
             if (token == null) OutOfTokenHelper(expected);
-            else if (!expectedTokenTypes.HasFlag(token.Type)) throw new ExpectedException(content, expected, token.Line, token.Column);
+            else if (!expectedTokenTypes.HasFlag(token.Type)) throw new ExpectedException(content, expected, token.StartLine, token.StartColumn, token.EndLine, token.EndColumn);
             return token!;
         }
 
@@ -638,7 +785,7 @@ namespace NEN
         private Token ConsumeOrThrowIfNotEqual(TokenType expectedTokenTypes, string expected)
         {
             var token = ConsumeOrThrow(expectedTokenTypes, expected);
-            if (token.Value != expected) throw new ExpectedException(content, expected, token.Line, token.Column);
+            if (token.Value != expected) throw new ExpectedException(content, expected, token.StartLine, token.StartColumn, token.EndLine, token.EndColumn);
             return token;
         }
 
@@ -647,6 +794,8 @@ namespace NEN
             throw new ExpectedException(
                 content,
                 expected,
+                GetCurrentLine(),
+                GetCurrentColumn() + GetCurrentLength() + 1,
                 GetCurrentLine(),
                 GetCurrentColumn() + GetCurrentLength() + 1
             );
@@ -717,23 +866,40 @@ namespace NEN
 
         private int GetCurrentLine()
         {
-            return tokens[index].Line; 
+            return tokens[index].StartLine; 
         }
         private int GetCurrentColumn()
         {
-            return tokens[index].Column;
+            return tokens[index].StartColumn;
         }
         private int GetCurrentLength()
         {
             return tokens[index].Value.Length;
         }
-        private (int, int) GetCurrentPosition()
+        private (int, int) GetCurrentEndPosition()
         {
             if (index >= tokens.Length)
             {
                 return (-1, -1);
             }
-            return (tokens[index].Line, tokens[index].Column);
+            return (tokens[index].EndLine, tokens[index].EndColumn);
+        }
+        private (int, int) GetPreviousEndPosition()
+        {
+            if (index - 1 < 0)
+            {
+                return (-1, -1);
+            }
+            return (tokens[index - 1].EndLine, tokens[index - 1].EndColumn);
+        }
+
+        private (int, int) GetCurrentStartPosition()
+        {
+            if (index >= tokens.Length)
+            {
+                return (-1, -1);
+            }
+            return (tokens[index].StartLine, tokens[index].StartColumn);
         }
         private bool SetBack()
         {

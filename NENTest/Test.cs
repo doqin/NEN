@@ -77,7 +77,7 @@ namespace NENTest
         static private void GeneralStaticAnalyzerTest<T>(string fileName, bool printTokens = false) where T : NENException
         {
             (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
-            PrintTokens(tokens);
+            // PrintTokens(tokens);
             var parser = new Parser(fileName, lines, tokens);
             var modulePart = parser.Parse();
             if (printTokens)
@@ -99,7 +99,7 @@ namespace NENTest
 
         static private void GeneralAssemblerTest<T>(string fileName) where T : NENException
         {
-            (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
+            (string[] lines, Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
             // PrintTokens(tokens);
             var parser = new Parser(fileName, lines, tokens);
             var modulePart = parser.Parse();
@@ -209,7 +209,7 @@ namespace NENTest
             Console.WriteLine($"{topBar}\n{topBarLine}");
             foreach (NEN.Types.Token token in tokens)
             {
-                Console.WriteLine($"{token.Value.PadRight(valuePadding)} | {token.Type,-10} | {token.Line,-4} | {token.Column,-4}");
+                Console.WriteLine($"{token.Value.PadRight(valuePadding)} | {token.Type,-10} | {token.StartLine,-4} | {token.StartColumn,-4}");
             }
         }
     }

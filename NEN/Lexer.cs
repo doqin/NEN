@@ -16,7 +16,16 @@ namespace NEN
                 foreach (Match match in matches)
                 {
                     var matchType = GetMatchType(match);
-                    tokens.Add(new Token { Type = matchType, Value = match.Value, Line = i, Column = match.Index + 1 });
+                    var startColumn = match.Index + 1;
+                    var endColumn = startColumn + match.Value.Length - 1;
+                    tokens.Add(new Token { 
+                        Type = matchType, 
+                        Value = match.Value, 
+                        StartLine = i, 
+                        StartColumn = startColumn,
+                        EndLine = i,
+                        EndColumn = endColumn
+                    });
                 }
             }
             Lexer.Analyse( tokens);
