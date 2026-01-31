@@ -20,7 +20,14 @@ namespace TBDNEN
             string workingDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
             if (args[0] == "xay")
             {
-                Build(workingDirectory);
+                try
+                {
+                    Build(workingDirectory);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine(ex);
+                }
             }
             else
             {
@@ -37,8 +44,7 @@ namespace TBDNEN
             }
             catch (Exception)
             {
-                Console.Error.WriteLine("Không tìm thấy tệp duannen.json");
-                return;
+                throw new("Không tìm thấy tệp duannen.json");
             }
             DuAnNen? projMetadata = null;
             try
@@ -47,8 +53,7 @@ namespace TBDNEN
             }
             catch (Exception)
             {
-                Console.Error.WriteLine("Tệp duannen.json không định dạng đúng cú pháp");
-                return;
+                throw new("Tệp duannen.json không định dạng đúng cú pháp");
             }
             List<NEN.Types.ModulePart> moduleParts = [];
             try
@@ -59,13 +64,12 @@ namespace TBDNEN
                     {
                         projMetadata.nguồn[file.Index] = Path.Combine(workingDirectory, file.Item);
                     }
-                    if (!File.Exists(file.Item)) throw new FileNotFoundException(null, file.Item);
+                    if (!File.Exists(projMetadata.nguồn[file.Index])) throw new FileNotFoundException(null, projMetadata.nguồn[file.Index]);
                 }
             }
             catch (FileNotFoundException f)
             {
-                Console.Error.WriteLine($"Không tìm thấy tệp nào tên '{f.FileName}'");
-                return;
+                throw new($"Không tìm thấy tệp nào tên '{f.FileName}'");
             }
             Directory.CreateDirectory(Path.Combine(workingDirectory, projMetadata!.đích)!);
             foreach (var fileName in projMetadata!.nguồn)
@@ -77,7 +81,7 @@ namespace TBDNEN
             }
             var analyzer = new StaticAnalyzer(projMetadata.tên, [.. moduleParts], []);
             var module = analyzer.Analyze();
-            var assembler = new Assembler(module, projMetadata.đích);
+            var assembler = new Assembler(module, Path.Combine(workingDirectory, projMetadata!.đích)!);
             assembler.Assemble();
             Console.WriteLine($"Hoàn thành biên dịch! OK");
         }

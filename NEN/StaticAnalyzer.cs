@@ -1158,6 +1158,7 @@ namespace NEN
                             string stn = string.Join("::", tempType.FullName!.Split("."));
                             throw new AmbiguousTypeUsage(modulePart.Source, tn, ftn, stn, typeNode.Line, typeNode.Column);
                         }
+                        if (tempType == null && type != null) continue;
                         type = tempType;
                     }
                     if (type == null)

@@ -8,6 +8,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Example sources\AssemblyTest\xây\**" />
+    <EmbeddedResource Remove="Example sources\AssemblyTest\xây\**" />
+    <None Remove="Example sources\AssemblyTest\xây\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="MSTest" Version="4.0.1" />
     <PackageReference Include="System.Reflection.MetadataLoadContext" Version="10.0.2" />
   </ItemGroup>

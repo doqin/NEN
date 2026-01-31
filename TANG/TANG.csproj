@@ -13,6 +13,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\TBDNEN\TBDNEN.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Update="Nen.xshd">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

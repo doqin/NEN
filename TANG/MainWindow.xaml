@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:TANG"
         mc:Ignorable="d"
-        Title="T.Ả.N.G." Height="450" Width="800"
+        Title="T.Ả.N.G." Height="730" Width="1235"
         xmlns:avalonedit="http://icsharpcode.net/sharpdevelop/avalonedit" Loaded="Window_Loaded">
     <Grid>
         <DockPanel>
@@ -15,6 +15,9 @@
 
                     </MenuItem>
                     <MenuItem x:Name="Open" Header="Mở" Click="Open_Click">
+
+                    </MenuItem>
+                    <MenuItem x:Name="Save" Header="Lưu" Click="Save_Click">
 
                     </MenuItem>
                     <MenuItem Header="Thoát">
@@ -33,11 +36,24 @@
                     </MenuItem>
                 </MenuItem>
             </Menu>
-            <Grid Margin="5, 5">
+            <ToolBarTray DockPanel.Dock="Top" Background="Transparent">
+                <ToolBar Band="1" 
+                         BandIndex="1" 
+                         Margin="4" 
+                         Background="#00000000"
+                         BorderBrush="#FFACACAC" 
+                         BorderThickness="1">
+                    <Button Content="Quay lại"/>
+                    <Button Content="Hồi phục"/>
+                    <Button x:Name="Build" Content="Xây dựng" Click="Build_Click"/>
+                    <Button x:Name="Run" Content="Chạy" Click="Run_Click"/>
+                </ToolBar>
+            </ToolBarTray>
+            <Grid Margin="5,0,5,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition/>
                     <ColumnDefinition Width="5"/>
-                    <ColumnDefinition Width="230"/>
+                    <ColumnDefinition Width="300"/>
                 </Grid.ColumnDefinitions>
                 <TabControl x:Name="editorTab">
                     <TabControl.ItemTemplate>
@@ -64,10 +80,13 @@
                         </DataTemplate>
                     </TabControl.ContentTemplate>
                 </TabControl>
-                
-                <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch"/>
-                <TreeView x:Name="explorer" Grid.Column="2">
-                </TreeView>
+
+                <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" Background="Transparent"/>
+                <GroupBox Header="Duyệt tệp tin" Grid.Column="2">
+                    <TreeView x:Name="explorer">
+                    </TreeView>
+                </GroupBox>
+
             </Grid>
         </DockPanel>
     </Grid>

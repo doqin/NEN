@@ -1,0 +1,7 @@
+{
+	"tên": "AssemblyTest",
+	"nguồn": [
+		"Chương_Trình.nen", "Người.nen", "Phụ.nen"
+	],
+	"đích": "xây"
+}

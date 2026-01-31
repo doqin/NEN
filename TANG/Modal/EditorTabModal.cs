@@ -9,6 +9,7 @@ using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows.Controls;
 using System.Xml;
 
 namespace TANG.Modal
@@ -17,6 +18,7 @@ namespace TANG.Modal
     {
         public required string Header { get; set; }
         public required string Text { get; set; }
+        public required string Path { get; set; }
     }
     internal class EditorTabModal
     {
@@ -27,16 +29,18 @@ namespace TANG.Modal
             Tabs = [];
         }
 
-        public void Add(string tabName, string path)
+        public void Add(TabControl tabControl, string tabName, string path)
         {
             if (Tabs.Any(t => t.Header == tabName)) return;
             var content = File.ReadAllText(path);
-            Tabs.Add(
-                new EditorTabItem { 
-                        Header = tabName,
-                        Text = content
-                    }
-                );
+            var tabItem = new EditorTabItem
+            {
+                Header = tabName,
+                Text = content,
+                Path = path
+            };
+            Tabs.Add(tabItem);
+            tabControl.SelectedItem = tabItem;
         }
 
         public void Remove(string tabName)

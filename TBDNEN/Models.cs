@@ -8,7 +8,7 @@ namespace TBDNEN
 {
     namespace Models
     {
-        class DuAnNen
+        public class DuAnNen
         {
             public required string tên { get; set; }
             public required string[] nguồn { get; set; }
