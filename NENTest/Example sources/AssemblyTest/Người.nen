@@ -22,6 +22,8 @@ lớp Người
     @Công_Khai thuộc_tính Tuổi thuộc Int32;
 
     thuộc_tính giấu thuộc Int32 gán 15;
+    
+    thuộc_tính test thuộc Int32 gán 20;
 
     phương_thức Test1() -> Void
         Console::WriteLine("Test1");

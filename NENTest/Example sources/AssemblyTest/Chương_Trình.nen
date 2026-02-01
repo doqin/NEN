@@ -4,6 +4,8 @@ sử_dụng System;
 lớp Chương_Trình
     @Chính @Tĩnh
     phương_thức Chính() -> Void
+    	biến a thuộc String gán "123";
+    	Console::WriteLine(a);
     	Console::WriteLine("Xin chào");
     	Thư_Viện::In("Chào .NET 9!");
         Phụ::Test("Foo");

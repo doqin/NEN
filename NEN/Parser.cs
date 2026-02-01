@@ -211,8 +211,8 @@ namespace NEN
             {
                 StartLine = startLine,
                 StartColumn = startColumn,
-                EndLine = endLine,
-                EndColumn = endColumn,
+                EndLine = fieldDeclaration.Variable.EndLine,
+                EndColumn = fieldDeclaration.Variable.EndColumn,
                 FieldAttributes = fieldAttributes,
                 Variable = fieldDeclaration.Variable,
                 InitialValue = fieldDeclaration.InitialValue

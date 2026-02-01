@@ -139,6 +139,7 @@ namespace TANG
         {
             try
             {
+                Cursor = Cursors.Wait;
                 TBDNEN.Program.Build(workingDirectory);
                 explorer.Items.Clear();
                 AddTreeItem(explorer, workingDirectory);
@@ -146,6 +147,10 @@ namespace TANG
             catch (Exception ex)
             {
                 MessageBox.Show(ex.Message);
+            }
+            finally
+            {
+                Cursor = Cursors.Arrow;
             }
         }
 

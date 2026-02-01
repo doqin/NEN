@@ -1,5 +1,6 @@
 ﻿using System.Text.RegularExpressions;
 using NEN.Types;
+using System.Linq;
 
 namespace NEN
 {
@@ -29,6 +30,37 @@ namespace NEN
                 }
             }
             Lexer.Analyse( tokens);
+            return (lines, [.. tokens]);
+        }
+
+        public static (string[], Token[]) TokenizeFromText(string content)
+        {
+            var lines = content
+                .Replace("\r\n", "\n")
+                .Replace("\r", "\n")
+                .Split('\n');
+            var regex = LexerRegex();
+            List<Token> tokens = [];
+            foreach (var (value, i) in lines.Select((value, i) => (value, i + 1)))
+            {
+                var matches = regex.Matches(value);
+                foreach (Match match in matches)
+                {
+                    var matchType = GetMatchType(match);
+                    var startColumn = match.Index + 1;
+                    var endColumn = startColumn + match.Value.Length - 1;
+                    tokens.Add(new Token
+                    {
+                        Type = matchType,
+                        Value = match.Value,
+                        StartLine = i,
+                        StartColumn = startColumn,
+                        EndLine = i,
+                        EndColumn = endColumn
+                    });
+                }
+            }
+            Lexer.Analyse(tokens);
             return (lines, [.. tokens]);
         }
 

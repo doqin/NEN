@@ -1,3 +1,5 @@
+sử_dụng System;
+
 lớp Thư_Viện
 	@Tĩnh @Công_Khai
 	phương_thức Cộng(a thuộc Int32, b thuộc Int32) -> Int32

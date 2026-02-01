@@ -62,7 +62,7 @@ namespace NEN
                             fieldsWithInitialization.First().EndLine,
                             fieldsWithInitialization.First().EndColumn
                         );
-                    if (c.Constructors == null && fieldsWithInitialization.Length > 0) GenerateDefaultConstructor(modulePart, c);
+                    if (c.Constructors == null) GenerateDefaultConstructor(modulePart, c);
                 }
             }
             // Declaring the methods in every classes in every module
@@ -268,9 +268,10 @@ namespace NEN
                 default:
                     throw new NotImplementedException();
             }
+            var newLocalSymbolTable = new Dictionary<string, (TypeNode, LocalBuilder)>(localSymbolTable);
             foreach(var statement in whileStatement.Body)
             {
-                AnalyzeStatement(modulePart, c, new(localSymbolTable), statement, whileStatement.EndLabel);
+                AnalyzeStatement(modulePart, c, newLocalSymbolTable, statement, whileStatement.EndLabel);
             }
         }
 
@@ -279,22 +280,24 @@ namespace NEN
             var condition = ifStatement.Condition;
             var conditionType = AnalyzeExpression(modulePart, c, localSymbolTable, ref condition);
             ifStatement.Condition = condition;
-            if (conditionType!.CLRFullName != PrimitiveType.Boolean) 
+            if (conditionType!.CLRFullName != PrimitiveType.Boolean)
                 throw new InvalidIfConditionTypeException(
-                    modulePart.Source, 
-                    condition.ReturnTypeNode!.FullName, 
-                    condition.StartLine, 
+                    modulePart.Source,
+                    condition.ReturnTypeNode!.FullName,
+                    condition.StartLine,
                     condition.StartColumn,
                     condition.EndLine,
                     condition.EndColumn
                 );
+            var ifLocalSymbolTable = new Dictionary<string, (TypeNode, LocalBuilder)>(localSymbolTable);
             foreach (var statement in ifStatement.IfClause)
             {
-                AnalyzeStatement(modulePart, c, new(localSymbolTable), statement, endLabel);
+                AnalyzeStatement(modulePart, c, ifLocalSymbolTable, statement, endLabel);
             }
+            var elseLocalSymbolTable = new Dictionary<string, (TypeNode, LocalBuilder)>(localSymbolTable);
             foreach (var statement in ifStatement.ElseClause)
             {
-                AnalyzeStatement(modulePart, c, new(localSymbolTable), statement, endLabel);
+                AnalyzeStatement(modulePart, c, elseLocalSymbolTable, statement, endLabel);
             }
         }
 
