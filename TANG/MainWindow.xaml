@@ -6,7 +6,8 @@
         xmlns:local="clr-namespace:TANG"
         mc:Ignorable="d"
         Title="T.Ả.N.G." Height="730" Width="1044"
-        xmlns:avalonedit="http://icsharpcode.net/sharpdevelop/avalonedit" Loaded="Window_Loaded">
+        xmlns:avalonedit="http://icsharpcode.net/sharpdevelop/avalonedit" Loaded="Window_Loaded"
+        xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks">
     <Grid>
         <DockPanel>
             <Menu DockPanel.Dock="Top">
@@ -37,16 +38,33 @@
                 </MenuItem>
             </Menu>
             <ToolBarTray DockPanel.Dock="Top" Background="Transparent">
-                <ToolBar Band="1" 
-                         BandIndex="1" 
-                         Margin="4" 
+                <ToolBar Margin="4" 
                          Background="#FFFFFFFF"
                          BorderBrush="#FFACACAC" 
                          BorderThickness="1">
-                    <Button Content="Quay lại"/>
-                    <Button Content="Hồi phục"/>
-                    <Button x:Name="Build" Content="Xây dựng" Click="Build_Click"/>
-                    <Button x:Name="Run" Content="Chạy" Click="Run_Click"/>
+                    <Button IsEnabled="False">
+                        <iconPacks:PackIconRemixIcon Kind="ArrowGoBackFill" Padding="2"/>
+                    </Button>
+                    <Button IsEnabled="False">
+                        <iconPacks:PackIconRemixIcon Kind="ArrowGoForwardFill" Padding="2"/>
+                    </Button>
+                    <Separator/>
+                    <Button x:Name="SaveButton" Click="Save_Click">
+                        <iconPacks:PackIconMaterial Kind="ContentSaveOutline" Foreground="CornflowerBlue" Padding="2"/>
+                    </Button>
+                    <Separator/>
+                    <Button x:Name="Build" Click="Build_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <iconPacks:PackIconMaterial Kind="CogOutline" Padding="2"/>
+                            <TextBlock Text="Xây dựng" Margin="4 0 0 0"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="Run" Click="Run_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <iconPacks:PackIconMaterialDesign Kind="PlayArrowRound" Padding="2" Foreground="LightGreen"/>
+                            <TextBlock Text="Chạy" Margin="4 0 0 0"/>
+                        </StackPanel>
+                    </Button>
                 </ToolBar>
             </ToolBarTray>
             <Grid Margin="5,0,5,0">

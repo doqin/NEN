@@ -1,0 +1,18 @@
+﻿<Window x:Class="TANG.BuildError"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:TANG"
+        mc:Ignorable="d"
+        Title="BuildError" Height="237" Width="329">
+    <Grid>
+        <RichTextBox IsReadOnly="True" FontFamily="Consolas">
+            <FlowDocument>
+                <Paragraph>
+                    <Run x:Name="run" Text="{Binding Text, RelativeSource={RelativeSource AncestorType=Window}}"></Run>
+                </Paragraph>
+            </FlowDocument>
+        </RichTextBox>
+    </Grid>
+</Window>

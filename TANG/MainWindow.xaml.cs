@@ -139,6 +139,7 @@ namespace TANG
         {
             try
             {
+                Build.IsEnabled = false;
                 Cursor = Cursors.Wait;
                 TBDNEN.Program.Build(workingDirectory);
                 explorer.Items.Clear();
@@ -146,11 +147,14 @@ namespace TANG
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message);
+                var buildError = new BuildError();
+                buildError.Text = ex.Message;
+                buildError.Show();
             }
             finally
             {
                 Cursor = Cursors.Arrow;
+                Build.IsEnabled = true;
             }
         }
 
