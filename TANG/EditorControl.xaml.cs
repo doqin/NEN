@@ -44,6 +44,8 @@ namespace TANG
         public EditorControl()
         {
             InitializeComponent();
+            textEditor.Options.ConvertTabsToSpaces = true;
+            textEditor.Options.IndentationSize = 4;
             textEditor.TextChanged += (_, __) =>
             {
                 if (Text != textEditor.Text)

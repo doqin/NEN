@@ -85,6 +85,12 @@ namespace NEN
             public StaticIllegalAccessmentException(string[] contentLines, string accessment, int startLine, int startColumn, int endLine, int endColumn) : base(contentLines, $"Không thể truy cập thành phần không tĩnh '{accessment}' vì là phương thức tĩnh", startLine, startColumn, endLine, endColumn) { }
         }
 
+        public class StandardMethodCallLikeStaticMethodException : NENException
+        {
+            public StandardMethodCallLikeStaticMethodException() { }
+            public StandardMethodCallLikeStaticMethodException(string[] contentLines, int startLine, int startColumn, int endLine, int endColumn) : base(contentLines, "Không thể gọi một phương thức có đối tượng như một phương thức tĩnh", startLine, startColumn, endLine, endColumn) { }
+        }
+
         public class InvalidUsingStatement : NENException
         {
             public InvalidUsingStatement() { }

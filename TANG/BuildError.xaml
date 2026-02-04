@@ -7,7 +7,7 @@
         mc:Ignorable="d"
         Title="BuildError" Height="237" Width="329">
     <Grid>
-        <RichTextBox IsReadOnly="True" FontFamily="Consolas">
+        <RichTextBox IsReadOnly="True" FontFamily="Consolas" Margin="5">
             <FlowDocument>
                 <Paragraph>
                     <Run x:Name="run" Text="{Binding Text, RelativeSource={RelativeSource AncestorType=Window}}"></Run>

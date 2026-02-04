@@ -145,10 +145,12 @@ namespace TANG
                 explorer.Items.Clear();
                 AddTreeItem(explorer, workingDirectory);
             }
-            catch (Exception ex)
+            catch (NEN.Exceptions.NENException ex)
             {
-                var buildError = new BuildError();
-                buildError.Text = ex.Message;
+                var buildError = new BuildError
+                {
+                    Text = ex.Message
+                };
                 buildError.Show();
             }
             finally

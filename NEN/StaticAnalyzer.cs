@@ -850,6 +850,13 @@ namespace NEN
             staticMethodCallExpression.TypeNode.CLRType = GetTypeFromTypeNode(modulePart, staticMethodCallExpression.TypeNode);
             var methodFullName = string.Join(".", [staticMethodCallExpression.TypeNode.CLRFullName, staticMethodCallExpression.MethodName]);
             AnalyzeMethodCallExpression(modulePart, c, localSymbolTable, ref staticMethodCallExpression, methodFullName, staticMethodCallExpression.TypeNode.CLRType);
+            if (!(staticMethodCallExpression.MethodInfo as MethodInfo)!.IsStatic)
+                throw new StandardMethodCallLikeStaticMethodException(
+                    modulePart.Source,
+                    staticMethodCallExpression.StartLine,
+                    staticMethodCallExpression.StartColumn,
+                    staticMethodCallExpression.EndLine,
+                    staticMethodCallExpression.EndColumn);
             staticMethodCallExpression.ReturnTypeNode = CreateTypeNodeFromType(
                 GetReturnTypeFromMethodBase(staticMethodCallExpression.MethodInfo!)!, 
                 staticMethodCallExpression.StartLine, 

@@ -61,7 +61,7 @@ namespace NEN
             var (endLine, endColumn) = GetPreviousEndPosition();
             List<MethodNode> methods = [];
             List<FieldDeclarationStatement> fields = [];
-            while (Current() != null && Current()!.Value != "kết_thúc")
+            while (Current(out var end) && end?.Value != "kết_thúc")
             {
                 var token = Consume();
                 switch (token!.Value)
@@ -94,7 +94,7 @@ namespace NEN
                         break;
                 }
             }
-            if (Current() == null) OutOfTokenHelper("kết_thúc");
+            if (!Current(out _)) OutOfTokenHelper("kết_thúc");
             Consume();
             return new ClassNode { 
                 Name = classIdentifier!.Value, 
@@ -162,7 +162,7 @@ namespace NEN
             ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "(");
             // TODO: Parse parameters
             List<VariableNode> parameters = [];
-            while (Current() != null && Current()!.Value != ")")
+            while (Current(out var rParen) && rParen!.Value != ")")
             {
                 var parameterIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên tham số");
                 ConsumeOrThrowIfNotEqual(TokenType.Keyword, "thuộc");
@@ -175,18 +175,18 @@ namespace NEN
                     EndLine = parameterIdentifier.EndLine, 
                     EndColumn = parameterIdentifier.EndColumn 
                 });
-                if (Current() != null && Current()!.Value != ")") ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ",");
+                if (Current(out rParen) && rParen!.Value != ")") ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ",");
             }
             ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ")");
             ConsumeOrThrowIfNotEqual(TokenType.Operator, "->");
             var returnTypeIdentifier = ParseType();
             List<StatementNode> statements = [];
-            while (Current() != null && Current()!.Value != "kết_thúc")
+            while (Current(out var token) && token!.Value != "kết_thúc")
             {
                 statements.Add(ParseStatement());
                 ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ";");
             }
-            if (Current() == null) OutOfTokenHelper("kết_thúc");
+            if (!Current(out _)) OutOfTokenHelper("kết_thúc");
             Consume();
             return new MethodNode { 
                 IsEntryPoint = isEntryPoint, 
@@ -257,7 +257,7 @@ namespace NEN
             var condition = ParseExpression(0);
             ConsumeOrThrowIfNotEqual(TokenType.Keyword, "thì");
             List<StatementNode> body = [];
-            while (Current() != null && Current()?.Value != "kết_thúc")
+            while (Current(out var token) && token?.Value != "kết_thúc")
             {
                 body.Add(ParseStatement());
                 ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ";");
@@ -280,7 +280,7 @@ namespace NEN
             var condition = ParseExpression(0);
             ConsumeOrThrowIfNotEqual(TokenType.Keyword, "thì");
             List<StatementNode> ifClause = [];
-            while(Current() != null && Current()?.Value != "kết_thúc" && Current()?.Value != "không_thì")
+            while(Current(out var token) && token?.Value != "kết_thúc" && token?.Value != "không_thì")
             {
                 ifClause.Add(ParseStatement());
                 ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ";");
@@ -288,7 +288,7 @@ namespace NEN
             List<StatementNode> elseClause = [];
             if (Consume()?.Value == "không_thì")
             {
-                while (Current() != null && Current()?.Value != "kết_thúc")
+                while (Current(out var end) && end?.Value != "kết_thúc")
                 {
                     elseClause.Add(ParseStatement());
                     ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ";");
@@ -314,7 +314,7 @@ namespace NEN
 
         private ReturnStatement ParseReturnStatement(int startLine, int startColumn)
         {
-            if (Current()?.Value == ";")
+            if (Current(out var semiColon) && semiColon?.Value == ";")
             {
                 var (endLine_, endColumn_) = GetPreviousEndPosition();
                 return new ReturnStatement
@@ -342,7 +342,7 @@ namespace NEN
             SetBack();
             var (startLine, startColumn) = GetCurrentStartPosition();
             var dest = ParsePrimary();
-            if (Current()?.Value == "gán")
+            if (Current(out var assign) && assign?.Value == "gán")
             {
                 ConsumeOrThrowIfNotEqual(TokenType.Keyword, "gán");
                 var src = ParseExpression(0);
@@ -373,10 +373,10 @@ namespace NEN
         {
             ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "(");
             List<ExpressionNode> arguments = [];
-            while (Current() != null && Current()?.Value != ")")
+            while (Current(out var rParen) && rParen?.Value != ")")
             {
                 var argumentExpression = ParseExpression(0);
-                if (Current() != null && Current()!.Value != ")") ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ",");
+                if (Current(out var token) && token?.Value != ")") ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ",");
                 arguments.Add(argumentExpression);
             }
             ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ")");
@@ -389,7 +389,7 @@ namespace NEN
             ConsumeOrThrowIfNotEqual(TokenType.Keyword, "thuộc");
             var typeIdentifier = ParseType();
             ExpressionNode? initialValue = null;
-            if (Current()?.Value == "gán")
+            if (Current(out var assign) && assign?.Value == "gán")
             {
                 ConsumeOrThrowIfNotEqual(TokenType.Keyword, "gán"); // will never happen but ok
                 initialValue = ParseExpression(0);
@@ -422,7 +422,7 @@ namespace NEN
             {
                 var token = ConsumeOrThrow(TokenType.Identifier, "tên không gian");
                 identifiers.Add(token.Value);
-                if (Current()?.Value != "::") break;
+                if (Current(out var ns) && ns?.Value != "::") break;
                 ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "::");
             } while (true);
             var (endLine, endColumn) = GetPreviousEndPosition();
@@ -473,7 +473,7 @@ namespace NEN
                     };
                     break;
                 case TokenType.Identifier:
-                    if (Current()?.Value == "(")
+                    if (Current(out var lParen) && lParen?.Value == "(")
                     {
                         var (endLine, endColumn) = GetPreviousEndPosition();
                         var arguments = ParseArguments();
@@ -486,7 +486,7 @@ namespace NEN
                             EndColumn = endColumn 
                         };
                     }
-                    else if (Current()?.Value == "::")
+                    else if (Current(out var ns) && ns?.Value == "::")
                     {
                         SetBack();
                         expression = ParseStaticAccessment();
@@ -525,9 +525,9 @@ namespace NEN
                     break;
                 default: throw new NotImplementedException();
             }
-            while (Current()?.Value == "." || Current()?.Value == "[")
+            while (Current(out var t) && (t?.Value == "." || t?.Value == "["))
             {
-                if (Current()?.Value == ".")
+                if (Current(out var dot) && dot?.Value == ".")
                 {
                     expression = ParseStandardMethodCallOrFieldAccessmentExpression(expression!);
                 }
@@ -545,7 +545,7 @@ namespace NEN
             var (startLine, startColumn) = GetCurrentStartPosition();
             var identifier = ConsumeOrThrow(TokenType.Identifier, "tên thuộc tính/tên phương thức");
             var (endLine, endColumn) = GetPreviousEndPosition();
-            if (Current() != null && Current()?.Value != "(")
+            if (Current(out var token) && token?.Value != "(")
             {
                 return new StandardFieldAccessmentExpression { 
                     Object = objectNode, 
@@ -598,10 +598,10 @@ namespace NEN
             };
             int nesting = 1;
             ExpressionNode? size = null;
-            while (Current()?.Value == "[")
+            while (Current(out var lBrack) && lBrack?.Value == "[")
             {
                 ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "[");
-                if (nesting == 1 && Current() != null && Current()?.Value != "]")
+                if (nesting == 1 && Current(out var token) && token?.Value != "]")
                 {
                     size = ParseExpression(0);
                 }
@@ -622,13 +622,13 @@ namespace NEN
             {
                 case ArrayType arrayType:
                     List<ExpressionNode> elements = [];
-                    if (Current()?.Value == "{")
+                    if (Current(out var lBrace) && lBrace?.Value == "{")
                     {
                         ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "{");
-                        while (Current() != null && Current()?.Value != "}")
+                        while (Current(out var token) && token?.Value != "}")
                         {
                             elements.Add(ParseExpression(0));
-                            if (Current() != null && Current()?.Value != "}") ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ",");
+                            if (Current(out var rBrace) && rBrace?.Value != "}") ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ",");
                         }
                         ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "}");
                     }
@@ -643,10 +643,10 @@ namespace NEN
                     };
                 case NamedType namedType:
                     List<AssignmentStatement> assignments = [];
-                    if (Current()?.Value == "{")
+                    if (Current(out lBrace) && lBrace?.Value == "{")
                     {
                         ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "{");
-                        while (Current() != null && Current()?.Value != "}")
+                        while (Current(out var rBrace) && rBrace?.Value != "}")
                         {
                             var (startAssignmentLine, startAssignmentColumn) = GetCurrentStartPosition();
                             var fieldIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên thuộc tính");
@@ -676,7 +676,7 @@ namespace NEN
                                 EndLine = endAssignmentLine,
                                 EndColumn = endAssignmentColumn
                             });
-                            if (Current() != null && Current()?.Value != "}") ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ",");
+                            if (Current(out var token) && token?.Value != "}") ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ",");
                         }
                         ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "}");
                     }
@@ -705,7 +705,7 @@ namespace NEN
                 EndLine = endLine,
                 EndColumn = endColumn
             };
-            while (Current()?.Value == "[")
+            while (Current(out var token) && token?.Value == "[")
             {
                 ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "[");
                 ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "]");
@@ -735,7 +735,7 @@ namespace NEN
                 EndLine = endLine,
                 EndColumn = endColumn
             };
-            if (Current() != null && Current()?.Value != "(")
+            if (Current(out var token) && token?.Value != "(")
             {
                 return new StaticFieldAccessmentExpression
                 {
@@ -801,15 +801,17 @@ namespace NEN
             );
         }
 
-        private Token? Current()
+        private bool Current(out Token? token)
         {
             if (index < tokens.Length)
             {
-                return tokens[index];
+                token = tokens[index];
+                return true;
             }
             else
             {
-                return null;
+                token = null;
+                return false;
             }
         }
 
@@ -831,12 +833,14 @@ namespace NEN
 
         private int CurrentPrecedence()
         {
-            Token? token = Current();
-            if (token?.Type == TokenType.Operator || token?.Type == TokenType.Keyword)
+            if (Current(out var token))
             {
-                if (precedences.TryGetValue(token.Value, out int value))
+                if (token?.Type == TokenType.Operator || token?.Type == TokenType.Keyword)
                 {
-                    return value;
+                    if (precedences.TryGetValue(token.Value, out int value))
+                    {
+                        return value;
+                    }
                 }
             }
             return -1;
@@ -866,15 +870,27 @@ namespace NEN
 
         private int GetCurrentLine()
         {
-            return tokens[index].StartLine; 
+            if (index < tokens.Length)
+            {
+                return tokens[index].StartLine;
+            }
+            return tokens.Last().EndLine; // meh
         }
         private int GetCurrentColumn()
         {
-            return tokens[index].StartColumn;
+            if (index < tokens.Length)
+            {
+                return tokens[index].StartColumn;
+            }
+            return tokens.Last().EndColumn + 2;
         }
         private int GetCurrentLength()
         {
-            return tokens[index].Value.Length;
+            if (index < tokens.Length)
+            {
+                return tokens[index].Value.Length;
+            }
+            return 1;
         }
         private (int, int) GetCurrentEndPosition()
         {
