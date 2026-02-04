@@ -1,6 +1,9 @@
 ﻿using NEN.Exceptions;
-using NEN.Types;
+using NEN.AST;
+using static NEN.Lexer;
 using System.Reflection;
+using System.Reflection.Emit;
+
 
 namespace NEN
 {
@@ -10,6 +13,15 @@ namespace NEN
         private readonly Token[] tokens = tokens;
         private int index = 0;
         private readonly string[] content = contentLines;
+
+        /// <summary>
+        /// Parses the current token stream and constructs a module part representing the source file, including its
+        /// classes and using namespace statements.
+        /// </summary>
+        /// <returns>A <see cref="ModulePart"/> object containing the parsed classes and using namespace statements from the
+        /// source file.</returns>
+        /// <exception cref="ExpectedException">Thrown if the token stream does not match the expected module structure, such as when a class declaration is
+        /// missing or an unexpected token is encountered.</exception>
         public ModulePart Parse()
         {
             List<ClassNode> classes = [];
@@ -59,6 +71,7 @@ namespace NEN
             var (startLine, startColumn) = GetCurrentStartPosition();
             var classIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên lớp");
             var (endLine, endColumn) = GetPreviousEndPosition();
+            List<ConstructorNode> constructors = [];
             List<MethodNode> methods = [];
             List<FieldDeclarationStatement> fields = [];
             while (Current(out var end) && end?.Value != "kết_thúc")
@@ -67,10 +80,18 @@ namespace NEN
                 switch (token!.Value)
                 {
                     case "@":
-                        var (left, right) = ParseMarker();
+                        var (left, right) = ParseMarker(classIdentifier.Value);
                         if (left != null)
                         {
-                            methods.Add(left);
+                            switch(left)
+                            {
+                                case MethodNode method:
+                                    methods.Add(method); break;
+                                case ConstructorNode constructor:
+                                    constructors.Add(constructor); break;
+                                default:
+                                    throw new NotImplementedException();
+                            }
                         }
                         else if (right != null)
                         {
@@ -81,6 +102,9 @@ namespace NEN
                         {
                             throw new("Internal error");
                         }
+                        break;
+                    case "phương_thức_khởi_tạo":
+                        constructors.Add(ParseConstructor(classIdentifier.Value));
                         break;
                     case "phương_thức":
                         methods.Add(ParseMethod());
@@ -98,6 +122,7 @@ namespace NEN
             Consume();
             return new ClassNode { 
                 Name = classIdentifier!.Value, 
+                Constructors = [..constructors],
                 Methods = [.. methods], 
                 Fields = [..fields], 
                 StartLine = startLine, 
@@ -111,9 +136,8 @@ namespace NEN
             "Chính", "Tĩnh", "Công_Khai"
         ];
 
-        private (MethodNode?, FieldDeclarationStatement?) ParseMarker(MethodAttributes methodAttributes = MethodAttributes.Private, FieldAttributes fieldAttributes = FieldAttributes.Private, bool isEntryPoint = false)
+        private (AST.MethodBase?, FieldDeclarationStatement?) ParseMarker(string className, MethodAttributes methodAttributes = MethodAttributes.Private, FieldAttributes fieldAttributes = FieldAttributes.Private, bool isEntryPoint = false)
         {
-            var (line, column) = GetCurrentStartPosition();
             var annotationIdentifier = ConsumeOrThrow(TokenType.Identifier, "thuộc tính phương thức");
             if (!markers.Contains(annotationIdentifier.Value)) throw new ExpectedException(content, "thuộc tính phương thức", annotationIdentifier.StartLine, annotationIdentifier.StartColumn, annotationIdentifier.EndLine, annotationIdentifier.EndColumn);
             switch(annotationIdentifier.Value)
@@ -123,17 +147,45 @@ namespace NEN
                     isEntryPoint = true;
                     break;
                 case "Công_Khai":
-                    if (methodAttributes.HasFlag(MethodAttributes.Public)) throw new RedefinedException(content, "@Công_Khai", annotationIdentifier.StartLine, annotationIdentifier.StartColumn, annotationIdentifier.EndLine, annotationIdentifier.EndColumn);
+                    if (methodAttributes.HasFlag(MethodAttributes.Public)) throw new RedefinedException(
+                        content, 
+                        "@Công_Khai", 
+                        annotationIdentifier.StartLine, 
+                        annotationIdentifier.StartColumn, 
+                        annotationIdentifier.EndLine, 
+                        annotationIdentifier.EndColumn
+                        );
                     methodAttributes &= ~MethodAttributes.Private;
                     methodAttributes |= MethodAttributes.Public;
-                    if (fieldAttributes.HasFlag(FieldAttributes.Public)) throw new RedefinedException(content, "@Công_Khai", annotationIdentifier.StartLine, annotationIdentifier.StartColumn, annotationIdentifier.EndLine, annotationIdentifier.EndColumn);
+                    if (fieldAttributes.HasFlag(FieldAttributes.Public)) throw new RedefinedException(
+                        content, 
+                        "@Công_Khai", 
+                        annotationIdentifier.StartLine, 
+                        annotationIdentifier.StartColumn, 
+                        annotationIdentifier.EndLine, 
+                        annotationIdentifier.EndColumn
+                        );
                     fieldAttributes &= ~FieldAttributes.Private;
                     fieldAttributes |= FieldAttributes.Public;
                     break;
                 case "Tĩnh":
-                    if (methodAttributes.HasFlag(MethodAttributes.Static)) throw new RedefinedException(content, "@Tĩnh", annotationIdentifier.StartLine, annotationIdentifier.StartColumn, annotationIdentifier.EndLine, annotationIdentifier.EndColumn);
+                    if (methodAttributes.HasFlag(MethodAttributes.Static)) throw new RedefinedException(
+                        content, 
+                        "@Tĩnh", 
+                        annotationIdentifier.StartLine, 
+                        annotationIdentifier.StartColumn, 
+                        annotationIdentifier.EndLine, 
+                        annotationIdentifier.EndColumn
+                        );
                     methodAttributes |= MethodAttributes.Static;
-                    if (fieldAttributes.HasFlag(FieldAttributes.Static)) throw new RedefinedException(content, "@Tĩnh", annotationIdentifier.StartLine, annotationIdentifier.StartColumn, annotationIdentifier.EndLine, annotationIdentifier.EndColumn);
+                    if (fieldAttributes.HasFlag(FieldAttributes.Static)) throw new RedefinedException(
+                        content, 
+                        "@Tĩnh", 
+                        annotationIdentifier.StartLine, 
+                        annotationIdentifier.StartColumn, 
+                        annotationIdentifier.EndLine, 
+                        annotationIdentifier.EndColumn
+                        );
                     fieldAttributes |= FieldAttributes.Static;
                     break;
                 default:
@@ -143,15 +195,75 @@ namespace NEN
             switch(token.Value)
             {
                 case "@":
-                    return ParseMarker(methodAttributes, fieldAttributes, isEntryPoint);
+                    return ParseMarker(className, methodAttributes, fieldAttributes, isEntryPoint);
                 case "phương_thức":
                     return (ParseMethod(methodAttributes, isEntryPoint), null);
+                case "phương_thức_khởi_tạo":
+                    return (ParseConstructor(className, methodAttributes), null);
                 case "thuộc_tính":
                     return (null, ParseFieldDeclarationStatement(fieldAttributes));
                 default:
                     var (el, ec) = GetCurrentEndPosition();
-                    throw new ExpectedException(content, "phương_thức", GetCurrentLine(), GetCurrentColumn(), el, ec);
+                    throw new ExpectedException(
+                        content, 
+                        "phương_thức", 
+                        GetCurrentLine(), 
+                        GetCurrentColumn(), 
+                        el, 
+                        ec
+                        );
             }
+        }
+
+        private ConstructorNode ParseConstructor(string className, MethodAttributes constructorAttributes = MethodAttributes.Private)
+        {
+            var (startLine, startColumn) = GetCurrentStartPosition();
+            var (endLine, endColumn) = GetCurrentEndPosition();
+            ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "(");
+            List<VariableNode> parameters = [];
+            while (Current(out var rParen) && rParen!.Value != ")")
+            {
+                var parameterIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên tham số");
+                ConsumeOrThrowIfNotEqual(TokenType.Keyword, "thuộc");
+                var type = ParseType();
+                parameters.Add(new VariableNode
+                {
+                    Name = parameterIdentifier.Value,
+                    TypeNode = type,
+                    StartLine = parameterIdentifier.StartLine,
+                    StartColumn = parameterIdentifier.StartColumn,
+                    EndLine = parameterIdentifier.EndLine,
+                    EndColumn = parameterIdentifier.EndColumn
+                });
+                if (Current(out rParen) && rParen!.Value != ")") ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ",");
+            }
+            ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ")");
+            List<StatementNode> statements = [];
+            while (Current(out var token) && token!.Value != "kết_thúc")
+            {
+                statements.Add(ParseStatement());
+                ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ";");
+            }
+            if (!Current(out _)) OutOfTokenHelper("kết_thúc");
+            Consume();
+            return new ConstructorNode
+            {
+                MethodAttributes = constructorAttributes,
+                Parameters = [..parameters],
+                Statements = [..statements],
+                StartLine = startLine,
+                StartColumn = startColumn,
+                EndLine = endLine,
+                EndColumn = endColumn,
+                DeclaringTypeNode = new NamedType { 
+                    Namespaces = [],
+                    Name = className,
+                    StartLine = startLine,
+                    StartColumn = startColumn,
+                    EndLine = endLine,
+                    EndColumn = endColumn
+                }
+            };
         }
 
         private MethodNode ParseMethod(MethodAttributes methodAttributes = MethodAttributes.Private, bool isEntryPoint = false)
@@ -160,7 +272,6 @@ namespace NEN
             var methodIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên phương thức");
             var (endLine, endColumn) = GetPreviousEndPosition();
             ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "(");
-            // TODO: Parse parameters
             List<VariableNode> parameters = [];
             while (Current(out var rParen) && rParen!.Value != ")")
             {
@@ -680,7 +791,7 @@ namespace NEN
                         }
                         ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "}");
                     }
-                    return new NewObjectExpression { 
+                    return new InlineConstructionExpression { 
                         ReturnTypeNode = namedType, 
                         FieldInitializations = [..assignments] , 
                         StartLine = startLine, 

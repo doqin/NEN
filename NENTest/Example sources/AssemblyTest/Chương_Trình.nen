@@ -8,7 +8,7 @@ lớp Chương_Trình
     	Console::WriteLine(a);
     	Console::WriteLine("Xin chào");
     	Thư_Viện::In("Chào .NET 9!");
-        Phụ::Test("Foo");
+        Phụ::Test("Foo", "b");
         Phụ::Kiểm_Tra_Khởi_Tạo_Đối_Tượng();
         Phụ::Kiểm_Tra_Gọi_Hàm();
         Phụ::Kiểm_Tra_Kiểu_Luận_Lý();

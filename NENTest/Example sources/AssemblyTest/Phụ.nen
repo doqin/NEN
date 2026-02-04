@@ -3,7 +3,7 @@ sử_dụng System;
 
 lớp Phụ
     @Tĩnh @Công_Khai
-    phương_thức Test(a thuộc String) -> Void
+    phương_thức Test(a thuộc String, ab thuộc String) -> Void
         Console::WriteLine("{0} Bar!", a);
         biến bro thuộc String gán "mọi người";
         biến str2 thuộc String gán "OK";

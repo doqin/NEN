@@ -1,4 +1,5 @@
-﻿using System;
+﻿using NEN.AST;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Data.Common;
@@ -63,9 +64,9 @@ namespace NEN
         public class TypeDiscrepancyException : NENException
         {
             public TypeDiscrepancyException() { }
-            public TypeDiscrepancyException(string[] contentLines, Types.TypeNode left, Types.TypeNode right, int startLine, int startColumn, int endLine, int endColumn) : base($"Kiểu dữ liệu không hợp lệ ({left} <-> {right})", CreateContent(contentLines, left, right), startLine, startColumn, endLine, endColumn) { }
+            public TypeDiscrepancyException(string[] contentLines, TypeNode left, TypeNode right, int startLine, int startColumn, int endLine, int endColumn) : base($"Kiểu dữ liệu không hợp lệ ({left} <-> {right})", CreateContent(contentLines, left, right), startLine, startColumn, endLine, endColumn) { }
 
-            private static string CreateContent(string[] contentLines, Types.TypeNode left, Types.TypeNode right)
+            private static string CreateContent(string[] contentLines, TypeNode left, TypeNode right)
             {
                 var leftCaretCount = Math.Max(1, left.EndColumn - left.StartColumn + 1);
                 var rightCaretCount = Math.Max(1, right.EndColumn - right.StartColumn + 1);

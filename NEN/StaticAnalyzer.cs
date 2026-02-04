@@ -1,11 +1,7 @@
 ﻿using NEN.Exceptions;
-using NEN.Types;
-using System.ComponentModel.Design;
-using System.Net.Mail;
+using NEN.AST;
 using System.Reflection;
 using System.Reflection.Emit;
-using System.Reflection.Metadata.Ecma335;
-using System.Reflection.PortableExecutable;
 
 namespace NEN
 {
@@ -15,10 +11,10 @@ namespace NEN
         private readonly Dictionary<(string, Type[]), MethodInfo> moduleMethods = new(new MethodSignatureComparer());
         private readonly Dictionary<(string, Type[]), ConstructorInfo> moduleConstructors = new(new MethodSignatureComparer());
         private readonly Dictionary<string, FieldInfo> moduleFields = [];
-        private readonly Types.Module module = new() { Name = assemblyName, ModuleParts = moduleParts};
-        private Types.MethodBase? currentMethod = null;
+        private readonly AST.Module module = new() { Name = assemblyName, ModuleParts = moduleParts};
+        private AST.MethodBase? currentMethod = null;
 
-        public Types.Module Analyze()
+        public AST.Module Analyze()
         {
             SetupModule();
             // Declaring the types and fields in every module
@@ -33,9 +29,10 @@ namespace NEN
                 {
                     DefineClass(modulePart, c);
                 }
-                // Define every field in the classes
+                
                 foreach (var c in modulePart.Classes)
                 {
+                    // Define every field in the classes
                     foreach (var field in c.Fields)
                     {
                         if (c.Fields.Where(f => f.Variable.Name == field.Variable.Name).ToArray().Length > 1)
@@ -52,8 +49,20 @@ namespace NEN
                             throw new("Internal error");
                         }
                     }
+                    
+                }
+            }
+            // Declaring every method and constructor in every classes in every module
+            foreach (var modulePart in module.ModuleParts)
+            {
+                foreach (var c in modulePart.Classes)
+                {
                     // Decide if type needs to generate a default constructor
-                    var fieldsWithInitialization = c.Fields.Where(f => f.InitialValue != null).ToArray();
+                    var fieldsWithInitialization = c.Fields
+                        .Where(
+                            f => f.InitialValue != null && 
+                            !f.FieldAttributes.HasFlag(FieldAttributes.Static))
+                        .ToArray();
                     if (c.Constructors != null && fieldsWithInitialization.Length > 0)
                         throw new FieldInitializationOutsideDefaultConstructorException(
                             modulePart.Source,
@@ -63,31 +72,27 @@ namespace NEN
                             fieldsWithInitialization.First().EndColumn
                         );
                     if (c.Constructors == null) GenerateDefaultConstructor(modulePart, c);
-                }
-            }
-            // Declaring the methods in every classes in every module
-            List<Dictionary<string, (TypeNode, LocalBuilder)>[]> lsLsSt = [];
-            foreach (var modulePart in module.ModuleParts)
-            {
-                // Define every method in the classes
-                foreach (var c in modulePart.Classes)
-                {
-                    List<Dictionary<string, (TypeNode, LocalBuilder)>> lsSt = [];
+                    else
+                    {
+                        foreach (var constructor in c.Constructors)
+                        {
+                            DefineConstructor(modulePart, c, constructor);
+                        }
+                    }
+
+                    // Define every method in the classes
                     foreach (var method in c.Methods)
                     {
-                        lsSt.Add(DefineMethod(modulePart, c, method));
+                        DefineMethod(modulePart, c, method);
                     }
-                    lsLsSt.Add([.. lsSt]);
                 }
             }
-            int i = 0;
             foreach (var modulePart in module.ModuleParts)
             {
                 // Analyze the method bodies in each class
-                for (int j = 0; j < modulePart.Classes.Length; j++)
+                foreach (var c in modulePart.Classes)
                 {
-                    AnalyzeClass(modulePart, modulePart.Classes[j], lsLsSt[i]);
-                    i++;
+                    AnalyzeClass(modulePart, c);
                 }
             }
             return module;
@@ -127,9 +132,56 @@ namespace NEN
             }
         }
 
-        private Dictionary<string, (TypeNode, LocalBuilder)> DefineMethod(ModulePart modulePart, ClassNode c, MethodNode method)
+        private void DefineConstructor(ModulePart modulePart, ClassNode c, ConstructorNode constructor)
         {
-            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable = new();
+            constructor.DeclaringTypeNode.CLRType = c.TypeBuilder;
+            List<Type> paramTypes = [];
+            foreach (var parameter in constructor.Parameters)
+            {
+                var paramType = GetTypeFromTypeNode(modulePart, parameter.TypeNode);
+                parameter.TypeNode = CreateTypeNodeFromType(
+                    paramType,
+                    parameter.TypeNode.StartLine,
+                    parameter.TypeNode.StartColumn,
+                    parameter.TypeNode.EndLine,
+                    parameter.TypeNode.EndColumn);
+                if (constructor.Parameters.Where(p => p.Name == parameter.Name).ToArray().Length > 1)
+                {
+                    throw new RedefinedException(
+                        modulePart.Source, 
+                        parameter.Name, 
+                        parameter.StartLine, 
+                        parameter.StartColumn, 
+                        parameter.EndLine, 
+                        parameter.EndColumn
+                        );
+                }
+                paramTypes.Add(paramType);
+            }
+            constructor.ConstructorBuilder = c.TypeBuilder!.DefineConstructor(
+                constructor.MethodAttributes,
+                CallingConventions.Standard, // maybe change this later
+                [..paramTypes]
+            );
+            for (int i = 0; i < constructor.Parameters.Length; i++)
+            {
+                ParameterBuilder p = constructor.ConstructorBuilder.DefineParameter(i + 1, ParameterAttributes.None, constructor.Parameters[i].Name);
+            }
+            if (!moduleConstructors.TryAdd((c.Name, [..paramTypes]), constructor.ConstructorBuilder))
+            {
+                throw new RedefinedException(
+                    modulePart.Source,
+                    $"{c.Name}({string.Join(", ", constructor.Parameters.Select(p => p.TypeNode.FullName))})",
+                    constructor.StartLine,
+                    constructor.StartColumn,
+                    constructor.EndLine,
+                    constructor.EndColumn
+                );
+            }
+        }
+
+        private void DefineMethod(ModulePart modulePart, ClassNode c, MethodNode method)
+        {
             var type = GetTypeFromTypeNode(modulePart, method.ReturnTypeNode);
             method.ReturnTypeNode = CreateTypeNodeFromType(
                 type, 
@@ -149,7 +201,14 @@ namespace NEN
                     parameter.TypeNode.EndColumn);
                 if (method.Parameters.Where(p => p.Name == parameter.Name).ToArray().Length > 1)
                 {
-                    throw new RedefinedException(modulePart.Source, parameter.Name, parameter.StartLine, parameter.StartColumn, parameter.EndLine, parameter.EndColumn);
+                    throw new RedefinedException(
+                        modulePart.Source, 
+                        parameter.Name, 
+                        parameter.StartLine, 
+                        parameter.StartColumn, 
+                        parameter.EndLine, 
+                        parameter.EndColumn
+                        );
                 }
                 paramTypes.Add(paramType);
             }
@@ -161,15 +220,21 @@ namespace NEN
             );
             for (int i = 0; i < method.Parameters.Length; i++)
             {
-                int index = method.MethodBuilder.IsStatic ? i : i + 1;
+                int index = i + 1;
                 ParameterBuilder p = method.MethodBuilder.DefineParameter(index, ParameterAttributes.None, method.Parameters[i].Name);
             }
             string methodFullName = string.Join('.', [c.Name, method.MethodName]);
             if (!moduleMethods.TryAdd((methodFullName, [.. paramTypes]), method.MethodBuilder))
             {
-                throw new RedefinedException(modulePart.Source, methodFullName, method.StartLine, method.StartColumn, method.EndLine, method.EndColumn);
+                throw new RedefinedException(
+                    modulePart.Source, 
+                    $"{string.Join("::", [c.Name, method.MethodName])}({string.Join(", ", method.Parameters.Select(p => p.TypeNode.FullName))})", 
+                    method.StartLine, 
+                    method.StartColumn, 
+                    method.EndLine, 
+                    method.EndColumn
+                );
             }
-            return localSymbolTable;
         }
 
         private void AnalyzeUsingNamespaceStatement(ModulePart modulePart, UsingNamespaceStatement usingNamespaceStatement)
@@ -193,31 +258,69 @@ namespace NEN
             usingNamespaceStatement.IsResolved = true;
         }
 
-        private void AnalyzeClass(ModulePart modulePart, ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)>[] localSymbolTableList)
+        private void AnalyzeClass(ModulePart modulePart, ClassNode c)
         {
-            for (int i = 0; i < c.Methods.Length; i++)
+            foreach (var init in c.Fields
+                .Where(f => f.InitialValue != null && f.FieldAttributes.HasFlag(FieldAttributes.Static)))
             {
-                AnalyzeMethod(modulePart, c, c.Methods[i], localSymbolTableList[i]);
-                VariableNode[] parameters = c.Methods[i].MethodBuilder!.IsStatic ? c.Methods[i].Parameters :
+                AnalyzeFieldDeclarationStatement(modulePart, c, init);
+            }
+            foreach (var constructor in c.Constructors!) // should have at least one by the time we're analyzing them
+            {
+                VariableNode[] parameters =
                     [ new VariableNode {
                         Name = "này",
                         TypeNode = CreateTypeNodeFromType(
-                            c.TypeBuilder!, 
-                            c.Methods[i].ReturnTypeNode.StartLine, 
-                            c.Methods[i].ReturnTypeNode.StartColumn,
-                            c.Methods[i].ReturnTypeNode.EndLine,
-                            c.Methods[i].ReturnTypeNode.EndColumn),
-                        StartLine = c.Methods[i].ReturnTypeNode.StartLine,
-                        StartColumn = c.Methods[i].ReturnTypeNode.StartColumn,
-                        EndLine = c.Methods[i].ReturnTypeNode.EndLine,
-                        EndColumn = c.Methods[i].ReturnTypeNode.EndColumn
-                    },..c.Methods[i].Parameters];
-                c.Methods[i].Parameters = parameters;
+                            c.TypeBuilder!,
+                            constructor.DeclaringTypeNode.StartLine,
+                            constructor.DeclaringTypeNode.StartColumn,
+                            constructor.DeclaringTypeNode.EndLine,
+                            constructor.DeclaringTypeNode.EndColumn
+                            ),
+                        StartLine = constructor.DeclaringTypeNode.StartLine,
+                        StartColumn = constructor.DeclaringTypeNode.StartColumn,
+                        EndLine = constructor.DeclaringTypeNode.EndLine,
+                        EndColumn = constructor.DeclaringTypeNode.EndColumn
+                    },..constructor.Parameters];
+                constructor.Parameters = parameters;
+                AnalyzeConstructor(modulePart, c, constructor);
+            }
+            foreach (var method in c.Methods)
+            {
+                VariableNode[] parameters = method.MethodBuilder!.IsStatic ? method.Parameters :
+                    [ new VariableNode {
+                        Name = "này",
+                        TypeNode = CreateTypeNodeFromType(
+                            c.TypeBuilder!,
+                            method.ReturnTypeNode.StartLine,
+                            method.ReturnTypeNode.StartColumn,
+                            method.ReturnTypeNode.EndLine,
+                            method.ReturnTypeNode.EndColumn
+                            ),
+                        StartLine = method.ReturnTypeNode.StartLine,
+                        StartColumn = method.ReturnTypeNode.StartColumn,
+                        EndLine = method.ReturnTypeNode.EndLine,
+                        EndColumn = method.ReturnTypeNode.EndColumn
+                    },..method.Parameters];
+                method.Parameters = parameters;
+                AnalyzeMethod(modulePart, c, method);
             }
         }
 
-        private void AnalyzeMethod(ModulePart modulePart, ClassNode c, MethodNode method, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable)
+        private void AnalyzeConstructor(ModulePart modulePart, ClassNode c, ConstructorNode constructor)
         {
+            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable = [];
+            currentMethod = constructor;
+            foreach (var statement in constructor.Statements)
+            {
+                AnalyzeStatement(modulePart, c, localSymbolTable, statement);
+            }
+            currentMethod = null;
+        }
+
+        private void AnalyzeMethod(ModulePart modulePart, ClassNode c, MethodNode method)
+        {
+            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable = [];
             currentMethod = method;
             foreach (var statement in method.Statements)
             {
@@ -320,7 +423,13 @@ namespace NEN
                 type = AnalyzeExpression(modulePart, c, localSymbolTable, ref expression);
                 returnStatement.Expression = expression;
             }
-            AnalyzeTypes(modulePart, currentMethod.ReturnTypeNode, type);
+            switch(currentMethod)
+            {
+                case MethodNode method:
+                    AnalyzeTypes(modulePart, method.ReturnTypeNode, type); break;
+                case ConstructorNode constructor:
+                    AnalyzeTypes(modulePart, constructor.DeclaringTypeNode, type); break;
+            }
         }
 
         private void AnalyzeAssignmentStatement(ModulePart modulePart, ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, AssignmentStatement assignmentStatement)
@@ -353,6 +462,24 @@ namespace NEN
             var expression = expressionStatement.Expression;
             AnalyzeExpression(modulePart, c, localSymbolTable, ref expression);
             expressionStatement.Expression = expression;
+        }
+
+        private void AnalyzeFieldDeclarationStatement(ModulePart modulePart, ClassNode c, FieldDeclarationStatement fieldDeclarationStatement)
+        {
+            var type = GetTypeFromTypeNode(modulePart, fieldDeclarationStatement.Variable.TypeNode);
+            fieldDeclarationStatement.Variable.TypeNode = CreateTypeNodeFromType(
+                type,
+                fieldDeclarationStatement.Variable.TypeNode.StartLine,
+                fieldDeclarationStatement.Variable.TypeNode.StartColumn,
+                fieldDeclarationStatement.Variable.TypeNode.EndLine,
+                fieldDeclarationStatement.Variable.TypeNode.EndColumn
+            );
+            if (fieldDeclarationStatement.InitialValue != null) {
+                var expr = fieldDeclarationStatement.InitialValue;
+                AnalyzeExpression(modulePart, c, [], ref expr);
+                fieldDeclarationStatement.InitialValue = expr;
+                AnalyzeTypes(modulePart, fieldDeclarationStatement.Variable.TypeNode, expr.ReturnTypeNode!);
+            }
         }
 
         private void AnalyzeVariableDeclarationStatement(ModulePart modulePart, ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable,  VariableDeclarationStatement variableDeclarationStatement)
@@ -422,7 +549,7 @@ namespace NEN
                 case LiteralExpression literalExpression: return AnalyzeLiteralExpression(literalExpression);
                 case VariableExpression _: return AnalyzeVariableExpression(modulePart, c, localSymbolTable, ref expression);
                 case NewArrayExpression newArrayExpression: return AnalyzeNewArrayExpression(modulePart, c, localSymbolTable, ref newArrayExpression);
-                case NewObjectExpression newObjectExpression: return AnalyzeNewObjectExpression(modulePart, c, localSymbolTable, newObjectExpression);
+                case InlineConstructionExpression newObjectExpression: return AnalyzeNewObjectExpression(modulePart, c, localSymbolTable, newObjectExpression);
                 case StandardMethodCallExpression standardMethodCallExpression: return AnalyzeStandardMethodCallExpression(modulePart, c, localSymbolTable, ref standardMethodCallExpression);
                 case StaticMethodCallExpression staticMethodCallExpression: return AnalyzeStaticMethodCallExpression(modulePart, c, localSymbolTable, staticMethodCallExpression);
                 case AmbiguousMethodCallExpression ambiguousMethodCallExpression: 
@@ -585,7 +712,7 @@ namespace NEN
             return standardFieldAccessmentExpression.ReturnTypeNode;
         }
 
-        private TypeNode AnalyzeNewObjectExpression(ModulePart modulePart, ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, NewObjectExpression newObjectExpression)
+        private TypeNode AnalyzeNewObjectExpression(ModulePart modulePart, ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, InlineConstructionExpression newObjectExpression)
         {
             foreach(var statement in newObjectExpression.FieldInitializations)
             {
@@ -604,7 +731,7 @@ namespace NEN
                 }
                 catch (Exception) { }
             }
-            if (newObjectExpression.ConstructorInfo == null) 
+            if (newObjectExpression.ConstructorInfo == null || newObjectExpression.ConstructorInfo!.IsPrivate) 
                 throw new UnresolvedConstructorException(
                     modulePart.Source, 
                     returnType.FullName!, 
@@ -1027,28 +1154,40 @@ namespace NEN
                 }
                 else
                 {
-                    methodCallExpression.MethodInfo = type?.GetMethod(
+                    if (type as TypeBuilder == null)
+                    {
+                        methodCallExpression.MethodInfo = type?.GetMethod(
                         methodCallExpression.MethodName,
                         [.. argumentTypes]
-                    ) ?? throw new InvalidMethodCallException(
-                        modulePart.Source,
-                        methodCallExpression.MethodName,
-                        [..argumentTypes],
-                        methodCallExpression.StartLine,
-                        methodCallExpression.StartColumn,
-                        methodCallExpression.EndLine,
-                        methodCallExpression.EndColumn
-                    );
+                        ) ?? throw new InvalidMethodCallException(
+                            modulePart.Source,
+                            methodCallExpression.MethodName,
+                            [.. argumentTypes],
+                            methodCallExpression.StartLine,
+                            methodCallExpression.StartColumn,
+                            methodCallExpression.EndLine,
+                            methodCallExpression.EndColumn
+                        );
 
-                    if (!methodCallExpression.MethodInfo.IsPublic) throw new InvalidMethodCallException(
-                        modulePart.Source,
-                        methodCallExpression.MethodName,
-                        [.. argumentTypes],
-                        methodCallExpression.StartLine,
-                        methodCallExpression.StartColumn,
-                        methodCallExpression.EndLine,
-                        methodCallExpression.EndColumn
-                    );
+                        if (!methodCallExpression.MethodInfo.IsPublic) throw new InvalidMethodCallException(
+                            modulePart.Source,
+                            methodCallExpression.MethodName,
+                            [.. argumentTypes],
+                            methodCallExpression.StartLine,
+                            methodCallExpression.StartColumn,
+                            methodCallExpression.EndLine,
+                            methodCallExpression.EndColumn
+                        );
+                    }
+                    else throw new InvalidMethodCallException(
+                            modulePart.Source,
+                            methodCallExpression.MethodName,
+                            [.. argumentTypes],
+                            methodCallExpression.StartLine,
+                            methodCallExpression.StartColumn,
+                            methodCallExpression.EndLine,
+                            methodCallExpression.EndColumn
+                        );
                 }
             }
             // Analyze the argument again in case of needing boxing
@@ -1127,7 +1266,7 @@ namespace NEN
         /// <param name="expression"></param>
         /// <returns></returns>
         /// <exception cref="UnresolvedIdentifierException"></exception>
-        private Types.TypeNode AnalyzeVariableExpression(ModulePart modulePart, ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, ref ExpressionNode expression)
+        private TypeNode AnalyzeVariableExpression(ModulePart modulePart, ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, ref ExpressionNode expression)
         {
             var variableExpression = (VariableExpression)expression;
             var variableName = variableExpression.Name;
@@ -1217,7 +1356,7 @@ namespace NEN
             }
         }
 
-        private Types.TypeNode AnalyzeBinaryExpression(ModulePart modulePart, ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, BinaryExpression binaryExpression)
+        private TypeNode AnalyzeBinaryExpression(ModulePart modulePart, ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, BinaryExpression binaryExpression)
         {
             var left = binaryExpression.Left;
             var right = binaryExpression.Right;

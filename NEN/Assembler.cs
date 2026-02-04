@@ -1,5 +1,4 @@
 ﻿using NEN.Exceptions;
-using NEN.Types;
 using System;
 using System.Diagnostics.SymbolStore;
 using System.Reflection;
@@ -7,12 +6,13 @@ using System.Reflection.Emit;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
+using NEN.AST;
 
 namespace NEN
 {
-    public class Assembler(Types.Module module, string savePath = "")
+    public class Assembler(AST.Module module, string savePath = "")
     {
-        private readonly Types.Module module = module;
+        private readonly AST.Module module = module;
         private MethodBuilder? entryPointMethod;
         private readonly string savePath = string.IsNullOrWhiteSpace(savePath) ? "" : $"{savePath}/";
         // private readonly ISymbolDocumentWriter documentWriter = module.ModuleBuilder!.DefineDocument($"{module.AssemblyBuilder!.GetName().Name}.nen");
@@ -87,20 +87,37 @@ namespace NEN
 
         private void AssembleType(ModulePart modulePart, ClassNode c)
         {
+            AssembleInitializer(modulePart, c);
             foreach(var constructor in c.Constructors ?? [])
             {
-                AssembleConstructor(c.TypeBuilder, constructor);
+                AssembleConstructor(constructor);
             }
             foreach(var method in c.Methods)
             {
-                AssembleMethod(modulePart, c.TypeBuilder!, method);
+                AssembleMethod(modulePart, method);
             }
             c.TypeBuilder!.CreateType();
         }
 
-        private void AssembleConstructor(TypeBuilder? typeBuilder, ConstructorNode constructor)
+        private void AssembleInitializer(ModulePart modulePart, ClassNode c)
+        {
+            var fields = c.Fields
+                .Where(f => f.InitialValue != null && f.FieldAttributes.HasFlag(FieldAttributes.Static));
+            var typeInitializer = c.TypeBuilder!.DefineTypeInitializer();
+            var ilGenerator = typeInitializer.GetILGenerator();
+            foreach (var field in fields)
+            {
+                AssembleFieldDeclarationStatement(ilGenerator, field);
+            }
+            ilGenerator.Emit(OpCodes.Ret);
+        }
+
+        private void AssembleConstructor(ConstructorNode constructor)
         {
             var ilGenerator = constructor.ConstructorBuilder!.GetILGenerator();
+            var objectType = module.CoreAssembly!.GetType("System.Object");
+            ilGenerator.Emit(OpCodes.Ldarg_0);
+            ilGenerator.Emit(OpCodes.Call, objectType!.GetConstructor(Type.EmptyTypes)!);
             foreach(var statement in constructor.Statements)
             {
                 AssembleStatement(ilGenerator, statement);
@@ -108,7 +125,7 @@ namespace NEN
             ilGenerator.Emit(OpCodes.Ret);
         }
 
-        private void AssembleMethod(ModulePart modulePart, TypeBuilder typeBuilder, MethodNode method)
+        private void AssembleMethod(ModulePart modulePart, MethodNode method)
         {   
             if (method.IsEntryPoint)
             {
@@ -233,6 +250,15 @@ namespace NEN
             AssembleExpression(ilGenerator, expressionStatement.Expression);
         }
 
+        private void AssembleFieldDeclarationStatement(ILGenerator ilGenerator, FieldDeclarationStatement fieldDeclarationStatement)
+        {
+            if (fieldDeclarationStatement.InitialValue != null)
+            {
+                AssembleExpression(ilGenerator, fieldDeclarationStatement.InitialValue);
+                ilGenerator.Emit(OpCodes.Stsfld, fieldDeclarationStatement.FieldInfo!);
+            }
+        }
+
         private void AssembleVariableDeclarationStatement( ILGenerator ilGenerator, VariableDeclarationStatement variableDeclarationStatement)
         {
             if (variableDeclarationStatement.InitialValue != null)
@@ -255,7 +281,7 @@ namespace NEN
                 case DuplicateExpression _: AssembleDuplicateExpression(ilGenerator); break;
                 case BoxExpression boxExpression: AssembleBoxExpression(ilGenerator, boxExpression); break;
                 case NewArrayExpression newArrayExpression: AssembleNewArrayExpression(ilGenerator, newArrayExpression); break;
-                case NewObjectExpression newObjectExpression: AssembleNewObjectExpression(ilGenerator, newObjectExpression); break;
+                case InlineConstructionExpression newObjectExpression: AssembleNewObjectExpression(ilGenerator, newObjectExpression); break;
                 case ArrayIndexingExpression arrayIndexingExpression: AssembleArrayIndexingExpression(ilGenerator, arrayIndexingExpression); break;
                 case StandardFieldAccessmentExpression standardFieldAccessmentExpression: AssembleStandardFieldAccessmentExpression(ilGenerator, standardFieldAccessmentExpression); break;
                 case StaticFieldAccessmentExpression staticFieldAccessmentExpression: AssembleStaticFieldAccessmentExpression(ilGenerator, staticFieldAccessmentExpression); break;
@@ -270,7 +296,7 @@ namespace NEN
             ilGenerator.Emit(OpCodes.Ldarg, argumentExpression.Index!.Value);
         }
 
-        private void AssembleNewObjectExpression(ILGenerator ilGenerator, NewObjectExpression newObjectExpression)
+        private void AssembleNewObjectExpression(ILGenerator ilGenerator, InlineConstructionExpression newObjectExpression)
         {
             ilGenerator.Emit(OpCodes.Newobj, newObjectExpression.ConstructorInfo!);
             foreach(var initialization in newObjectExpression.FieldInitializations)

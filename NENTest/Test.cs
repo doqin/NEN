@@ -1,7 +1,8 @@
 ﻿using Microsoft.Testing.Extensions.CodeCoverage;
 using NEN;
 using NEN.Exceptions;
-using NEN.Types;
+using NEN.AST;
+using static NEN.Lexer;
 using System.Diagnostics.Metrics;
 using System.Diagnostics.SymbolStore;
 using System.IO.Enumeration;
@@ -23,7 +24,7 @@ namespace NENTest
         public void LexerTest()
         {
             string fileName = "LexerTest";
-            (_, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
+            (_, Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
             PrintTokens(tokens);
         }
 
@@ -31,7 +32,7 @@ namespace NENTest
         public void ParserTest()
         {
             string fileName = "ParserTest";
-            (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
+            (string[] lines, Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
             // PrintTokens(tokens);
             var parser = new Parser(fileName, lines, tokens);
             var module = parser.Parse();
@@ -42,7 +43,7 @@ namespace NENTest
         public void StaticAnalyzerTest()
         {
             string fileName = "ParserTest";
-            (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
+            (string[] lines, Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
             // PrintTokens(tokens);
             var parser = new Parser(fileName, lines, tokens);
             var modulePart = parser.Parse();
@@ -56,10 +57,10 @@ namespace NENTest
         public void AssemblerTest()
         {
             string assemblyName = "AssemblerTest";
-            List<NEN.Types.ModulePart> moduleParts = [];
+            List<ModulePart> moduleParts = [];
             foreach (var fileName in Directory.GetFiles("Example sources\\AssemblyTest", "*.nen"))
             {
-                (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize(fileName);
+                (string[] lines, Token[] tokens) = Lexer.Tokenize(fileName);
                 // PrintTokens(tokens);
                 var parser = new Parser(fileName, lines, tokens);
                 var modulePart = parser.Parse();
@@ -76,7 +77,7 @@ namespace NENTest
 
         static private void GeneralStaticAnalyzerTest<T>(string fileName, bool printTokens = false) where T : NENException
         {
-            (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
+            (string[] lines, Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
             // PrintTokens(tokens);
             var parser = new Parser(fileName, lines, tokens);
             var modulePart = parser.Parse();
@@ -200,14 +201,14 @@ namespace NENTest
             GeneralAssemblerTest<MultipleEntryPointException>("MultipleEntryPointTest");
         }
 
-        private static void PrintTokens(NEN.Types.Token[] tokens)
+        private static void PrintTokens(Token[] tokens)
         {
             Console.WriteLine("Kết quả Lexer:");
             int valuePadding = tokens.Select(token => token.Value.Length).Max();
             var topBar = $"{"Value".PadRight(valuePadding)} | {"Type",-10} | {"Line",-4} | {"Column",-4}";
             var topBarLine = new string('-', topBar.Length);
             Console.WriteLine($"{topBar}\n{topBarLine}");
-            foreach (NEN.Types.Token token in tokens)
+            foreach (Token token in tokens)
             {
                 Console.WriteLine($"{token.Value.PadRight(valuePadding)} | {token.Type,-10} | {token.StartLine,-4} | {token.StartColumn,-4}");
             }
