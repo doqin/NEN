@@ -134,4 +134,10 @@ lớp Phụ
             kết_thúc;
         kết_thúc;
     kết_thúc
+
+    @Tĩnh @Công_Khai
+    phương_thức Kiểm_Tra_Khởi_Tạo() -> Void
+        biến n1 thuộc Người gán tạo Người();
+        biến n2 thuộc Người gán tạo Người("A", 21);
+    kết_thúc
 kết_thúc

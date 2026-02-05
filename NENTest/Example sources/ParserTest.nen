@@ -17,6 +17,9 @@ lớp Chương_Trình
             Tuổi gán 25
         };
 
+        biến n1 thuộc Người gán tạo Người();
+        biến n2 thuộc Người gán tạo Người("C", 43);
+
         người.Tên gán "Nguyễn Thị B";
         người.Tuổi gán 63;
 

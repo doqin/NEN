@@ -754,7 +754,19 @@ namespace NEN
                     };
                 case NamedType namedType:
                     List<AssignmentStatement> assignments = [];
-                    if (Current(out lBrace) && lBrace?.Value == "{")
+                    if (Current(out var lParen) && lParen?.Value == "(")
+                    {
+                        var arguments = ParseArguments();
+                        return new ConstructorCallExpression {
+                            ReturnTypeNode = namedType,
+                            Arguments = arguments,
+                            StartLine = startLine,
+                            StartColumn = startColumn,
+                            EndLine = endLine,
+                            EndColumn = endColumn
+                        };
+                    }
+                    else if (Current(out lBrace) && lBrace?.Value == "{")
                     {
                         ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "{");
                         while (Current(out var rBrace) && rBrace?.Value != "}")

@@ -281,7 +281,8 @@ namespace NEN
                 case DuplicateExpression _: AssembleDuplicateExpression(ilGenerator); break;
                 case BoxExpression boxExpression: AssembleBoxExpression(ilGenerator, boxExpression); break;
                 case NewArrayExpression newArrayExpression: AssembleNewArrayExpression(ilGenerator, newArrayExpression); break;
-                case InlineConstructionExpression newObjectExpression: AssembleNewObjectExpression(ilGenerator, newObjectExpression); break;
+                case InlineConstructionExpression inlineConstructionExpression: AssembleInlineConstructionExpression(ilGenerator, inlineConstructionExpression); break;
+                case ConstructorCallExpression constructorCallExpression: AssembleConstructorCallExpression(ilGenerator, constructorCallExpression); break;
                 case ArrayIndexingExpression arrayIndexingExpression: AssembleArrayIndexingExpression(ilGenerator, arrayIndexingExpression); break;
                 case StandardFieldAccessmentExpression standardFieldAccessmentExpression: AssembleStandardFieldAccessmentExpression(ilGenerator, standardFieldAccessmentExpression); break;
                 case StaticFieldAccessmentExpression staticFieldAccessmentExpression: AssembleStaticFieldAccessmentExpression(ilGenerator, staticFieldAccessmentExpression); break;
@@ -296,10 +297,19 @@ namespace NEN
             ilGenerator.Emit(OpCodes.Ldarg, argumentExpression.Index!.Value);
         }
 
-        private void AssembleNewObjectExpression(ILGenerator ilGenerator, InlineConstructionExpression newObjectExpression)
+        private void AssembleConstructorCallExpression(ILGenerator ilGenerator, ConstructorCallExpression constructorCallExpression)
         {
-            ilGenerator.Emit(OpCodes.Newobj, newObjectExpression.ConstructorInfo!);
-            foreach(var initialization in newObjectExpression.FieldInitializations)
+            foreach(var argument in constructorCallExpression.Arguments)
+            {
+                AssembleExpression(ilGenerator, argument);
+            }
+            ilGenerator.Emit(OpCodes.Newobj, constructorCallExpression.ConstructorInfo!);
+        }
+
+        private void AssembleInlineConstructionExpression(ILGenerator ilGenerator, InlineConstructionExpression inlineConstructionExpression)
+        {
+            ilGenerator.Emit(OpCodes.Newobj, inlineConstructionExpression.ConstructorInfo!);
+            foreach(var initialization in inlineConstructionExpression.FieldInitializations)
             {
                 AssembleAssignmentStatement(ilGenerator, initialization);
             }

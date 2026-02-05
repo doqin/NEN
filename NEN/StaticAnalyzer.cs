@@ -549,7 +549,8 @@ namespace NEN
                 case LiteralExpression literalExpression: return AnalyzeLiteralExpression(literalExpression);
                 case VariableExpression _: return AnalyzeVariableExpression(modulePart, c, localSymbolTable, ref expression);
                 case NewArrayExpression newArrayExpression: return AnalyzeNewArrayExpression(modulePart, c, localSymbolTable, ref newArrayExpression);
-                case InlineConstructionExpression newObjectExpression: return AnalyzeNewObjectExpression(modulePart, c, localSymbolTable, newObjectExpression);
+                case InlineConstructionExpression inlineConstructionExpression: return AnalyzeInlineConstructionExpression(modulePart, c, localSymbolTable, inlineConstructionExpression);
+                case ConstructorCallExpression constructorCallExpression: return AnalyzeConstructorCallExpression(modulePart, c, localSymbolTable, constructorCallExpression);
                 case StandardMethodCallExpression standardMethodCallExpression: return AnalyzeStandardMethodCallExpression(modulePart, c, localSymbolTable, ref standardMethodCallExpression);
                 case StaticMethodCallExpression staticMethodCallExpression: return AnalyzeStaticMethodCallExpression(modulePart, c, localSymbolTable, staticMethodCallExpression);
                 case AmbiguousMethodCallExpression ambiguousMethodCallExpression: 
@@ -712,43 +713,84 @@ namespace NEN
             return standardFieldAccessmentExpression.ReturnTypeNode;
         }
 
-        private TypeNode AnalyzeNewObjectExpression(ModulePart modulePart, ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, InlineConstructionExpression newObjectExpression)
+        private TypeNode AnalyzeConstructorCallExpression(ModulePart modulePart, ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, ConstructorCallExpression constructorCallExpression)
         {
-            foreach(var statement in newObjectExpression.FieldInitializations)
+            List<Type> argTypes = [];
+            for (int i = 0; i < constructorCallExpression.Arguments.Length; i++)
             {
-                AnalyzeAssignmentStatement(modulePart, c, localSymbolTable, statement);
+                var argTypeNode = AnalyzeExpression(modulePart, c, localSymbolTable, ref constructorCallExpression.Arguments[i]);
+                argTypes.Add(GetTypeFromTypeNode(modulePart, argTypeNode));
             }
-            var returnType = GetTypeFromTypeNode(modulePart, newObjectExpression.ReturnTypeNode!);
-            if (moduleConstructors.TryGetValue((returnType.FullName!, []), out var constructorInfo))
+            var returnType = GetTypeFromTypeNode(modulePart, constructorCallExpression.ReturnTypeNode!);
+            if (moduleConstructors.TryGetValue((returnType.FullName!, [..argTypes]), out var constructorInfo))
             {
-                newObjectExpression.ConstructorInfo = constructorInfo;
+                constructorCallExpression.ConstructorInfo = constructorInfo;
             }
             else
             {
                 try
                 {
-                    newObjectExpression.ConstructorInfo = returnType.GetConstructor([]);
+                    constructorCallExpression.ConstructorInfo = returnType.GetConstructor([..argTypes]);
                 }
                 catch (Exception) { }
             }
-            if (newObjectExpression.ConstructorInfo == null || newObjectExpression.ConstructorInfo!.IsPrivate) 
+            if (constructorCallExpression.ConstructorInfo == null || constructorCallExpression.ConstructorInfo!.IsPrivate)
+                throw new UnresolvedConstructorException(
+                    modulePart.Source,
+                    returnType.FullName!,
+                    [],
+                    constructorCallExpression.StartLine,
+                    constructorCallExpression.StartColumn,
+                    constructorCallExpression.EndLine,
+                    constructorCallExpression.EndColumn
+                );
+            constructorCallExpression.ReturnTypeNode = CreateTypeNodeFromType(
+                returnType,
+                constructorCallExpression.ReturnTypeNode!.StartLine,
+                constructorCallExpression.ReturnTypeNode!.StartColumn,
+                constructorCallExpression.ReturnTypeNode!.EndLine,
+                constructorCallExpression.ReturnTypeNode!.EndColumn
+            );
+            return constructorCallExpression.ReturnTypeNode;
+        }
+
+        private TypeNode AnalyzeInlineConstructionExpression(ModulePart modulePart, ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, InlineConstructionExpression inlineConstructionExpression)
+        {
+            foreach(var statement in inlineConstructionExpression.FieldInitializations)
+            {
+                AnalyzeAssignmentStatement(modulePart, c, localSymbolTable, statement);
+            }
+            var returnType = GetTypeFromTypeNode(modulePart, inlineConstructionExpression.ReturnTypeNode!);
+            if (moduleConstructors.TryGetValue((returnType.FullName!, []), out var constructorInfo))
+            {
+                inlineConstructionExpression.ConstructorInfo = constructorInfo;
+            }
+            else
+            {
+                try
+                {
+                    inlineConstructionExpression.ConstructorInfo = returnType.GetConstructor([]);
+                }
+                catch (Exception) { }
+            }
+            if (inlineConstructionExpression.ConstructorInfo == null || inlineConstructionExpression.ConstructorInfo!.IsPrivate) 
                 throw new UnresolvedConstructorException(
                     modulePart.Source, 
                     returnType.FullName!, 
                     [], 
-                    newObjectExpression.StartLine, 
-                    newObjectExpression.StartColumn,
-                    newObjectExpression.EndLine,
-                    newObjectExpression.EndColumn
+                    inlineConstructionExpression.StartLine, 
+                    inlineConstructionExpression.StartColumn,
+                    inlineConstructionExpression.EndLine,
+                    inlineConstructionExpression.EndColumn
                 );
-            newObjectExpression.ReturnTypeNode = CreateTypeNodeFromType(
+            inlineConstructionExpression.ReturnTypeNode = CreateTypeNodeFromType(
                 returnType,
-                newObjectExpression.ReturnTypeNode!.StartLine,
-                newObjectExpression.ReturnTypeNode.StartColumn,
-                newObjectExpression.ReturnTypeNode.EndLine,
-                newObjectExpression.ReturnTypeNode.EndColumn
+                inlineConstructionExpression.ReturnTypeNode!.StartLine,
+                inlineConstructionExpression.ReturnTypeNode.StartColumn,
+                inlineConstructionExpression.ReturnTypeNode.EndLine,
+                inlineConstructionExpression.ReturnTypeNode.EndColumn
             );
-            return newObjectExpression.ReturnTypeNode;
+            return inlineConstructionExpression.ReturnTypeNode;
         }
 
         private TypeNode AnalyzeArrayIndexingExpression(ModulePart modulePart, ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, ArrayIndexingExpression arrayIndexingExpression)

@@ -14,5 +14,6 @@ lớp Chương_Trình
         Phụ::Kiểm_Tra_Kiểu_Luận_Lý();
         Phụ::Kiểm_Tra_Nếu();
         Phụ::Kiểm_Tra_Trong_Khi();
+        Phụ::Kiểm_Tra_Khởi_Tạo();
     kết_thúc
 kết_thúc
