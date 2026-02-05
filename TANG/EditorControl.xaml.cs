@@ -7,6 +7,7 @@ using ICSharpCode.AvalonEdit.Rendering;
 using ICSharpCode.AvalonEdit.Search;
 using NEN;
 using NEN.AST;
+using NEN.Exceptions;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -40,7 +41,7 @@ namespace TANG
         CompletionWindow? completionWindow;
         DispatcherTimer analysisTimer;
         SymbolColorizer? symbolColorizer;
-        List<string> symbolCompletions = [];
+        NEN.Symbols.Symbol[] symbolCompletions = [];
 
         public EditorControl()
         {
@@ -80,20 +81,21 @@ namespace TANG
                 EndOffset = textEditor.TextArea.Caret.Offset
             };
             IList<ICompletionData> data = completionWindow.CompletionList.CompletionData;
-            HashSet<string> added = new(StringComparer.Ordinal);
             foreach (var keyword in NEN.Lexer.Keywords)
             {
-                if (added.Add(keyword))
-                {
-                    data.Add(new Types.NENCompletionData(keyword));
-                }
+                data.Add(new Types.NENCompletionData(keyword));
             }
             foreach (var symbol in symbolCompletions)
             {
-                if (added.Add(symbol))
+                data.Add(new Types.NENCompletionData(symbol switch
                 {
-                    data.Add(new Types.NENCompletionData(symbol));
-                }
+                    NEN.Symbols.MethodBase methodBase => methodBase.Name,
+                    NEN.Symbols.FieldSymbol fieldSymbol => fieldSymbol.Name,
+                    NEN.Symbols.LocalSymbol localSymbol => localSymbol.Name,
+                    NEN.Symbols.ClassSymbol classSymbol => classSymbol.Name,
+                    NEN.Symbols.ANSISymbol ansiSymbol => ansiSymbol.Name,
+                    _ => throw new NotImplementedException(),
+                }));
             }
 
             if (!string.IsNullOrEmpty(currentWord))
@@ -221,11 +223,11 @@ namespace TANG
 
                 var analyzer = new StaticAnalyzer(moduleName, [.. moduleParts], []);
                 var module = analyzer.Analyze();
-                var spans = CollectSymbolSpans(module, FilePath);
-                symbolCompletions = [.. CollectSymbolNames(module, FilePath)];
+                var (symbols, spans) = module.CollectSymbols(FilePath!, textEditor.Document);
+                symbolCompletions = [.. symbols];
                 ApplySymbolSpans(spans);
             }
-            catch
+            catch (NENException) // only catch NENExceptions, if a regular exception happens we gotta fix it
             {
                 ClearSymbolColorizer();
             }
@@ -270,370 +272,7 @@ namespace TANG
             return Path.GetFullPath(Path.Combine(projectRoot, source));
         }
 
-        IReadOnlyList<SymbolSpan> CollectSymbolSpans(Module module, string? currentPath)
-        {
-            List<SymbolSpan> spans = [];
-            var currentFullPath = string.IsNullOrWhiteSpace(currentPath) ? null : Path.GetFullPath(currentPath);
-            foreach (var modulePart in module.ModuleParts)
-            {
-                if (currentFullPath != null)
-                {
-                    var modulePartPath = Path.GetFullPath(modulePart.SourceName);
-                    if (!string.Equals(modulePartPath, currentFullPath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-                }
-                foreach (var c in modulePart.Classes)
-                {
-                    AddSpan(spans, c.StartLine, c.StartColumn, c.EndLine, c.EndColumn, SymbolKind.Class);
-                    foreach (var field in c.Fields)
-                    {
-                        AddSpan(spans, field.Variable.StartLine, field.Variable.StartColumn, field.Variable.EndLine, field.Variable.EndColumn, SymbolKind.Field);
-                        AddTypeSpan(spans, field.Variable.TypeNode, SymbolKind.Class);
-                        if (field.InitialValue != null)
-                        {
-                            CollectExpression(field.InitialValue, spans);
-                        }
-                    }
-
-                    if (c.Constructors != null)
-                    {
-                        foreach (var ctor in c.Constructors)
-                        {
-                            AddSpan(spans, ctor.StartLine, ctor.StartColumn, ctor.EndLine, ctor.EndColumn, SymbolKind.Method);
-                            AddTypeSpan(spans, ctor.DeclaringTypeNode, SymbolKind.Class);
-                            AddParametersAndStatements(spans, ctor.Parameters, ctor.Statements);
-                        }
-                    }
-
-                    foreach (var method in c.Methods)
-                    {
-                        AddSpan(spans, method.StartLine, method.StartColumn, method.EndLine, method.EndColumn, SymbolKind.Method);
-                        AddTypeSpan(spans, method.ReturnTypeNode, SymbolKind.Class);
-                        AddParametersAndStatements(spans, method.Parameters, method.Statements);
-                    }
-                }
-            }
-            return spans;
-        }
-
-        IReadOnlyCollection<string> CollectSymbolNames(Module module, string? currentPath)
-        {
-            HashSet<string> names = new(StringComparer.Ordinal);
-            var currentFullPath = string.IsNullOrWhiteSpace(currentPath) ? null : Path.GetFullPath(currentPath);
-            foreach (var modulePart in module.ModuleParts)
-            {
-                if (currentFullPath != null)
-                {
-                    var modulePartPath = Path.GetFullPath(modulePart.SourceName);
-                    if (!string.Equals(modulePartPath, currentFullPath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-                }
-
-                foreach (var c in modulePart.Classes)
-                {
-                    names.Add(c.Name);
-                    foreach (var field in c.Fields)
-                    {
-                        names.Add(field.Variable.Name);
-                    }
-
-                    if (c.Constructors != null)
-                    {
-                        foreach (var ctor in c.Constructors)
-                        {
-                            names.Add(ctor.GetMethodInfo()?.Name ?? c.Name);
-                            AddParametersNames(names, ctor.Parameters);
-                            CollectStatementNames(ctor.Statements, names);
-                        }
-                    }
-
-                    foreach (var method in c.Methods)
-                    {
-                        names.Add(method.MethodName);
-                        AddParametersNames(names, method.Parameters);
-                        CollectStatementNames(method.Statements, names);
-                    }
-                }
-            }
-            return names;
-        }
-
-        static void AddParametersNames(HashSet<string> names, IEnumerable<VariableNode> parameters)
-        {
-            foreach (var parameter in parameters)
-            {
-                names.Add(parameter.Name);
-            }
-        }
-
-        void CollectStatementNames(IEnumerable<StatementNode> statements, HashSet<string> names)
-        {
-            foreach (var statement in statements)
-            {
-                switch (statement)
-                {
-                    case VariableDeclarationStatement variableDeclaration:
-                        names.Add(variableDeclaration.Variable.Name);
-                        if (variableDeclaration.InitialValue != null)
-                        {
-                            CollectExpressionNames(variableDeclaration.InitialValue, names);
-                        }
-                        break;
-                    case AssignmentStatement assignment:
-                        CollectExpressionNames(assignment.Destination, names);
-                        CollectExpressionNames(assignment.Source, names);
-                        break;
-                    case ExpressionStatement expressionStatement:
-                        CollectExpressionNames(expressionStatement.Expression, names);
-                        break;
-                    case ReturnStatement returnStatement when returnStatement.Expression != null:
-                        CollectExpressionNames(returnStatement.Expression, names);
-                        break;
-                    case IfStatement ifStatement:
-                        CollectExpressionNames(ifStatement.Condition, names);
-                        CollectStatementNames(ifStatement.IfClause, names);
-                        CollectStatementNames(ifStatement.ElseClause, names);
-                        break;
-                    case WhileStatement whileStatement:
-                        CollectExpressionNames(whileStatement.Condition, names);
-                        CollectStatementNames(whileStatement.Body, names);
-                        break;
-                }
-            }
-        }
-
-        void CollectExpressionNames(ExpressionNode expression, HashSet<string> names)
-        {
-            switch (expression)
-            {
-                case VariableExpression variableExpression:
-                    names.Add(variableExpression.Name);
-                    break;
-                case ArgumentExpression argumentExpression:
-                    names.Add(argumentExpression.Name);
-                    break;
-                case StandardFieldAccessmentExpression fieldAccessmentExpression:
-                    CollectExpressionNames(fieldAccessmentExpression.Object, names);
-                    names.Add(fieldAccessmentExpression.FieldName);
-                    break;
-                case StaticFieldAccessmentExpression staticFieldAccessmentExpression:
-                    names.Add(staticFieldAccessmentExpression.FieldName);
-                    break;
-                case StandardMethodCallExpression methodCallExpression:
-                    CollectExpressionNames(methodCallExpression.Object, names);
-                    names.Add(methodCallExpression.MethodName);
-                    foreach (var argument in methodCallExpression.Arguments)
-                    {
-                        CollectExpressionNames(argument, names);
-                    }
-                    break;
-                case StaticMethodCallExpression staticMethodCallExpression:
-                    names.Add(staticMethodCallExpression.MethodName);
-                    foreach (var argument in staticMethodCallExpression.Arguments)
-                    {
-                        CollectExpressionNames(argument, names);
-                    }
-                    break;
-                case AmbiguousMethodCallExpression ambiguousMethodCallExpression:
-                    names.Add(ambiguousMethodCallExpression.MethodName);
-                    foreach (var argument in ambiguousMethodCallExpression.Arguments)
-                    {
-                        CollectExpressionNames(argument, names);
-                    }
-                    break;
-                case BinaryExpression binaryExpression:
-                    CollectExpressionNames(binaryExpression.Left, names);
-                    CollectExpressionNames(binaryExpression.Right, names);
-                    break;
-                case NewArrayExpression newArrayExpression:
-                    if (newArrayExpression.Size != null)
-                    {
-                        CollectExpressionNames(newArrayExpression.Size, names);
-                    }
-                    foreach (var element in newArrayExpression.Elements)
-                    {
-                        CollectExpressionNames(element, names);
-                    }
-                    break;
-                case ArrayIndexingExpression arrayIndexingExpression:
-                    CollectExpressionNames(arrayIndexingExpression.Array, names);
-                    CollectExpressionNames(arrayIndexingExpression.Index, names);
-                    break;
-                case InlineConstructionExpression newObjectExpression:
-                    foreach (var fieldInit in newObjectExpression.FieldInitializations)
-                    {
-                        CollectStatementNames([fieldInit], names);
-                    }
-                    break;
-                case BoxExpression boxExpression:
-                    CollectExpressionNames(boxExpression.Expression, names);
-                    break;
-            }
-        }
-
-        void AddParametersAndStatements(List<SymbolSpan> spans, IEnumerable<VariableNode> parameters, IEnumerable<StatementNode> statements)
-        {
-            foreach (var parameter in parameters)
-            {
-                AddSpan(spans, parameter.StartLine, parameter.StartColumn, parameter.EndLine, parameter.EndColumn, SymbolKind.Parameter);
-                AddTypeSpan(spans, parameter.TypeNode, SymbolKind.Class);
-            }
-
-            CollectStatements(statements, spans);
-        }
-
-        void CollectStatements(IEnumerable<StatementNode> statements, List<SymbolSpan> spans)
-        {
-            foreach (var statement in statements)
-            {
-                switch (statement)
-                {
-                    case VariableDeclarationStatement variableDeclaration:
-                        AddSpan(spans, variableDeclaration.Variable.StartLine, variableDeclaration.Variable.StartColumn, variableDeclaration.Variable.EndLine, variableDeclaration.Variable.EndColumn, SymbolKind.Local);
-                        AddTypeSpan(spans, variableDeclaration.Variable.TypeNode, SymbolKind.Class);
-                        if (variableDeclaration.InitialValue != null)
-                        {
-                            CollectExpression(variableDeclaration.InitialValue, spans);
-                        }
-                        break;
-                    case AssignmentStatement assignment:
-                        CollectExpression(assignment.Destination, spans);
-                        CollectExpression(assignment.Source, spans);
-                        break;
-                    case ExpressionStatement expressionStatement:
-                        CollectExpression(expressionStatement.Expression, spans);
-                        break;
-                    case ReturnStatement returnStatement when returnStatement.Expression != null:
-                        CollectExpression(returnStatement.Expression, spans);
-                        break;
-                    case IfStatement ifStatement:
-                        CollectExpression(ifStatement.Condition, spans);
-                        CollectStatements(ifStatement.IfClause, spans);
-                        CollectStatements(ifStatement.ElseClause, spans);
-                        break;
-                    case WhileStatement whileStatement:
-                        CollectExpression(whileStatement.Condition, spans);
-                        CollectStatements(whileStatement.Body, spans);
-                        break;
-                }
-            }
-        }
-
-        void CollectExpression(ExpressionNode expression, List<SymbolSpan> spans)
-        {
-            switch (expression)
-            {
-                case VariableExpression variableExpression:
-                    AddSpan(spans, variableExpression.StartLine, variableExpression.StartColumn, variableExpression.EndLine, variableExpression.EndColumn, SymbolKind.Local);
-                    break;
-                case ArgumentExpression argumentExpression:
-                    AddSpan(spans, argumentExpression.StartLine, argumentExpression.StartColumn, argumentExpression.EndLine, argumentExpression.EndColumn, SymbolKind.Parameter);
-                    break;
-                case StandardFieldAccessmentExpression fieldAccessmentExpression:
-                    AddSpan(spans, fieldAccessmentExpression.StartLine, fieldAccessmentExpression.StartColumn, fieldAccessmentExpression.EndLine, fieldAccessmentExpression.EndColumn, SymbolKind.Field);
-                    CollectExpression(fieldAccessmentExpression.Object, spans);
-                    break;
-                case StaticFieldAccessmentExpression staticFieldAccessmentExpression:
-                    AddSpan(spans, staticFieldAccessmentExpression.StartLine, staticFieldAccessmentExpression.StartColumn, staticFieldAccessmentExpression.EndLine, staticFieldAccessmentExpression.EndColumn, SymbolKind.Field);
-                    AddTypeSpan(spans, staticFieldAccessmentExpression.TypeNode, SymbolKind.Class);
-                    break;
-                case StandardMethodCallExpression methodCallExpression:
-                    AddSpan(spans, methodCallExpression.StartLine, methodCallExpression.StartColumn, methodCallExpression.EndLine, methodCallExpression.EndColumn, SymbolKind.Method);
-                    CollectExpression(methodCallExpression.Object, spans);
-                    foreach (var argument in methodCallExpression.Arguments)
-                    {
-                        CollectExpression(argument, spans);
-                    }
-                    break;
-                case StaticMethodCallExpression staticMethodCallExpression:
-                    AddSpan(spans, staticMethodCallExpression.StartLine, staticMethodCallExpression.StartColumn, staticMethodCallExpression.EndLine, staticMethodCallExpression.EndColumn, SymbolKind.Method);
-                    AddTypeSpan(spans, staticMethodCallExpression.TypeNode, SymbolKind.Class);
-                    foreach (var argument in staticMethodCallExpression.Arguments)
-                    {
-                        CollectExpression(argument, spans);
-                    }
-                    break;
-                case AmbiguousMethodCallExpression ambiguousMethodCallExpression:
-                    AddSpan(spans, ambiguousMethodCallExpression.StartLine, ambiguousMethodCallExpression.StartColumn, ambiguousMethodCallExpression.EndLine, ambiguousMethodCallExpression.EndColumn, SymbolKind.Method);
-                    foreach (var argument in ambiguousMethodCallExpression.Arguments)
-                    {
-                        CollectExpression(argument, spans);
-                    }
-                    break;
-                case BinaryExpression binaryExpression:
-                    CollectExpression(binaryExpression.Left, spans);
-                    CollectExpression(binaryExpression.Right, spans);
-                    break;
-                case NewArrayExpression newArrayExpression:
-                    if (newArrayExpression.Size != null)
-                    {
-                        CollectExpression(newArrayExpression.Size, spans);
-                    }
-                    foreach (var element in newArrayExpression.Elements)
-                    {
-                        CollectExpression(element, spans);
-                    }
-                    AddTypeSpan(spans, newArrayExpression.ReturnTypeNode, SymbolKind.Class);
-                    break;
-                case ArrayIndexingExpression arrayIndexingExpression:
-                    CollectExpression(arrayIndexingExpression.Array, spans);
-                    CollectExpression(arrayIndexingExpression.Index, spans);
-                    break;
-                case InlineConstructionExpression newObjectExpression:
-                    AddTypeSpan(spans, newObjectExpression.ReturnTypeNode, SymbolKind.Class);
-                    foreach (var fieldInit in newObjectExpression.FieldInitializations)
-                    {
-                        CollectStatements([fieldInit], spans);
-                    }
-                    break;
-                case BoxExpression boxExpression:
-                    CollectExpression(boxExpression.Expression, spans);
-                    break;
-            }
-        }
-
-        void AddTypeSpan(List<SymbolSpan> spans, TypeNode? typeNode, SymbolKind kind)
-        {
-            if (typeNode == null) return;
-            AddSpan(spans, typeNode.StartLine, typeNode.StartColumn, typeNode.EndLine, typeNode.EndColumn, kind);
-            if (typeNode is ArrayType arrayType)
-            {
-                AddTypeSpan(spans, arrayType.ElementTypeNode, kind);
-            }
-        }
-
-        void AddSpan(List<SymbolSpan> spans, int startLine, int startColumn, int endLine, int endColumn, SymbolKind kind)
-        {
-            if (startLine < 1 || startColumn < 1 || endLine < 1 || endColumn < 1) return;
-            if (textEditor.Document == null) return;
-            try
-            {
-                var startOffset = GetOffset(textEditor.Document, startLine, startColumn);
-                var endOffset = GetOffset(textEditor.Document, endLine, endColumn + 1);
-                endOffset = Math.Min(endOffset, textEditor.Document.TextLength);
-                if (endOffset > startOffset)
-                {
-                    spans.Add(new SymbolSpan(startOffset, endOffset, kind));
-                }
-            }
-            catch
-            {
-                // Ignore invalid spans
-            }
-        }
-
-        static int GetOffset(TextDocument document, int line, int column)
-        {
-            var documentLine = document.GetLineByNumber(line);
-            var cappedColumn = Math.Clamp(column - 1, 0, documentLine.Length);
-            return documentLine.Offset + cappedColumn;
-        }
-
-        void ApplySymbolSpans(IReadOnlyList<SymbolSpan> spans)
+        void ApplySymbolSpans(IReadOnlyList<NEN.Symbols.SymbolSpan> spans)
         {
             if (symbolColorizer != null)
             {
@@ -688,32 +327,21 @@ namespace TANG
             return (startOffset, currentWord);
         }
 
-        enum SymbolKind
-        {
-            Class,
-            Method,
-            Field,
-            Parameter,
-            Local
-        }
-
-        readonly record struct SymbolSpan(int StartOffset, int EndOffset, SymbolKind Kind);
-
         sealed class SymbolColorizer : DocumentColorizingTransformer
         {
-            readonly IReadOnlyList<SymbolSpan> spans;
-            readonly IReadOnlyDictionary<SymbolKind, Brush> brushes;
+            readonly IReadOnlyList<NEN.Symbols.SymbolSpan> spans;
+            readonly IReadOnlyDictionary<NEN.Symbols.SymbolKind, Brush> brushes;
 
-            public SymbolColorizer(IReadOnlyList<SymbolSpan> spans)
+            public SymbolColorizer(IReadOnlyList<NEN.Symbols.SymbolSpan> spans)
             {
                 this.spans = spans;
-                brushes = new Dictionary<SymbolKind, Brush>
+                brushes = new Dictionary<NEN.Symbols.SymbolKind, Brush>
                 {
-                    { SymbolKind.Class, CreateBrush(38, 127, 153) },
-                    { SymbolKind.Method, CreateBrush(121, 94, 38) },
-                    { SymbolKind.Field, CreateBrush(0, 16, 128) },
-                    { SymbolKind.Parameter, CreateBrush(0, 16, 128) },
-                    { SymbolKind.Local, CreateBrush(0, 16, 128) }
+                    { NEN.Symbols.SymbolKind.Class, CreateBrush(38, 127, 153) },
+                    { NEN.Symbols.SymbolKind.Method, CreateBrush(121, 94, 38) },
+                    { NEN.Symbols.SymbolKind.Field, CreateBrush(0, 16, 128) },
+                    { NEN.Symbols.SymbolKind.Parameter, CreateBrush(0, 16, 128) },
+                    { NEN.Symbols.SymbolKind.Local, CreateBrush(0, 16, 128) }
                 };
             }
 
@@ -733,7 +361,7 @@ namespace TANG
                         {
                             element.TextRunProperties.SetForegroundBrush(brush);
                         }
-                        if (span.Kind is SymbolKind.Class or SymbolKind.Method)
+                        if (span.Kind is NEN.Symbols.SymbolKind.Class or NEN.Symbols.SymbolKind.Method or NEN.Symbols.SymbolKind.Field)
                         {
                             element.TextRunProperties.SetTypeface(CreateTypeface(element.TextRunProperties, FontWeights.SemiBold));
                         }

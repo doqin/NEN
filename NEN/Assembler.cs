@@ -144,7 +144,7 @@ namespace NEN
         {
             switch (statement)
             {
-                case VariableDeclarationStatement variableDeclarationStatement: AssembleVariableDeclarationStatement( ilGenerator, variableDeclarationStatement); break;
+                case LocalDeclarationStatement variableDeclarationStatement: AssembleVariableDeclarationStatement( ilGenerator, variableDeclarationStatement); break;
                 case ExpressionStatement expressionStatement: AssembleExpressionStatement(ilGenerator, expressionStatement); break;
                 case AssignmentStatement assignmentStatement: AssembleAssignmentStatement(ilGenerator, assignmentStatement); break;
                 case ReturnStatement returnStatement: AssembleReturnStatement(ilGenerator, returnStatement); break;
@@ -259,7 +259,7 @@ namespace NEN
             }
         }
 
-        private void AssembleVariableDeclarationStatement( ILGenerator ilGenerator, VariableDeclarationStatement variableDeclarationStatement)
+        private void AssembleVariableDeclarationStatement( ILGenerator ilGenerator, LocalDeclarationStatement variableDeclarationStatement)
         {
             if (variableDeclarationStatement.InitialValue != null)
             {

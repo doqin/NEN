@@ -1,4 +1,7 @@
-﻿using System.Reflection;
+﻿using ICSharpCode.AvalonEdit.Document;
+using Microsoft.VisualBasic;
+using NEN.Symbols;
+using System.Reflection;
 using System.Reflection.Emit;
 
 namespace NEN
@@ -16,6 +19,18 @@ namespace NEN
             {
                 return Helper.GetTreeString<ASTNode>($"Bộ phận mô đun: {SourceName}", [.. UsingNamespaces, .. Classes]);
             }
+            internal void CollectSymbols(
+                TextDocument document, 
+                HashSet<Symbol> symbols, 
+                List<SymbolSpan> symbolSpans, 
+                bool collectPrivates, 
+                bool collectSpans)
+            {
+                foreach(var c in Classes)
+                {
+                    c.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                }
+            }
         }
 
         public class Module
@@ -31,6 +46,23 @@ namespace NEN
             {
                 return Helper.GetTreeString($"Mô đun: {Name}", [.. ModuleParts]);
             }
+            public (Symbol[], SymbolSpan[]) CollectSymbols(string sourceFile, TextDocument document)
+            {
+                HashSet<Symbol> symbols = new(new SymbolComparer());
+                List<SymbolSpan> symbolSpans = [];
+                foreach(var modulePart in ModuleParts)
+                {
+                    if (modulePart.SourceName == sourceFile)
+                    {
+                        modulePart.CollectSymbols(document, symbols, symbolSpans, true, true);
+                    }
+                    else
+                    {
+                        modulePart.CollectSymbols(document, symbols, symbolSpans, false, false);
+                    }
+                }
+                return ([..symbols], [..symbolSpans]);
+            }
         }
         public abstract class ASTNode
         {
@@ -38,6 +70,13 @@ namespace NEN
             public required int StartColumn { set; get; }
             public required int EndLine { set; get; }
             public required int EndColumn { set; get; }
+            internal abstract void CollectSymbols(
+                TextDocument document, 
+                HashSet<Symbol> symbols,
+                List<SymbolSpan> symbolSpans, 
+                bool collectPrivates, 
+                bool collectSpans
+            );
         }
 
         public class ClassNode : ASTNode
@@ -47,6 +86,43 @@ namespace NEN
             public MethodNode[] Methods { get; set; } = [];
             public TypeBuilder? TypeBuilder { get; set; }
             public ConstructorNode[]? Constructors { get; set; }
+
+            internal override void CollectSymbols(
+                TextDocument document, 
+                HashSet<Symbol> symbols, 
+                List<SymbolSpan> symbolSpans, 
+                bool collectPrivates, 
+                bool collectSpans
+            )
+            {
+                var classSymbol = new ClassSymbol { Name = Name };
+                symbols.Add(classSymbol);
+                foreach (var field in Fields)
+                {
+                    field.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                }
+                foreach (var constructor in Constructors ?? [])
+                {
+                    constructor.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                }
+                foreach (var method in Methods)
+                {
+                    method.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                }
+                if (collectSpans)
+                {
+                    Helper.AddSpan(
+                        document, 
+                        symbolSpans, 
+                        StartLine, 
+                        StartColumn, 
+                        EndLine, 
+                        EndColumn, 
+                        SymbolKind.Class
+                    ); // Class name
+                }
+            }
+
             public ConstructorNode? GetDefaultConstructor()
             {
                 return Constructors?.First(e => e.Parameters.Length == 0);
@@ -60,10 +136,22 @@ namespace NEN
 
         public abstract class MethodBase : ASTNode
         {
+            public required NamedType DeclaringTypeNode { get; set; }
             public MethodAttributes MethodAttributes { get; set; } = MethodAttributes.Private;
             public VariableNode[] Parameters { get; set; } = [];
             public StatementNode[] Statements { get; set; } = [];
             public abstract System.Reflection.MethodBase? GetMethodInfo();
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                foreach (var param in Parameters)
+                {
+                    param.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                }
+                foreach (var statement in Statements)
+                {
+                    statement.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                }
+            }
         }
 
         public class MethodNode : MethodBase
@@ -86,11 +174,21 @@ namespace NEN
                     [.. Statements]
                     );
             }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                base.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                symbols.Add(Helper.MethodNodeToMethodSymbol(this));
+                if (collectSpans)
+                {
+                    Helper.AddSpan(document, symbolSpans, StartLine, StartColumn, EndLine, EndColumn, SymbolKind.Method);
+                }
+                ReturnTypeNode.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+            }
         }
 
         public class ConstructorNode : MethodBase
         {
-            public required NamedType DeclaringTypeNode { get; set; }
             public ConstructorBuilder? ConstructorBuilder { get; set; }
             public override System.Reflection.MethodBase? GetMethodInfo()
             {
@@ -105,15 +203,46 @@ namespace NEN
                     [.. Statements]
                     );
             }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                base.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                symbols.Add(Helper.MethodNodeToMethodSymbol(this));
+                if (collectSpans)
+                {
+                    // Maybe change it later
+                    Helper.AddSpan(document, symbolSpans, StartLine, StartColumn, EndLine, EndColumn, SymbolKind.Method);
+                }
+            }
         }
 
-        public class VariableNode : ASTNode // Used for both attributes and parameters
+        public class VariableNode : ASTNode // Used for both fields and parameters
         {
+            public required SymbolKind SymbolKind { get; set; }
             public required string Name { get; set; }
             public required TypeNode TypeNode { get; set; }
             public override string ToString()
             {
                 return $"{Name} ({TypeNode})";
+            }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                // The symbol is collected by its respective declaration statement
+
+                // So we only collect the spans here if needed
+                if (collectSpans)
+                {
+                    Helper.AddSpan(
+                        document,
+                        symbolSpans,
+                        StartLine,
+                        StartColumn,
+                        EndLine,
+                        EndColumn,
+                        SymbolKind); // symbol name
+                }
+                TypeNode.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
             }
         }
 
@@ -131,6 +260,7 @@ namespace NEN
             public required string Name { get; set; }
             public string FullName => string.Join("::", [.. Namespaces, Name]);
             public string CLRFullName => string.Join(".", [.. Namespaces, Name]);
+            public abstract Type? GetCLRType();
         }
 
         public class NamedType : TypeNode
@@ -143,6 +273,20 @@ namespace NEN
                     return $"{string.Join("::", [.. Namespaces, Name])}(*)";
                 }
                 return CLRType.FullName ?? string.Join("::", [.. Namespaces, Name]);
+            }
+            public override Type? GetCLRType()
+            {
+                return CLRType;
+            }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                symbols.Add(Helper.TypeNodeToTypeSymbol(this));
+                if (collectSpans)
+                {
+                    // TODO: Add more types later
+                    Helper.AddSpan(document, symbolSpans, StartLine, StartColumn, EndLine, EndColumn, SymbolKind.Class);
+                }
             }
         }
 
@@ -161,6 +305,15 @@ namespace NEN
                     return $"{ElementTypeNode}[]";
 
                 return $"{ElementTypeNode}[{new string(',', Rank - 1)}]";
+            }
+            public override Type? GetCLRType()
+            {
+                return ElementTypeNode.GetCLRType();
+            }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                ElementTypeNode.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
             }
         }
 
@@ -181,6 +334,19 @@ namespace NEN
                         Helper.GetTreeString("Phần không thì:", ElseClause)
                         ]);
             }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                Condition.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                foreach (var statement in IfClause)
+                {
+                    statement.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                }
+                foreach (var statement in ElseClause)
+                {
+                    statement.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                }
+            }
         }
 
         public class WhileStatement : StatementNode
@@ -192,11 +358,24 @@ namespace NEN
             {
                 return Helper.GetTreeString<object>("Trong khi:", [Condition, Helper.GetTreeString("Nội dung:", [.. Body])]);
             }
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                Condition.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                foreach(var statement in Body)
+                {
+                    statement.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                }
+            }
         }
 
         public class BreakStatement : StatementNode
         {
             public Label? EndLabel { get; set; }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                return;
+            }
         }
 
         public class ReturnStatement : StatementNode
@@ -205,6 +384,11 @@ namespace NEN
             public override string ToString()
             {
                 return Helper.GetTreeString($"Trả về:", [Expression]);
+            }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                Expression?.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
             }
         }
 
@@ -217,6 +401,11 @@ namespace NEN
                 string isResolved = IsResolved ? "" : "(*)";
                 return $"Sử dụng không gian tên '{string.Join("::", Namespace)}'{isResolved}";
             }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                return;
+            }
         }
 
         public abstract class DeclarationStatement : StatementNode
@@ -225,8 +414,9 @@ namespace NEN
             public ExpressionNode? InitialValue { set; get; }
         }
 
-        public class VariableDeclarationStatement : DeclarationStatement
+        public class LocalDeclarationStatement : DeclarationStatement
         {
+            public MethodBase? DeclaringMethod { get; set; } // Gets resolved after static analysis
             public LocalBuilder? LocalBuilder { set; get; }
             public override string ToString()
             {
@@ -236,10 +426,25 @@ namespace NEN
                 }
                 return $"Khai báo biến: {Variable}";
             }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                if (collectPrivates)
+                {
+                    symbols.Add(new LocalSymbol
+                    {
+                        Method = Helper.MethodNodeToMethodSymbol(DeclaringMethod!),
+                        Name = Variable.Name
+                    });
+                }
+                Variable.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                InitialValue?.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+            }
         }
 
         public class FieldDeclarationStatement : DeclarationStatement
         {
+            public required NamedType DeclaringTypeNode { get; set; }
             public FieldInfo? FieldInfo { set; get; }
             public FieldAttributes FieldAttributes { get; set; } = FieldAttributes.Private;
             public override string ToString()
@@ -249,6 +454,19 @@ namespace NEN
                     return Helper.GetTreeString($"Khai báo thuộc tính: ({FieldAttributes}) {Variable} gán", [InitialValue]);
                 }
                 return $"Khai báo thuộc tính: {Variable}";
+            }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                if (FieldAttributes.HasFlag(FieldAttributes.Public) || collectPrivates)
+                {
+                    symbols.Add(new FieldSymbol {
+                        DeclaringType = Helper.TypeNodeToTypeSymbol(DeclaringTypeNode),
+                        Name = Variable.Name
+                    });
+                }
+                Variable.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                InitialValue?.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
             }
         }
 
@@ -260,6 +478,12 @@ namespace NEN
             {
                 return Helper.GetTreeString("Gán:", [Destination, Source]);
             }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                Destination.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                Source.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+            }
         }
 
         public class ExpressionStatement : StatementNode
@@ -268,6 +492,11 @@ namespace NEN
             public override string ToString()
             {
                 return $"Biểu thức: {Expression}";
+            }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                Expression.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
             }
         }
 
@@ -292,6 +521,12 @@ namespace NEN
                 }
                 return Helper.GetTreeString<object>(null, [Left, Operator, Right]);
             }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                Left.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                Right.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+            }
         }
 
         public class ThisExpression : ExpressionNode
@@ -299,6 +534,11 @@ namespace NEN
             public override string ToString()
             {
                 return "{này}";
+            }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                return;
             }
         }
 
@@ -312,6 +552,11 @@ namespace NEN
                     return $"{Value} ({ReturnTypeNode})";
                 }
                 return $"{Value}(*)";
+            }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                return;
             }
         }
 
@@ -329,6 +574,14 @@ namespace NEN
                 }
                 return $"{Name}{isResolved}";
             }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                if (collectSpans)
+                {
+                    Helper.AddSpan(document, symbolSpans, StartLine, StartColumn, EndLine, EndColumn, SymbolKind.Local);
+                }
+            }
         }
 
         public class ArgumentExpression : ExpressionNode
@@ -345,6 +598,14 @@ namespace NEN
                 }
                 return $"{Name}{isResolved}";
             }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                if (collectSpans)
+                {
+                    Helper.AddSpan(document, symbolSpans, StartLine, StartColumn, EndLine, EndColumn, SymbolKind.Parameter);
+                }
+            }
         }
 
         public class AmbiguousMethodCallExpression : ExpressionNode // For unresolved methods
@@ -358,6 +619,18 @@ namespace NEN
                 string returnType = ReturnTypeNode == null ? "" : $" -> {ReturnTypeNode}";
                 return Helper.GetTreeString($"Gọi hàm(*): {MethodName}{isResolved}{returnType}", Arguments);
             }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                foreach(var argument in Arguments)
+                {
+                    argument.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                }
+                if (collectSpans)
+                {
+                    Helper.AddSpan(document, symbolSpans, StartLine, StartColumn, EndLine, EndColumn, SymbolKind.Method);
+                }
+            }
         }
 
         public class StaticMethodCallExpression : AmbiguousMethodCallExpression
@@ -368,6 +641,12 @@ namespace NEN
                 string isResolved = MethodInfo == null ? "(*)" : "";
                 string returnType = ReturnTypeNode == null ? "" : $" -> {ReturnTypeNode}";
                 return Helper.GetTreeString($"Gọi hàm: {TypeNode.FullName}::{MethodName}{isResolved}{returnType}", Arguments);
+            }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                base.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                TypeNode.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
             }
         }
 
@@ -381,6 +660,12 @@ namespace NEN
                 string returnType = ReturnTypeNode == null ? "" : $" -> {ReturnTypeNode}";
                 return Helper.GetTreeString($"Gọi hàm: {namespaceAndType}::{MethodName}{isResolved}{returnType}", [Object, .. Arguments]);
             }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                base.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                Object.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+            }
         }
 
         public class BoxExpression : ExpressionNode
@@ -389,6 +674,11 @@ namespace NEN
             public override string ToString()
             {
                 return Helper.GetTreeString("Box biểu thức", [Expression]);
+            }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                Expression.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
             }
         }
 
@@ -401,6 +691,16 @@ namespace NEN
                 string size = Size == null ? "tự động" : Size.ToString()!;
                 return Helper.GetTreeString($"Khởi tạo mảng {ReturnTypeNode} ({size})", Elements);
             }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                ReturnTypeNode?.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                Size?.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                foreach(var element in Elements)
+                {
+                    element.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                }
+            }
         }
 
         public class ArrayIndexingExpression : ExpressionNode
@@ -411,6 +711,12 @@ namespace NEN
             public override string ToString()
             {
                 return Helper.GetTreeString($"Truy cập phần tử -> {ReturnTypeNode}", [Index]);
+            }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                Array.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                Index.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
             }
         }
 
@@ -427,6 +733,15 @@ namespace NEN
                 string isResolved = ConstructorInfo == null ? "(*)" : "";
                 return Helper.GetTreeString($"Khởi tạo đối tượng kiểu {ReturnTypeNode}{isResolved}", FieldInitializations);
             }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                ReturnTypeNode?.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                foreach(var init in FieldInitializations)
+                {
+                    init.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                }
+            }
         }
 
         public class ConstructorCallExpression : NewObjectExpression
@@ -436,6 +751,15 @@ namespace NEN
             {
                 string isResolved = ConstructorInfo == null ? "(*)" : "";
                 return Helper.GetTreeString($"Khởi tạo đối tượng kiểu {ReturnTypeNode}{isResolved}", Arguments);
+            }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                ReturnTypeNode?.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                foreach(var arg in Arguments)
+                {
+                    arg.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                }
             }
         }
 
@@ -454,6 +778,15 @@ namespace NEN
                 string isResolved = FieldInfo == null ? "(*)" : "";
                 return Helper.GetTreeString($"Truy cập thuộc tính {FieldName}{isResolved}", [Object]);
             }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                Object.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                if (collectSpans)
+                {
+                    Helper.AddSpan(document, symbolSpans, StartLine, StartColumn, EndLine, EndColumn, SymbolKind.Field);
+                }
+            }
         }
 
         public class StaticFieldAccessmentExpression : FieldAccessmentExpression
@@ -464,6 +797,15 @@ namespace NEN
                 string isResolved = FieldInfo == null ? "(*)" : "";
                 return $"Truy cập thuộc tính {TypeNode}::{FieldName}{isResolved}";
             }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                TypeNode.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                if (collectSpans)
+                {
+                    Helper.AddSpan(document, symbolSpans, StartLine, StartColumn, EndLine, EndColumn, SymbolKind.Field);
+                }
+            }
         }
 
         public class DuplicateExpression : ExpressionNode
@@ -471,6 +813,11 @@ namespace NEN
             public override string ToString()
             {
                 return "Sao chép đối tượng";
+            }
+
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                return;
             }
         }
     }

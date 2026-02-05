@@ -189,6 +189,7 @@ namespace NEN
                 method.ReturnTypeNode.StartColumn,
                 method.ReturnTypeNode.EndLine,
                 method.ReturnTypeNode.EndColumn);
+            method.DeclaringTypeNode.CLRType = c.TypeBuilder;
             List<Type> paramTypes = [];
             foreach (var parameter in method.Parameters)
             {
@@ -260,8 +261,7 @@ namespace NEN
 
         private void AnalyzeClass(ModulePart modulePart, ClassNode c)
         {
-            foreach (var init in c.Fields
-                .Where(f => f.InitialValue != null && f.FieldAttributes.HasFlag(FieldAttributes.Static)))
+            foreach (var init in c.Fields)
             {
                 AnalyzeFieldDeclarationStatement(modulePart, c, init);
             }
@@ -269,6 +269,7 @@ namespace NEN
             {
                 VariableNode[] parameters =
                     [ new VariableNode {
+                        SymbolKind = Symbols.SymbolKind.Parameter,
                         Name = "này",
                         TypeNode = CreateTypeNodeFromType(
                             c.TypeBuilder!,
@@ -289,6 +290,7 @@ namespace NEN
             {
                 VariableNode[] parameters = method.MethodBuilder!.IsStatic ? method.Parameters :
                     [ new VariableNode {
+                        SymbolKind = Symbols.SymbolKind.Parameter,
                         Name = "này",
                         TypeNode = CreateTypeNodeFromType(
                             c.TypeBuilder!,
@@ -333,7 +335,7 @@ namespace NEN
         {
             switch(statement)
             {
-                case VariableDeclarationStatement variableDeclarationStatement: AnalyzeVariableDeclarationStatement(modulePart, c, localSymbolTable,  variableDeclarationStatement); break;
+                case LocalDeclarationStatement localDeclarationStatement: AnalyzeLocalDeclarationStatement(modulePart, c, localSymbolTable,  localDeclarationStatement); break;
                 case ExpressionStatement expressionStatement: AnalyzeExpressionStatement(modulePart, c, localSymbolTable, ref expressionStatement); break;
                 case AssignmentStatement assignmentStatement: AnalyzeAssignmentStatement(modulePart, c, localSymbolTable, assignmentStatement); break;
                 case ReturnStatement returnStatement: AnalyzeReturnStatement(modulePart, c, localSymbolTable, returnStatement); break;
@@ -466,6 +468,7 @@ namespace NEN
 
         private void AnalyzeFieldDeclarationStatement(ModulePart modulePart, ClassNode c, FieldDeclarationStatement fieldDeclarationStatement)
         {
+            fieldDeclarationStatement.DeclaringTypeNode.CLRType = c.TypeBuilder;
             var type = GetTypeFromTypeNode(modulePart, fieldDeclarationStatement.Variable.TypeNode);
             fieldDeclarationStatement.Variable.TypeNode = CreateTypeNodeFromType(
                 type,
@@ -482,49 +485,50 @@ namespace NEN
             }
         }
 
-        private void AnalyzeVariableDeclarationStatement(ModulePart modulePart, ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable,  VariableDeclarationStatement variableDeclarationStatement)
+        private void AnalyzeLocalDeclarationStatement(ModulePart modulePart, ClassNode c, Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable,  LocalDeclarationStatement localDeclarationStatement)
         {
             if (
-                localSymbolTable.TryGetValue(variableDeclarationStatement.Variable.Name, out _) || 
-                currentMethod?.Parameters.FirstOrDefault(p => p.Name == variableDeclarationStatement.Variable.Name) != null
+                localSymbolTable.TryGetValue(localDeclarationStatement.Variable.Name, out _) || 
+                currentMethod?.Parameters.FirstOrDefault(p => p.Name == localDeclarationStatement.Variable.Name) != null
             )
             {
-                throw new RedefinedException(modulePart.Source, variableDeclarationStatement.Variable.Name, variableDeclarationStatement.Variable.StartLine, variableDeclarationStatement.Variable.StartColumn, variableDeclarationStatement.Variable.EndLine, variableDeclarationStatement.Variable.EndColumn);
+                throw new RedefinedException(modulePart.Source, localDeclarationStatement.Variable.Name, localDeclarationStatement.Variable.StartLine, localDeclarationStatement.Variable.StartColumn, localDeclarationStatement.Variable.EndLine, localDeclarationStatement.Variable.EndColumn);
             }
-            var type = GetTypeFromTypeNode(modulePart, variableDeclarationStatement.Variable.TypeNode);
-            variableDeclarationStatement.Variable.TypeNode = CreateTypeNodeFromType(
+            var type = GetTypeFromTypeNode(modulePart, localDeclarationStatement.Variable.TypeNode);
+            localDeclarationStatement.Variable.TypeNode = CreateTypeNodeFromType(
                 type, 
-                variableDeclarationStatement.Variable.TypeNode.StartLine, 
-                variableDeclarationStatement.Variable.TypeNode.StartColumn,
-                variableDeclarationStatement.Variable.TypeNode.EndLine,
-                variableDeclarationStatement.Variable.TypeNode.EndColumn
+                localDeclarationStatement.Variable.TypeNode.StartLine, 
+                localDeclarationStatement.Variable.TypeNode.StartColumn,
+                localDeclarationStatement.Variable.TypeNode.EndLine,
+                localDeclarationStatement.Variable.TypeNode.EndColumn
             );
-            if (variableDeclarationStatement.InitialValue == null) { }
+            if (localDeclarationStatement.InitialValue == null) { }
             else
             {
-                var expr = variableDeclarationStatement.InitialValue;
+                var expr = localDeclarationStatement.InitialValue;
                 AnalyzeExpression(modulePart, c, localSymbolTable, ref expr);
-                variableDeclarationStatement.InitialValue = expr;
-                AnalyzeTypes(modulePart, variableDeclarationStatement.Variable.TypeNode, expr.ReturnTypeNode!);
+                localDeclarationStatement.InitialValue = expr;
+                AnalyzeTypes(modulePart, localDeclarationStatement.Variable.TypeNode, expr.ReturnTypeNode!);
             }
             var methodBase = currentMethod!.GetMethodInfo();
             switch(methodBase)
             {
                 case MethodBuilder methodBuilder:
                     var localBuilder = methodBuilder.GetILGenerator().DeclareLocal(type);
-                    localBuilder.SetLocalSymInfo(variableDeclarationStatement.Variable.Name);
-                    variableDeclarationStatement.LocalBuilder = localBuilder;
+                    localBuilder.SetLocalSymInfo(localDeclarationStatement.Variable.Name);
+                    localDeclarationStatement.LocalBuilder = localBuilder;
                     break;
                 default:
                     throw new("Internal error");
             }
+            localDeclarationStatement.DeclaringMethod = currentMethod;
             if (!localSymbolTable.TryAdd(
-                variableDeclarationStatement.Variable.Name, 
-                (variableDeclarationStatement.Variable.TypeNode, variableDeclarationStatement.LocalBuilder)
+                localDeclarationStatement.Variable.Name, 
+                (localDeclarationStatement.Variable.TypeNode, localDeclarationStatement.LocalBuilder)
                 )
             )
             {
-                throw new RedefinedException(modulePart.Source, variableDeclarationStatement.Variable.Name, variableDeclarationStatement.Variable.StartLine, variableDeclarationStatement.Variable.StartColumn, variableDeclarationStatement.Variable.EndLine, variableDeclarationStatement.Variable.EndColumn);
+                throw new RedefinedException(modulePart.Source, localDeclarationStatement.Variable.Name, localDeclarationStatement.Variable.StartLine, localDeclarationStatement.Variable.StartColumn, localDeclarationStatement.Variable.EndLine, localDeclarationStatement.Variable.EndColumn);
             }
         }
 
@@ -606,10 +610,10 @@ namespace NEN
             var fieldType = GetTypeFromTypeNode(modulePart, staticFieldAccessmentExpression.TypeNode);
             staticFieldAccessmentExpression.TypeNode = CreateTypeNodeFromType(
                 fieldType,
-                staticFieldAccessmentExpression.StartLine,
-                staticFieldAccessmentExpression.StartColumn,
-                staticFieldAccessmentExpression.EndLine,
-                staticFieldAccessmentExpression.EndColumn
+                staticFieldAccessmentExpression.TypeNode.StartLine,
+                staticFieldAccessmentExpression.TypeNode.StartColumn,
+                staticFieldAccessmentExpression.TypeNode.EndLine,
+                staticFieldAccessmentExpression.TypeNode.EndColumn
             );
             if (staticFieldAccessmentExpression.FieldInfo != null) { }
             else if (moduleFields.TryGetValue(

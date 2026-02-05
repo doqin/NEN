@@ -107,10 +107,10 @@ namespace NEN
                         constructors.Add(ParseConstructor(classIdentifier.Value));
                         break;
                     case "phương_thức":
-                        methods.Add(ParseMethod());
+                        methods.Add(ParseMethod(classIdentifier.Value));
                         break;
                     case "thuộc_tính":
-                        fields.Add(ParseFieldDeclarationStatement());
+                        fields.Add(ParseFieldDeclarationStatement(classIdentifier.Value));
                         ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ";");
                         break;
                     default:
@@ -197,11 +197,11 @@ namespace NEN
                 case "@":
                     return ParseMarker(className, methodAttributes, fieldAttributes, isEntryPoint);
                 case "phương_thức":
-                    return (ParseMethod(methodAttributes, isEntryPoint), null);
+                    return (ParseMethod(className, methodAttributes, isEntryPoint), null);
                 case "phương_thức_khởi_tạo":
                     return (ParseConstructor(className, methodAttributes), null);
                 case "thuộc_tính":
-                    return (null, ParseFieldDeclarationStatement(fieldAttributes));
+                    return (null, ParseFieldDeclarationStatement(className, fieldAttributes));
                 default:
                     var (el, ec) = GetCurrentEndPosition();
                     throw new ExpectedException(
@@ -217,8 +217,8 @@ namespace NEN
 
         private ConstructorNode ParseConstructor(string className, MethodAttributes constructorAttributes = MethodAttributes.Private)
         {
-            var (startLine, startColumn) = GetCurrentStartPosition();
-            var (endLine, endColumn) = GetCurrentEndPosition();
+            var (startLine, startColumn) = GetPreviousStartPosition();
+            var (endLine, endColumn) = GetPreviousEndPosition();
             ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "(");
             List<VariableNode> parameters = [];
             while (Current(out var rParen) && rParen!.Value != ")")
@@ -228,6 +228,7 @@ namespace NEN
                 var type = ParseType();
                 parameters.Add(new VariableNode
                 {
+                    SymbolKind = Symbols.SymbolKind.Parameter,
                     Name = parameterIdentifier.Value,
                     TypeNode = type,
                     StartLine = parameterIdentifier.StartLine,
@@ -266,7 +267,7 @@ namespace NEN
             };
         }
 
-        private MethodNode ParseMethod(MethodAttributes methodAttributes = MethodAttributes.Private, bool isEntryPoint = false)
+        private MethodNode ParseMethod(string className, MethodAttributes methodAttributes = MethodAttributes.Private, bool isEntryPoint = false)
         {
             var (startLine, startColumn) = GetCurrentStartPosition();
             var methodIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên phương thức");
@@ -279,6 +280,7 @@ namespace NEN
                 ConsumeOrThrowIfNotEqual(TokenType.Keyword, "thuộc");
                 var type = ParseType();
                 parameters.Add(new VariableNode { 
+                    SymbolKind = Symbols.SymbolKind.Parameter,
                     Name = parameterIdentifier.Value, 
                     TypeNode = type, 
                     StartLine = parameterIdentifier.StartLine, 
@@ -300,6 +302,15 @@ namespace NEN
             if (!Current(out _)) OutOfTokenHelper("kết_thúc");
             Consume();
             return new MethodNode { 
+                DeclaringTypeNode = new NamedType
+                {
+                    Namespaces = [],
+                    Name = className,
+                    StartLine = startLine,
+                    StartColumn = startColumn,
+                    EndLine = endLine,
+                    EndColumn = endColumn
+                },
                 IsEntryPoint = isEntryPoint, 
                 MethodAttributes = methodAttributes, 
                 MethodName = methodIdentifier.Value, 
@@ -313,13 +324,23 @@ namespace NEN
             };
         }
 
-        private FieldDeclarationStatement ParseFieldDeclarationStatement(FieldAttributes fieldAttributes = FieldAttributes.Private)
+        private FieldDeclarationStatement ParseFieldDeclarationStatement(string className, FieldAttributes fieldAttributes = FieldAttributes.Private)
         {
             var (startLine, startColumn) = GetCurrentStartPosition();
-            var fieldDeclaration = ParseVariableDeclarationStatement(startLine, startColumn);
+            var fieldDeclaration = ParseLocalDeclarationStatement(startLine, startColumn);
+            fieldDeclaration.Variable.SymbolKind = Symbols.SymbolKind.Field;
             var (endLine, endColumn) = GetPreviousEndPosition();
             return new FieldDeclarationStatement
             {
+                DeclaringTypeNode = new NamedType
+                {
+                    Namespaces = [],
+                    Name = className,
+                    StartLine = startLine,
+                    StartColumn = startColumn,
+                    EndLine = endLine,
+                    EndColumn = endColumn
+                },
                 StartLine = startLine,
                 StartColumn = startColumn,
                 EndLine = fieldDeclaration.Variable.EndLine,
@@ -340,7 +361,7 @@ namespace NEN
                     switch (token!.Value)
                     {
                         case "biến":
-                            return ParseVariableDeclarationStatement(line, column);
+                            return ParseLocalDeclarationStatement(line, column);
                         case "trả_về":
                             return ParseReturnStatement(line, column);
                         case "nếu":
@@ -494,7 +515,7 @@ namespace NEN
             return [.. arguments];
         }
 
-        private VariableDeclarationStatement ParseVariableDeclarationStatement(int startLine, int startColumn)
+        private LocalDeclarationStatement ParseLocalDeclarationStatement(int startLine, int startColumn)
         {
             var variableIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên biến");
             ConsumeOrThrowIfNotEqual(TokenType.Keyword, "thuộc");
@@ -506,10 +527,11 @@ namespace NEN
                 initialValue = ParseExpression(0);
             }
             var (endLine, endColumn) = GetPreviousEndPosition();
-            return new VariableDeclarationStatement
+            return new LocalDeclarationStatement
             {
                 Variable = new VariableNode
                 {
+                    SymbolKind = Symbols.SymbolKind.Local,
                     Name = variableIdentifier.Value,
                     TypeNode = typeIdentifier,
                     StartLine = variableIdentifier.StartLine,
@@ -856,7 +878,7 @@ namespace NEN
                 StartLine = startLine,
                 StartColumn = startColumn,
                 EndLine = endLine,
-                EndColumn = endColumn
+                EndColumn = endColumn - identifier.Last().Length
             };
             if (Current(out var token) && token?.Value != "(")
             {
@@ -865,8 +887,8 @@ namespace NEN
                     TypeNode = type,
                     FieldName = identifier[^1],
                     StartLine = startLine,
-                    StartColumn = startColumn,
-                    EndLine = endColumn,
+                    StartColumn = endColumn - identifier.Last().Length,
+                    EndLine = endLine,
                     EndColumn = endColumn
                 };
             }
@@ -877,7 +899,7 @@ namespace NEN
                 Arguments = arguments,
                 MethodName = identifier[^1],
                 StartLine = startLine,
-                StartColumn = startColumn,
+                StartColumn = endColumn - identifier.Last().Length,
                 EndLine = endLine,
                 EndColumn = endColumn
             };
@@ -1030,6 +1052,14 @@ namespace NEN
                 return (-1, -1);
             }
             return (tokens[index - 1].EndLine, tokens[index - 1].EndColumn);
+        }
+        private (int, int) GetPreviousStartPosition()
+        {
+            if (index - 1 < 0)
+            {
+                return (-1, -1);
+            }
+            return (tokens[index - 1].StartLine, tokens[index - 1].StartColumn);
         }
 
         private (int, int) GetCurrentStartPosition()
