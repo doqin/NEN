@@ -1,9 +1,11 @@
 ﻿// See https://aka.ms/new-console-template for more information
 using NEN;
+using NEN.AST;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using TBDNEN.Models;
+using static NEN.Lexer;
 
 namespace TBDNEN
 {
@@ -55,7 +57,7 @@ namespace TBDNEN
             {
                 throw new("Tệp duannen.json không định dạng đúng cú pháp");
             }
-            List<NEN.Types.ModulePart> moduleParts = [];
+            List<ModulePart> moduleParts = [];
             try
             {
                 foreach(var file in projMetadata!.nguồn.Index())
@@ -74,7 +76,7 @@ namespace TBDNEN
             Directory.CreateDirectory(Path.Combine(workingDirectory, projMetadata!.đích)!);
             foreach (var fileName in projMetadata!.nguồn)
             {
-                (string[] lines, NEN.Types.Token[] tokens) = Lexer.Tokenize(fileName);
+                (string[] lines, Token[] tokens) = Lexer.Tokenize(fileName);
                 var parser = new Parser(fileName, lines, tokens);
                 var modulePart = parser.Parse();
                 moduleParts.Add(modulePart);

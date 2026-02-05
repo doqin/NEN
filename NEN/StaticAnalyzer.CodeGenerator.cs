@@ -1,4 +1,4 @@
-﻿using NEN.Types;
+﻿using NEN.AST;
 using System.Reflection;
 
 namespace NEN
@@ -14,12 +14,12 @@ namespace NEN
             );
             var defaultConstructor = new ConstructorNode
             {
-                ReturnTypeNode = CreateTypeNodeFromType(
+                DeclaringTypeNode = (CreateTypeNodeFromType(
                     defaultConstructorBuilder!.DeclaringType!, 
                     c.StartLine, 
                     c.StartColumn,
                     c.EndLine,
-                    c.EndColumn),
+                    c.EndColumn) as NamedType)!,
                 ConstructorBuilder = defaultConstructorBuilder,
                 StartLine = c.StartLine,
                 StartColumn = c.StartColumn,
@@ -31,42 +31,11 @@ namespace NEN
             currentMethod = c.GetDefaultConstructor();
             var objectType = module.CoreAssembly!.GetType("System.Object") ?? throw new("Internal error");
             defaultConstructor.Statements = [ 
-                new ExpressionStatement {
-                    Expression = new StandardMethodCallExpression {
-                        ReturnTypeNode = CreateTypeNodeFromType(
-                            objectType, 
-                            c.StartLine, 
-                            c.StartColumn,
-                            c.EndLine,
-                            c.EndColumn),
-                        Object = new ThisExpression {
-                            ReturnTypeNode = new NamedType {
-                                Namespaces = [],
-                                Name = c.Name,
-                                StartLine = c.StartLine,
-                                StartColumn = c.StartColumn,
-                                EndLine = c.EndLine,
-                                EndColumn = c.EndColumn
-                            },
-                            StartLine = c.StartLine,
-                            StartColumn = c.StartColumn,
-                            EndLine = c.EndLine,
-                            EndColumn = c.EndColumn
-                        },
-                        MethodName = "ObjectConstructor",
-                        Arguments = [],
-                        MethodInfo = objectType.GetConstructor(Type.EmptyTypes),
-                        StartLine = c.StartLine,
-                        StartColumn = c.StartColumn,
-                        EndLine = c.EndLine,
-                        EndColumn = c.EndColumn
-                    },
-                    StartLine = c.StartLine, 
-                    StartColumn = c.StartColumn,
-                    EndLine = c.EndLine,
-                    EndColumn = c.EndColumn
-                }, // Constructs an `object` type (the base for any reference type)
-                ..c.Fields.Where(f => f.InitialValue != null).Select(f =>
+                ..c.Fields
+                    .Where(
+                        f => f.InitialValue != null && !f.FieldAttributes.HasFlag(FieldAttributes.Static)
+                        )
+                    .Select(f =>
                 {
                     if (f.FieldAttributes.HasFlag(FieldAttributes.Static)) {
                         return new AssignmentStatement {
@@ -132,7 +101,7 @@ namespace NEN
             // Analyze the initial values
             foreach (var statement in defaultConstructor.Statements)
             {
-                AnalyzeStatement(modulePart, c, new(), statement);
+                AnalyzeStatement(modulePart, c, [], statement);
             }
             if (!moduleConstructors.TryAdd((c.Name, []), defaultConstructor.ConstructorBuilder))
             {

@@ -17,6 +17,9 @@ lớp Chương_Trình
             Tuổi gán 25
         };
 
+        biến n1 thuộc Người gán tạo Người();
+        biến n2 thuộc Người gán tạo Người("C", 43);
+
         người.Tên gán "Nguyễn Thị B";
         người.Tuổi gán 63;
 
@@ -72,7 +75,19 @@ lớp Người
 
     @Công_Khai thuộc_tính Tuổi thuộc Int32;
 
-    thuộc_tính giấu thuộc Int32 gán 15;
+    thuộc_tính giấu thuộc Int32;
+
+    @Công_Khai
+    phương_thức_khởi_tạo()
+        Tên gán "A";
+        Tuổi gán 20;
+    kết_thúc
+
+    @Công_Khai
+    phương_thức_khởi_tạo(tên thuộc String, tuổi thuộc Int32)
+        Tên gán tên;
+        Tuổi gán tuổi;
+    kết_thúc
 
     phương_thức Test1() -> Void
         Console::WriteLine("Test1");

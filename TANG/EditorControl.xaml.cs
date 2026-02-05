@@ -6,7 +6,7 @@ using ICSharpCode.AvalonEdit.Highlighting.Xshd;
 using ICSharpCode.AvalonEdit.Rendering;
 using ICSharpCode.AvalonEdit.Search;
 using NEN;
-using NEN.Types;
+using NEN.AST;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -18,6 +18,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using System.Xml;
 using TBDNEN.Models;
+using static NEN.Lexer;
 
 namespace TANG
 {
@@ -301,7 +302,7 @@ namespace TANG
                         foreach (var ctor in c.Constructors)
                         {
                             AddSpan(spans, ctor.StartLine, ctor.StartColumn, ctor.EndLine, ctor.EndColumn, SymbolKind.Method);
-                            AddTypeSpan(spans, ctor.ReturnTypeNode, SymbolKind.Class);
+                            AddTypeSpan(spans, ctor.DeclaringTypeNode, SymbolKind.Class);
                             AddParametersAndStatements(spans, ctor.Parameters, ctor.Statements);
                         }
                     }
@@ -462,7 +463,7 @@ namespace TANG
                     CollectExpressionNames(arrayIndexingExpression.Array, names);
                     CollectExpressionNames(arrayIndexingExpression.Index, names);
                     break;
-                case NewObjectExpression newObjectExpression:
+                case InlineConstructionExpression newObjectExpression:
                     foreach (var fieldInit in newObjectExpression.FieldInitializations)
                     {
                         CollectStatementNames([fieldInit], names);
@@ -582,7 +583,7 @@ namespace TANG
                     CollectExpression(arrayIndexingExpression.Array, spans);
                     CollectExpression(arrayIndexingExpression.Index, spans);
                     break;
-                case NewObjectExpression newObjectExpression:
+                case InlineConstructionExpression newObjectExpression:
                     AddTypeSpan(spans, newObjectExpression.ReturnTypeNode, SymbolKind.Class);
                     foreach (var fieldInit in newObjectExpression.FieldInitializations)
                     {
