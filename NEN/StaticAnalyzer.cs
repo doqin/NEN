@@ -514,10 +514,10 @@ namespace NEN
             FieldDeclarationStatement fieldDeclarationStatement)
         {
             fieldDeclarationStatement.DeclaringTypeNode.CLRType = c.TypeBuilder;
-            var type = GetTypeFromTypeNode(modulePart, typeTable, fieldDeclarationStatement.Variable.TypeNode);
+            var type = GetTypeFromTypeNode(modulePart, typeTable, fieldDeclarationStatement.Variable.TypeNode!);
             fieldDeclarationStatement.Variable.TypeNode = CreateTypeNodeFromType(
                 type,
-                fieldDeclarationStatement.Variable.TypeNode.StartLine,
+                fieldDeclarationStatement.Variable.TypeNode!.StartLine,
                 fieldDeclarationStatement.Variable.TypeNode.StartColumn,
                 fieldDeclarationStatement.Variable.TypeNode.EndLine,
                 fieldDeclarationStatement.Variable.TypeNode.EndColumn
@@ -544,27 +544,41 @@ namespace NEN
             {
                 throw new RedefinedException(modulePart.Source, localDeclarationStatement.Variable.Name, localDeclarationStatement.Variable.StartLine, localDeclarationStatement.Variable.StartColumn, localDeclarationStatement.Variable.EndLine, localDeclarationStatement.Variable.EndColumn);
             }
-            var type = GetTypeFromTypeNode(modulePart, typeTable, localDeclarationStatement.Variable.TypeNode);
-            localDeclarationStatement.Variable.TypeNode = CreateTypeNodeFromType(
-                type, 
-                localDeclarationStatement.Variable.TypeNode.StartLine, 
-                localDeclarationStatement.Variable.TypeNode.StartColumn,
-                localDeclarationStatement.Variable.TypeNode.EndLine,
-                localDeclarationStatement.Variable.TypeNode.EndColumn
-            );
-            if (localDeclarationStatement.InitialValue == null) { }
-            else
+            if (localDeclarationStatement.Variable.TypeNode != null)
+            {
+                var type = GetTypeFromTypeNode(modulePart, typeTable, localDeclarationStatement.Variable.TypeNode);
+                localDeclarationStatement.Variable.TypeNode = CreateTypeNodeFromType(
+                    type,
+                    localDeclarationStatement.Variable.TypeNode.StartLine,
+                    localDeclarationStatement.Variable.TypeNode.StartColumn,
+                    localDeclarationStatement.Variable.TypeNode.EndLine,
+                    localDeclarationStatement.Variable.TypeNode.EndColumn
+                );
+            }
+            if (localDeclarationStatement.InitialValue != null)
             {
                 var expr = localDeclarationStatement.InitialValue;
-                AnalyzeExpression(modulePart, c, typeTable, localSymbolTable, ref expr);
+                var returnType = AnalyzeExpression(modulePart, c, typeTable, localSymbolTable, ref expr);
                 localDeclarationStatement.InitialValue = expr;
-                AnalyzeTypes(modulePart, typeTable, localDeclarationStatement.Variable.TypeNode, expr.ReturnTypeNode!);
+                if (localDeclarationStatement.Variable.TypeNode != null)
+                {
+                    AnalyzeTypes(modulePart, typeTable, localDeclarationStatement.Variable.TypeNode, expr.ReturnTypeNode!);
+                }
+                else
+                {
+                    localDeclarationStatement.Variable.TypeNode = returnType;
+                }
             }
             var methodBase = currentMethod!.GetMethodInfo();
             switch(methodBase)
             {
                 case MethodBuilder methodBuilder:
-                    var localBuilder = methodBuilder.GetILGenerator().DeclareLocal(type);
+                    var localBuilder = methodBuilder
+                        .GetILGenerator()
+                        .DeclareLocal(
+                            localDeclarationStatement.Variable.TypeNode!
+                                .GetCLRType()!
+                        );
                     localBuilder.SetLocalSymInfo(localDeclarationStatement.Variable.Name);
                     localDeclarationStatement.LocalBuilder = localBuilder;
                     break;

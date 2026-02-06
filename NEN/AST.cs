@@ -220,7 +220,7 @@ namespace NEN
         {
             public required SymbolKind SymbolKind { get; set; }
             public required string Name { get; set; }
-            public required TypeNode TypeNode { get; set; }
+            public TypeNode? TypeNode { get; set; }
             public override string ToString()
             {
                 return $"{Name} ({TypeNode})";

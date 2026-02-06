@@ -330,6 +330,7 @@ namespace NEN
             var fieldDeclaration = ParseLocalDeclarationStatement(startLine, startColumn);
             fieldDeclaration.Variable.SymbolKind = Symbols.SymbolKind.Field;
             var (endLine, endColumn) = GetPreviousEndPosition();
+            if (fieldDeclaration.Variable.TypeNode == null) throw new ImplicitTypeOnFieldException(content, startLine, startColumn, endLine, endColumn);
             return new FieldDeclarationStatement
             {
                 DeclaringTypeNode = new NamedType
@@ -518,13 +519,22 @@ namespace NEN
         private LocalDeclarationStatement ParseLocalDeclarationStatement(int startLine, int startColumn)
         {
             var variableIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên biến");
-            ConsumeOrThrowIfNotEqual(TokenType.Keyword, "thuộc");
-            var typeIdentifier = ParseType();
+            TypeNode? typeIdentifier = null;
             ExpressionNode? initialValue = null;
             if (Current(out var assign) && assign?.Value == "gán")
             {
                 ConsumeOrThrowIfNotEqual(TokenType.Keyword, "gán"); // will never happen but ok
                 initialValue = ParseExpression(0);
+            }
+            else
+            {
+                ConsumeOrThrowIfNotEqual(TokenType.Keyword, "thuộc");
+                typeIdentifier = ParseType();
+                if (Current(out assign) && assign?.Value == "gán")
+                {
+                    ConsumeOrThrowIfNotEqual(TokenType.Keyword, "gán"); // will never happen but ok
+                    initialValue = ParseExpression(0);
+                }
             }
             var (endLine, endColumn) = GetPreviousEndPosition();
             return new LocalDeclarationStatement

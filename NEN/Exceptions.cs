@@ -192,5 +192,11 @@ namespace NEN
             public BreakOutsideLoopException() { }
             public BreakOutsideLoopException(string[] contentLines, int startLine, int startColumn, int endLine, int endColumn) : base(contentLines, $"'Thoát' chỉ có thể sử dụng trong một vòng lặp", startLine, startColumn, endLine, endColumn) { }
         }
+
+        public class ImplicitTypeOnFieldException : NENException
+        {
+            public ImplicitTypeOnFieldException() { }
+            public ImplicitTypeOnFieldException(string[] contentLines, int startLine, int startColumn, int endLine, int endColumn) : base(contentLines, $"Xét kiểu dữ liệu ngầm chỉ sử dụng được với biến cục bộ", startLine, startColumn, endLine, endColumn) { }
+        }
     }
 }
