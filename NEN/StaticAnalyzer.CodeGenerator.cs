@@ -101,7 +101,7 @@ namespace NEN
             // Analyze the initial values
             foreach (var statement in defaultConstructor.Statements)
             {
-                AnalyzeStatement(modulePart, c, [], statement);
+                AnalyzeStatement(modulePart, c, [], [], statement);
             }
             if (!moduleConstructors.TryAdd((c.Name, []), defaultConstructor.ConstructorBuilder))
             {
