@@ -1,5 +1,6 @@
-﻿using NEN.Exceptions;
-using NEN.AST;
+﻿using NEN.AST;
+using NEN.Exceptions;
+using System;
 using System.Reflection;
 using System.Reflection.Emit;
 
@@ -12,7 +13,7 @@ namespace NEN
         private readonly Dictionary<(string, Type[]), MethodInfo> moduleMethods = new(new MethodSignatureComparer());
         private readonly Dictionary<(string, Type[]), ConstructorInfo> moduleConstructors = new(new MethodSignatureComparer());
         private readonly Dictionary<string, FieldInfo> moduleFields = [];
-        private readonly AST.Module module = new() { Name = assemblyName, ModuleParts = moduleParts};
+        private readonly AST.Module module = new() { Name = assemblyName, ModuleParts = moduleParts };
         private AST.MethodBase? currentMethod = null;
 
         public AST.Module Analyze()
@@ -46,7 +47,7 @@ namespace NEN
                             GetTypeFromTypeNode(modulePart, [], field.Variable.TypeNode!),
                             field.FieldAttributes
                             );
-                        if (!moduleFields.TryAdd(string.Join(".", [..c.Namespaces, c.Name, field.Variable.Name]), field.FieldInfo))
+                        if (!moduleFields.TryAdd(string.Join(".", [.. c.Namespaces, c.Name, field.Variable.Name]), field.FieldInfo))
                         {
                             throw new("Internal error");
                         }
@@ -62,7 +63,7 @@ namespace NEN
                     // Decide if type needs to generate a default constructor
                     var fieldsWithInitialization = c.Fields
                         .Where(
-                            f => f.InitialValue != null && 
+                            f => f.InitialValue != null &&
                             !f.FieldAttributes.HasFlag(FieldAttributes.Static))
                         .ToArray();
                     if (c.Constructors != null && fieldsWithInitialization.Length > 0)
@@ -106,6 +107,7 @@ namespace NEN
             string runtimePath = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
             PathAssemblyResolver resolver = new([.. Directory.GetFiles(runtimePath, "*.dll"), .. assemblyPaths]);
             module.MetadataLoadContext = new(resolver);
+            module.MetadataLoadContext.LoadFromAssemblyName("System.Private.CoreLib");
             module.CoreAssembly = module.MetadataLoadContext.CoreAssembly!;
             module.AssemblyBuilder = new(new AssemblyName(assemblyName), module.CoreAssembly!);
             module.ModuleBuilder = module.AssemblyBuilder.DefineDynamicModule(module.Name);
@@ -116,8 +118,8 @@ namespace NEN
                         assembly => assembly.GetExportedTypes()
                             .Select(type => type.Namespace)
                     ).Aggregate(
-                        new List<string>(), 
-                        (x, y) => 
+                        new List<string>(),
+                        (x, y) =>
                         x.Concat(y).Distinct().ToList()!
                         )
                     ];
@@ -137,8 +139,8 @@ namespace NEN
         }
 
         private void DefineConstructor(
-            ModulePart modulePart, 
-            ClassNode c, 
+            ModulePart modulePart,
+            ClassNode c,
             Dictionary<string, Type> typeTable,
             ConstructorNode constructor)
         {
@@ -156,11 +158,11 @@ namespace NEN
                 if (constructor.Parameters.Where(p => p.Name == parameter.Name).ToArray().Length > 1)
                 {
                     throw new RedefinedException(
-                        modulePart.Source, 
-                        parameter.Name, 
-                        parameter.StartLine, 
-                        parameter.StartColumn, 
-                        parameter.EndLine, 
+                        modulePart.Source,
+                        parameter.Name,
+                        parameter.StartLine,
+                        parameter.StartColumn,
+                        parameter.EndLine,
                         parameter.EndColumn
                         );
                 }
@@ -169,13 +171,13 @@ namespace NEN
             constructor.ConstructorBuilder = c.TypeBuilder!.DefineConstructor(
                 constructor.MethodAttributes,
                 CallingConventions.Standard, // maybe change this later
-                [..paramTypes]
+                [.. paramTypes]
             );
             for (int i = 0; i < constructor.Parameters.Length; i++)
             {
                 ParameterBuilder p = constructor.ConstructorBuilder.DefineParameter(i + 1, ParameterAttributes.None, constructor.Parameters[i].Name);
             }
-            if (!moduleConstructors.TryAdd((c.CLRFullName, [..paramTypes]), constructor.ConstructorBuilder))
+            if (!moduleConstructors.TryAdd((c.CLRFullName, [.. paramTypes]), constructor.ConstructorBuilder))
             {
                 throw new RedefinedException(
                     modulePart.Source,
@@ -189,15 +191,15 @@ namespace NEN
         }
 
         private void DefineMethod(
-            ModulePart modulePart, 
-            ClassNode c, 
+            ModulePart modulePart,
+            ClassNode c,
             Dictionary<string, Type> typeTable,
             MethodNode method)
         {
             var type = GetTypeFromTypeNode(modulePart, typeTable, method.ReturnTypeNode);
             method.ReturnTypeNode = CreateTypeNodeFromType(
-                type, 
-                method.ReturnTypeNode.StartLine, 
+                type,
+                method.ReturnTypeNode.StartLine,
                 method.ReturnTypeNode.StartColumn,
                 method.ReturnTypeNode.EndLine,
                 method.ReturnTypeNode.EndColumn);
@@ -207,19 +209,19 @@ namespace NEN
             {
                 var paramType = GetTypeFromTypeNode(modulePart, typeTable, parameter.TypeNode!);
                 parameter.TypeNode = CreateTypeNodeFromType(
-                    paramType, 
-                    parameter.TypeNode!.StartLine, 
+                    paramType,
+                    parameter.TypeNode!.StartLine,
                     parameter.TypeNode.StartColumn,
                     parameter.TypeNode.EndLine,
                     parameter.TypeNode.EndColumn);
                 if (method.Parameters.Where(p => p.Name == parameter.Name).ToArray().Length > 1)
                 {
                     throw new RedefinedException(
-                        modulePart.Source, 
-                        parameter.Name, 
-                        parameter.StartLine, 
-                        parameter.StartColumn, 
-                        parameter.EndLine, 
+                        modulePart.Source,
+                        parameter.Name,
+                        parameter.StartLine,
+                        parameter.StartColumn,
+                        parameter.EndLine,
                         parameter.EndColumn
                         );
                 }
@@ -240,11 +242,11 @@ namespace NEN
             if (!moduleMethods.TryAdd((methodFullName, [.. paramTypes]), method.MethodBuilder))
             {
                 throw new RedefinedException(
-                    modulePart.Source, 
-                    $"{string.Join("::", [c.FullName, method.MethodName])}({string.Join(", ", method.Parameters.Select(p => p.TypeNode.FullName))})", 
-                    method.StartLine, 
-                    method.StartColumn, 
-                    method.EndLine, 
+                    modulePart.Source,
+                    $"{string.Join("::", [c.FullName, method.MethodName])}({string.Join(", ", method.Parameters.Select(p => p.TypeNode.FullName))})",
+                    method.StartLine,
+                    method.StartColumn,
+                    method.EndLine,
                     method.EndColumn
                 );
             }
@@ -262,9 +264,9 @@ namespace NEN
             if (!module.AvailableNamespaces.Contains(string.Join(".", usingNamespaceStatement.Namespace)))
             {
                 throw new UnresolvedIdentifierException(
-                    modulePart.Source, 
-                    string.Join("::", usingNamespaceStatement.Namespace), 
-                    usingNamespaceStatement.StartLine, 
+                    modulePart.Source,
+                    string.Join("::", usingNamespaceStatement.Namespace),
+                    usingNamespaceStatement.StartLine,
                     usingNamespaceStatement.StartColumn,
                     usingNamespaceStatement.EndLine,
                     usingNamespaceStatement.EndColumn
@@ -346,16 +348,16 @@ namespace NEN
         }
 
         private void AnalyzeStatement(
-            ModulePart modulePart, 
-            ClassNode c, 
+            ModulePart modulePart,
+            ClassNode c,
             Dictionary<string, Type> typeTable,
-            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, 
-            StatementNode statement, 
+            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable,
+            StatementNode statement,
             Label? endLabel = null)
         {
-            switch(statement)
+            switch (statement)
             {
-                case LocalDeclarationStatement localDeclarationStatement: AnalyzeLocalDeclarationStatement(modulePart, c, typeTable, localSymbolTable,  localDeclarationStatement); break;
+                case LocalDeclarationStatement localDeclarationStatement: AnalyzeLocalDeclarationStatement(modulePart, c, typeTable, localSymbolTable, localDeclarationStatement); break;
                 case ExpressionStatement expressionStatement: AnalyzeExpressionStatement(modulePart, c, typeTable, localSymbolTable, ref expressionStatement); break;
                 case AssignmentStatement assignmentStatement: AnalyzeAssignmentStatement(modulePart, c, typeTable, localSymbolTable, assignmentStatement); break;
                 case ReturnStatement returnStatement: AnalyzeReturnStatement(modulePart, c, typeTable, localSymbolTable, returnStatement); break;
@@ -372,10 +374,10 @@ namespace NEN
         }
 
         private void AnalyzeWhileStatement(
-            ModulePart modulePart, 
-            ClassNode c, 
+            ModulePart modulePart,
+            ClassNode c,
             Dictionary<string, Type> typeTable,
-            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, 
+            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable,
             WhileStatement whileStatement)
         {
             var condition = whileStatement.Condition;
@@ -399,18 +401,18 @@ namespace NEN
                     throw new NotImplementedException();
             }
             var newLocalSymbolTable = new Dictionary<string, (TypeNode, LocalBuilder)>(localSymbolTable);
-            foreach(var statement in whileStatement.Body)
+            foreach (var statement in whileStatement.Body)
             {
                 AnalyzeStatement(modulePart, c, typeTable, newLocalSymbolTable, statement, whileStatement.EndLabel);
             }
         }
 
         private void AnalyzeIfStatement(
-            ModulePart modulePart, 
-            ClassNode c, 
+            ModulePart modulePart,
+            ClassNode c,
             Dictionary<string, Type> typeTable,
-            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, 
-            IfStatement ifStatement, 
+            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable,
+            IfStatement ifStatement,
             Label? endLabel = null)
         {
             var condition = ifStatement.Condition;
@@ -438,10 +440,10 @@ namespace NEN
         }
 
         private void AnalyzeReturnStatement(
-            ModulePart modulePart, 
-            ClassNode c, 
+            ModulePart modulePart,
+            ClassNode c,
             Dictionary<string, Type> typeTable,
-            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, 
+            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable,
             ReturnStatement returnStatement)
         {
             if (currentMethod == null)
@@ -449,8 +451,8 @@ namespace NEN
                 throw new("Internal error");
             }
             TypeNode type = CreateTypeNodeFromType(
-                module.CoreAssembly!.GetType("System.Void")!, 
-                returnStatement.StartLine, 
+                module.CoreAssembly!.GetType("System.Void")!,
+                returnStatement.StartLine,
                 returnStatement.StartColumn,
                 returnStatement.EndLine,
                 returnStatement.EndColumn
@@ -461,7 +463,7 @@ namespace NEN
                 type = AnalyzeExpression(modulePart, c, typeTable, localSymbolTable, ref expression);
                 returnStatement.Expression = expression;
             }
-            switch(currentMethod)
+            switch (currentMethod)
             {
                 case MethodNode method:
                     AnalyzeTypes(modulePart, typeTable, method.ReturnTypeNode, type); break;
@@ -471,10 +473,10 @@ namespace NEN
         }
 
         private void AnalyzeAssignmentStatement(
-            ModulePart modulePart, 
-            ClassNode c, 
+            ModulePart modulePart,
+            ClassNode c,
             Dictionary<string, Type> typeTable,
-            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, 
+            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable,
             AssignmentStatement assignmentStatement)
         {
             var dest = assignmentStatement.Destination;
@@ -483,7 +485,7 @@ namespace NEN
             var src = assignmentStatement.Source;
             var srcType = AnalyzeExpression(modulePart, c, typeTable, localSymbolTable, ref src);
             assignmentStatement.Source = src;
-            switch(dest)
+            switch (dest)
             {
                 case VariableExpression variableExpression:
                     variableExpression.IsLoading = false;
@@ -501,10 +503,10 @@ namespace NEN
         }
 
         private void AnalyzeExpressionStatement(
-            ModulePart modulePart, 
-            ClassNode c, 
+            ModulePart modulePart,
+            ClassNode c,
             Dictionary<string, Type> typeTable,
-            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, 
+            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable,
             ref ExpressionStatement expressionStatement)
         {
             var expression = expressionStatement.Expression;
@@ -513,7 +515,7 @@ namespace NEN
         }
 
         private void AnalyzeFieldDeclarationStatement(
-            ModulePart modulePart, 
+            ModulePart modulePart,
             ClassNode c,
             Dictionary<string, Type> typeTable,
             FieldDeclarationStatement fieldDeclarationStatement)
@@ -536,14 +538,14 @@ namespace NEN
         }
 
         private void AnalyzeLocalDeclarationStatement(
-            ModulePart modulePart, 
-            ClassNode c, 
+            ModulePart modulePart,
+            ClassNode c,
             Dictionary<string, Type> typeTable,
-            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, 
+            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable,
             LocalDeclarationStatement localDeclarationStatement)
         {
             if (
-                localSymbolTable.TryGetValue(localDeclarationStatement.Variable.Name, out _) || 
+                localSymbolTable.TryGetValue(localDeclarationStatement.Variable.Name, out _) ||
                 currentMethod?.Parameters.FirstOrDefault(p => p.Name == localDeclarationStatement.Variable.Name) != null
             )
             {
@@ -575,7 +577,7 @@ namespace NEN
                 }
             }
             var methodBase = currentMethod!.GetMethodInfo();
-            switch(methodBase)
+            switch (methodBase)
             {
                 case MethodBuilder methodBuilder:
                     var localBuilder = methodBuilder
@@ -592,7 +594,7 @@ namespace NEN
             }
             localDeclarationStatement.DeclaringMethod = currentMethod;
             if (!localSymbolTable.TryAdd(
-                localDeclarationStatement.Variable.Name, 
+                localDeclarationStatement.Variable.Name,
                 (localDeclarationStatement.Variable.TypeNode, localDeclarationStatement.LocalBuilder)
                 )
             )
@@ -602,9 +604,9 @@ namespace NEN
         }
 
         private bool AnalyzeTypes(
-            ModulePart modulePart, 
+            ModulePart modulePart,
             Dictionary<string, Type> typeTable,
-            TypeNode leftNode, 
+            TypeNode leftNode,
             TypeNode rightNode)
         {
             Type left = GetTypeFromTypeNode(modulePart, typeTable, leftNode);
@@ -620,13 +622,13 @@ namespace NEN
         }
 
         private TypeNode AnalyzeExpression(
-            ModulePart modulePart, 
-            ClassNode c, 
+            ModulePart modulePart,
+            ClassNode c,
             Dictionary<string, Type> typeTable,
-            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, 
+            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable,
             ref ExpressionNode expression)
         {
-            switch(expression)
+            switch (expression)
             {
                 case LiteralExpression literalExpression: return AnalyzeLiteralExpression(literalExpression);
                 case VariableExpression _: return AnalyzeVariableExpression(modulePart, c, typeTable, localSymbolTable, ref expression);
@@ -635,11 +637,11 @@ namespace NEN
                 case ConstructorCallExpression constructorCallExpression: return AnalyzeConstructorCallExpression(modulePart, c, typeTable, localSymbolTable, constructorCallExpression);
                 case StandardMethodCallExpression standardMethodCallExpression: return AnalyzeStandardMethodCallExpression(modulePart, c, typeTable, localSymbolTable, ref standardMethodCallExpression);
                 case StaticMethodCallExpression staticMethodCallExpression: return AnalyzeStaticMethodCallExpression(modulePart, c, typeTable, localSymbolTable, staticMethodCallExpression);
-                case AmbiguousMethodCallExpression ambiguousMethodCallExpression: 
+                case AmbiguousMethodCallExpression ambiguousMethodCallExpression:
                     var type = AnalyzeAmbiguousMethodCallExpression(modulePart, c, typeTable, localSymbolTable, ref ambiguousMethodCallExpression);
                     expression = ambiguousMethodCallExpression;
                     return type;
-                case BinaryExpression binaryExpression: return AnalyzeBinaryExpression(modulePart, c, typeTable, localSymbolTable,  binaryExpression);
+                case BinaryExpression binaryExpression: return AnalyzeBinaryExpression(modulePart, c, typeTable, localSymbolTable, binaryExpression);
                 case ArrayIndexingExpression arrayIndexingExpression: return AnalyzeArrayIndexingExpression(modulePart, c, typeTable, localSymbolTable, arrayIndexingExpression);
                 case StandardFieldAccessmentExpression standardFieldAccessmentExpression: return AnalyzeStandardFieldAccessmentExpression(modulePart, c, typeTable, localSymbolTable, standardFieldAccessmentExpression);
                 case StaticFieldAccessmentExpression staticFieldAccessmentExpression: return AnalyzeStaticFieldAccessmentExpression(modulePart, typeTable, localSymbolTable, staticFieldAccessmentExpression);
@@ -651,14 +653,14 @@ namespace NEN
         }
 
         private TypeNode AnalyzeDuplicateExpression(
-            ModulePart modulePart, 
+            ModulePart modulePart,
             Dictionary<string, Type> typeTable,
             DuplicateExpression duplicateExpression)
         {
             var returnType = GetTypeFromTypeNode(modulePart, typeTable, duplicateExpression.ReturnTypeNode!);
             duplicateExpression.ReturnTypeNode = CreateTypeNodeFromType(
-                returnType, 
-                duplicateExpression.StartLine, 
+                returnType,
+                duplicateExpression.StartLine,
                 duplicateExpression.StartColumn,
                 duplicateExpression.EndLine,
                 duplicateExpression.EndColumn);
@@ -666,14 +668,14 @@ namespace NEN
         }
 
         private TypeNode AnalyzeThisExpression(
-            ModulePart modulePart, 
+            ModulePart modulePart,
             Dictionary<string, Type> typeTable,
             ThisExpression thisExpression)
         {
             var returnType = GetTypeFromTypeNode(modulePart, typeTable, thisExpression.ReturnTypeNode!);
             thisExpression.ReturnTypeNode = CreateTypeNodeFromType(
-                returnType, 
-                thisExpression.StartLine, 
+                returnType,
+                thisExpression.StartLine,
                 thisExpression.StartColumn,
                 thisExpression.EndLine,
                 thisExpression.EndColumn);
@@ -681,10 +683,10 @@ namespace NEN
         }
 
         private TypeNode AnalyzeBoxExpression(
-            ModulePart modulePart, 
-            ClassNode c, 
+            ModulePart modulePart,
+            ClassNode c,
             Dictionary<string, Type> typeTable,
-            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, 
+            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable,
             BoxExpression boxExpression)
         {
             var expr = boxExpression.Expression;
@@ -695,9 +697,9 @@ namespace NEN
         }
 
         private TypeNode AnalyzeStaticFieldAccessmentExpression(
-            ModulePart modulePart, 
+            ModulePart modulePart,
             Dictionary<string, Type> typeTable,
-            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, 
+            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable,
             StaticFieldAccessmentExpression staticFieldAccessmentExpression)
         {
             var fieldType = GetTypeFromTypeNode(modulePart, typeTable, staticFieldAccessmentExpression.TypeNode);
@@ -711,17 +713,17 @@ namespace NEN
             if (staticFieldAccessmentExpression.FieldInfo != null) { }
             else if (moduleFields.TryGetValue(
                 string.Join(
-                    ".", 
+                    ".",
                 [
-                        ..staticFieldAccessmentExpression.TypeNode.Namespaces, 
-                        staticFieldAccessmentExpression.TypeNode.Name, 
+                        ..staticFieldAccessmentExpression.TypeNode.Namespaces,
+                        staticFieldAccessmentExpression.TypeNode.Name,
                         staticFieldAccessmentExpression.FieldName
-                        ]), 
+                        ]),
                 out var fieldInfo
                 )
             )
             {
-                if (!fieldInfo.IsPublic) 
+                if (!fieldInfo.IsPublic)
                     throw new InvalidFieldAccessmentException(
                         modulePart.Source,
                         staticFieldAccessmentExpression!.FieldName,
@@ -756,10 +758,10 @@ namespace NEN
         }
 
         private TypeNode AnalyzeStandardFieldAccessmentExpression(
-            ModulePart modulePart, 
-            ClassNode c, 
+            ModulePart modulePart,
+            ClassNode c,
             Dictionary<string, Type> typeTable,
-            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, 
+            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable,
             StandardFieldAccessmentExpression standardFieldAccessmentExpression)
         {
             var fieldObject = standardFieldAccessmentExpression.Object;
@@ -768,18 +770,18 @@ namespace NEN
             if (standardFieldAccessmentExpression.FieldInfo != null) { }
             else if (moduleFields.TryGetValue(
                 string.Join(
-                    ".", 
+                    ".",
                     [
-                        ..objectTypeNode.Namespaces, 
-                        objectTypeNode.Name, 
+                        ..objectTypeNode.Namespaces,
+                        objectTypeNode.Name,
                         standardFieldAccessmentExpression.FieldName
                         ]
-                    ), 
+                    ),
                 out var fieldInfo
                 )
             )
             {
-                if (!fieldInfo.IsPublic) 
+                if (!fieldInfo.IsPublic)
                     throw new InvalidFieldAccessmentException(
                         modulePart.Source,
                         standardFieldAccessmentExpression!.FieldName,
@@ -816,25 +818,25 @@ namespace NEN
         }
 
         private TypeNode AnalyzeConstructorCallExpression(
-            ModulePart modulePart, 
-            ClassNode c, 
+            ModulePart modulePart,
+            ClassNode c,
             Dictionary<string, Type> typeTable,
-            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, 
+            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable,
             ConstructorCallExpression constructorCallExpression)
         {
             List<Type> argTypes = [];
             for (int i = 0; i < constructorCallExpression.Arguments.Length; i++)
             {
                 var argTypeNode = AnalyzeExpression(
-                    modulePart, 
-                    c, 
-                    typeTable, 
-                    localSymbolTable, 
+                    modulePart,
+                    c,
+                    typeTable,
+                    localSymbolTable,
                     ref constructorCallExpression.Arguments[i]);
                 argTypes.Add(GetTypeFromTypeNode(modulePart, typeTable, argTypeNode));
             }
             var returnType = GetTypeFromTypeNode(modulePart, typeTable, constructorCallExpression.ReturnTypeNode!);
-            if (moduleConstructors.TryGetValue((returnType.FullName!, [..argTypes]), out var constructorInfo))
+            if (moduleConstructors.TryGetValue((returnType.FullName!, [.. argTypes]), out var constructorInfo))
             {
                 constructorCallExpression.ConstructorInfo = constructorInfo;
             }
@@ -842,7 +844,7 @@ namespace NEN
             {
                 try
                 {
-                    constructorCallExpression.ConstructorInfo = returnType.GetConstructor([..argTypes]);
+                    constructorCallExpression.ConstructorInfo = returnType.GetConstructor([.. argTypes]);
                 }
                 catch (Exception) { }
             }
@@ -867,13 +869,13 @@ namespace NEN
         }
 
         private TypeNode AnalyzeInlineConstructionExpression(
-            ModulePart modulePart, 
-            ClassNode c, 
+            ModulePart modulePart,
+            ClassNode c,
             Dictionary<string, Type> typeTable,
-            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, 
+            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable,
             InlineConstructionExpression inlineConstructionExpression)
         {
-            foreach(var statement in inlineConstructionExpression.FieldInitializations)
+            foreach (var statement in inlineConstructionExpression.FieldInitializations)
             {
                 AnalyzeAssignmentStatement(modulePart, c, typeTable, localSymbolTable, statement);
             }
@@ -890,12 +892,12 @@ namespace NEN
                 }
                 catch (Exception) { }
             }
-            if (inlineConstructionExpression.ConstructorInfo == null || inlineConstructionExpression.ConstructorInfo!.IsPrivate) 
+            if (inlineConstructionExpression.ConstructorInfo == null || inlineConstructionExpression.ConstructorInfo!.IsPrivate)
                 throw new UnresolvedConstructorException(
-                    modulePart.Source, 
-                    returnType.FullName!, 
-                    [], 
-                    inlineConstructionExpression.StartLine, 
+                    modulePart.Source,
+                    returnType.FullName!,
+                    [],
+                    inlineConstructionExpression.StartLine,
                     inlineConstructionExpression.StartColumn,
                     inlineConstructionExpression.EndLine,
                     inlineConstructionExpression.EndColumn
@@ -911,17 +913,17 @@ namespace NEN
         }
 
         private TypeNode AnalyzeArrayIndexingExpression(
-            ModulePart modulePart, 
-            ClassNode c, 
+            ModulePart modulePart,
+            ClassNode c,
             Dictionary<string, Type> typeTable,
-            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, 
+            Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable,
             ArrayIndexingExpression arrayIndexingExpression)
         {
             var arrayNode = arrayIndexingExpression.Array;
             AnalyzeExpression(modulePart, c, typeTable, localSymbolTable, ref arrayNode);
             arrayIndexingExpression.Array = arrayNode;
             var arrayType = GetTypeFromTypeNode(modulePart, typeTable, arrayNode.ReturnTypeNode!);
-            if (!arrayType.IsArray)
+            if (!arrayType.IsArray && !arrayType.IsCollectible)
             {
                 throw new IndexingOnNonArrayException(modulePart.Source, arrayNode.ReturnTypeNode!.FullName, arrayIndexingExpression.StartLine, arrayIndexingExpression.StartColumn, arrayIndexingExpression.EndLine, arrayIndexingExpression.EndColumn);
             }
@@ -932,13 +934,34 @@ namespace NEN
             {
                 throw new InvalidArrayIndexingTypeException(modulePart.Source, indexNode.ReturnTypeNode.FullName, indexNode.StartLine, indexNode.StartColumn, indexNode.EndLine, indexNode.EndColumn);
             }
+            var elementType = GetIndexerReturnType(arrayType);
             arrayIndexingExpression.ReturnTypeNode = CreateTypeNodeFromType(
-                arrayType.GetElementType()!, 
+                elementType!, 
                 arrayIndexingExpression.StartLine, 
                 arrayIndexingExpression.StartColumn,
                 arrayIndexingExpression.EndLine,
                 arrayIndexingExpression.EndColumn);
             return arrayIndexingExpression.ReturnTypeNode;
+        }
+
+        public static Type GetIndexerReturnType(Type collectionType)
+        {
+            if (collectionType.IsArray) return collectionType.GetElementType()!;
+
+            string? indexerName = null;
+            try { indexerName = collectionType.GetCustomAttribute<DefaultMemberAttribute>()?.MemberName; }
+            catch (InvalidOperationException) { /* MLC type, fall back */ }
+
+            indexerName ??= collectionType.GetCustomAttributesData()
+                .FirstOrDefault(c => c.AttributeType.FullName == typeof(DefaultMemberAttribute).FullName)?
+                .ConstructorArguments.FirstOrDefault().Value as string;
+
+            var indexerProperty = collectionType.GetProperties()
+                .FirstOrDefault(p => p.GetIndexParameters().Length > 0 &&
+                                     (indexerName == null || p.Name == indexerName))
+                ?? throw new ArgumentException($"Type {collectionType.Name} does not have an indexer.");
+
+            return indexerProperty.PropertyType;
         }
 
         private TypeNode AnalyzeNewArrayExpression(
@@ -1035,8 +1058,8 @@ namespace NEN
                         module.CoreAssembly!.GetType(PrimitiveType.Int32)!,
                         newArrayExpression.ReturnTypeNode!.StartLine,
                         newArrayExpression.ReturnTypeNode!.StartColumn,
-                        newArrayExpression.ReturnTypeNode.EndLine,
-                        newArrayExpression.ReturnTypeNode.EndColumn
+                        newArrayExpression.ReturnTypeNode!.EndLine,
+                        newArrayExpression.ReturnTypeNode!.EndColumn
                     ),
                     StartLine = newArrayExpression.ReturnTypeNode!.StartLine, 
                     StartColumn = newArrayExpression.ReturnTypeNode!.StartColumn, 
@@ -1649,6 +1672,51 @@ namespace NEN
             {
                 throw new ArgumentException("Internal error");
             }
+            Type searchingThroughNamespaces(string typeName)
+            {
+                Type? type = null;
+                var namespaces = modulePart.UsingNamespaces
+                    .Select(n => string.Join(".", n.Namespace))
+                    .Where(e => e.EndsWith(typeNamespace))
+                    .ToArray();
+                if (namespaces.Length == 0)
+                {
+                    namespaces = [typeNamespace];
+                }
+                var typeNames = namespaces.Select(n => string.Join(".", [n, typeName])).ToArray();
+                if (typeNamespace == "") typeNames = [.. typeNames, typeName];
+                foreach (var typeN in typeNames)
+                {
+                    var tempType = moduleTypes.GetValueOrDefault(typeN);
+                    if (tempType != null && type != null && tempType.FullName != type.FullName)
+                    {
+                        string tn = typeNode.FullName;
+                        string ftn = string.Join("::", type.FullName!.Split("."));
+                        string stn = string.Join("::", tempType.FullName!.Split("."));
+                        throw new AmbiguousTypeUsage(modulePart.Source, tn, ftn, stn, typeNode.StartLine, typeNode.StartColumn, typeNode.EndLine, typeNode.EndColumn);
+                    }
+                    if (tempType == null && type != null) continue;
+                    type = tempType;
+                }
+                foreach (var typeN in typeNames)
+                {
+                    var tempType = module.CoreAssembly!.GetType(typeN);
+                    if (tempType != null && type != null && tempType.FullName != type.FullName)
+                    {
+                        string tn = typeNode.FullName;
+                        string ftn = string.Join("::", type.FullName!.Split("."));
+                        string stn = string.Join("::", tempType.FullName!.Split("."));
+                        throw new AmbiguousTypeUsage(modulePart.Source, tn, ftn, stn, typeNode.StartLine, typeNode.StartColumn, typeNode.EndLine, typeNode.EndColumn);
+                    }
+                    if (tempType == null && type != null) continue;
+                    type = tempType;
+                }
+                if (type == null)
+                {
+                    throw new UnresolvedTypeException(modulePart.Source, typeNode.FullName, typeNode.StartLine, typeNode.StartColumn, typeNode.EndLine, typeNode.EndColumn);
+                }
+                return type;
+            }
             switch (typeNode)
             {
                 case ArrayType arrayTypeNode:
@@ -1661,48 +1729,21 @@ namespace NEN
                         throw new("Internal error");
                     }
                     return arrayType;
+                case GenericType genericType:
+                    var type = searchingThroughNamespaces(genericType.OpenGenericName);
+                    List<Type> typeArguments = [];
+                    foreach (var typeArgument in genericType.TypeArguments)
+                    {
+                        typeArguments.Add(GetTypeFromTypeNode(modulePart, typeTable, typeArgument));
+                    }
+                    type = type.MakeGenericType([.. typeArguments]);
+                    if (!typeTable.TryAdd(typeNode.CLRFullName, type))
+                    {
+                        throw new("Internal error");
+                    }
+                    return type;
                 case NamedType namedType:
-                    Type? type = null;
-                    var namespaces = modulePart.UsingNamespaces
-                        .Select(n => string.Join(".", n.Namespace))
-                        .Where(e => e.EndsWith(typeNamespace))
-                        .ToArray();
-                    if (namespaces.Length == 0)
-                    {
-                        namespaces = [typeNamespace];
-                    }
-                    var typeNames = namespaces.Select(n => string.Join(".", [n, typeNode.Name])).ToArray();
-                    if (typeNamespace == "") typeNames = [..typeNames, typeNode.Name];
-                    foreach (var typeName in typeNames)
-                    {
-                        var tempType = moduleTypes.GetValueOrDefault(typeName);
-                        if (tempType != null && type != null && tempType.FullName != type.FullName)
-                        {
-                            string tn = typeNode.FullName;
-                            string ftn = string.Join("::", type.FullName!.Split("."));
-                            string stn = string.Join("::", tempType.FullName!.Split("."));
-                            throw new AmbiguousTypeUsage(modulePart.Source, tn, ftn, stn, typeNode.StartLine, typeNode.StartColumn, typeNode.EndLine, typeNode.EndColumn);
-                        }
-                        if (tempType == null && type != null) continue;
-                        type = tempType;
-                    }
-                    foreach (var typeName in typeNames)
-                    {
-                        var tempType = module.CoreAssembly!.GetType(typeName);
-                        if (tempType != null && type != null && tempType.FullName != type.FullName)
-                        {
-                            string tn = typeNode.FullName;
-                            string ftn = string.Join("::", type.FullName!.Split("."));
-                            string stn = string.Join("::", tempType.FullName!.Split("."));
-                            throw new AmbiguousTypeUsage(modulePart.Source, tn, ftn, stn, typeNode.StartLine, typeNode.StartColumn, typeNode.EndLine, typeNode.EndColumn);
-                        }
-                        if (tempType == null && type != null) continue;
-                        type = tempType;
-                    }
-                    if (type == null)
-                    {
-                        throw new UnresolvedTypeException(modulePart.Source, typeNode.FullName, typeNode.StartLine, typeNode.StartColumn, typeNode.EndLine, typeNode.EndColumn);
-                    }
+                    type = searchingThroughNamespaces(namedType.Name);
                     if (!typeTable.TryAdd(typeNode.CLRFullName, type))
                     {
                         throw new("Internal error");
@@ -1730,7 +1771,23 @@ namespace NEN
                     EndColumn = endColumn,
                 };
             }
-            return new NamedType { 
+            if (type.IsGenericType)
+            {
+                return new GenericType
+                {
+                    CLRType = type,
+                    Namespaces = namespaces,
+                    Name = type.Name,
+                    OpenGenericName = type.GetGenericTypeDefinition().Name,
+                    TypeArguments = [.. type.GenericTypeArguments.Select(gt => CreateTypeNodeFromType(gt, startLine, startColumn, endLine, endColumn))],
+                    StartLine = startLine,
+                    StartColumn = startColumn,
+                    EndLine = endLine,
+                    EndColumn = endColumn
+                };
+            }
+            return new NamedType 
+            { 
                 CLRType = type,
                 Namespaces = namespaces,
                 Name = type.Name,

@@ -244,7 +244,7 @@ namespace NEN
                         EndColumn,
                         SymbolKind); // symbol name
                 }
-                TypeNode.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                TypeNode!.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
             }
         }
 
@@ -292,6 +292,34 @@ namespace NEN
             }
         }
 
+        public class GenericType : TypeNode
+        {
+            public Type? CLRType { get; set; }
+            public required string OpenGenericName { get; set; }
+            public required TypeNode[] TypeArguments { get; set; }
+            public override string ToString()
+            {
+                var isResolved = CLRType == null ? "(*)" : "";
+                return $"{FullName}{isResolved}";
+            }
+            public override Type? GetCLRType()
+            {
+                return CLRType;
+            }
+            internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
+            {
+                symbols.Add(Helper.TypeNodeToTypeSymbol(this));
+                foreach(var typeArgument in TypeArguments)
+                {
+                    typeArgument.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                }
+                if (collectSpans)
+                {
+                    Helper.AddSpan(document, symbolSpans, StartLine, StartColumn, EndLine, EndColumn, SymbolKind.Class);
+                }
+            }
+        }
+
         public class ArrayType : TypeNode
         {
             public required TypeNode ElementTypeNode { get; set; }
@@ -310,7 +338,7 @@ namespace NEN
             }
             public override Type? GetCLRType()
             {
-                return ElementTypeNode.GetCLRType();
+                return ElementTypeNode.GetCLRType()!.MakeArrayType();
             }
 
             internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)

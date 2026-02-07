@@ -76,13 +76,13 @@ namespace NEN
                 {
                     Name = methodNode.MethodName,
                     DeclaringType = TypeNodeToTypeSymbol(methodNode.DeclaringTypeNode),
-                    Parameters = [.. methodNode.Parameters.Select(p => TypeNodeToTypeSymbol(p.TypeNode))]
+                    Parameters = [.. methodNode.Parameters.Select(p => TypeNodeToTypeSymbol(p.TypeNode!))]
                 },
                 ConstructorNode constructorNode => new ConstructorSymbol
                 {
                     Name = constructorNode.DeclaringTypeNode.FullName,
                     DeclaringType = TypeNodeToTypeSymbol(constructorNode.DeclaringTypeNode),
-                    Parameters = [.. constructorNode.Parameters.Select(p => TypeNodeToTypeSymbol(p.TypeNode))]
+                    Parameters = [.. constructorNode.Parameters.Select(p => TypeNodeToTypeSymbol(p.TypeNode!))]
                 },
                 _ => throw new NotImplementedException(),
             };

@@ -1,5 +1,6 @@
 
 sử_dụng System;
+sử_dụng System::Collections::Generic;
 
 lớp Phụ
     @Tĩnh @Công_Khai
@@ -139,5 +140,6 @@ lớp Phụ
     phương_thức Kiểm_Tra_Khởi_Tạo() -> Void
         biến n1 thuộc Người gán tạo Người();
         biến n2 thuộc Người gán tạo Người("A", 21);
+        biến p gán tạo List<System::Int32>();
     kết_thúc
 kết_thúc

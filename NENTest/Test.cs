@@ -480,6 +480,20 @@ namespace NENTest
         }
 
         [TestMethod]
+        public void GenericTypeTest()
+        {
+            var assemblyName = "GenericTypeTest";
+            var (ab, context, coreAssembly) = CreateAssembly(assemblyName, []);
+            var voidType = coreAssembly!.GetType("System.Void")!;
+            var intType = coreAssembly!.GetType("System.Int32")!;
+            var stringType = coreAssembly!.GetType("System.String")!;
+            var consoleType = coreAssembly!.GetType("System.Console")!;
+            var writeLineMethod = consoleType.GetMethod("WriteLine", [stringType])!;
+            var listAssembly = context.LoadFromAssemblyName("System.Private.CoreLib");
+            var listType = coreAssembly!.GetType("System.Collections.Generic.List`1") ?? throw new("not found");
+        }
+
+        [TestMethod]
         public void BranchingTest()
         {
             var assemblyName = "BranchingTest";

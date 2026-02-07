@@ -220,16 +220,27 @@ namespace NEN
                     ilGenerator.Emit(OpCodes.Starg, argumentExpression.Index!.Value);
                     break;
                 case ArrayIndexingExpression arrayIndexingExpression:
-                    var elementType = LowerTypeNode(arrayIndexingExpression.ReturnTypeNode!);
+                    var elementType = arrayIndexingExpression.ReturnTypeNode!.GetCLRType()!;
                     AssembleExpression(ilGenerator, arrayIndexingExpression.Index); // Load the index onto the stack
                     AssembleExpression(ilGenerator, assignmentStatement.Source);
-                    if (elementType.IsValueType)
+                    if (assignmentStatement.Source.ReturnTypeNode!.GetCLRType()!.IsArray)
                     {
-                        ilGenerator.Emit(OpCodes.Stelem, elementType); // Store the value onto the element specifed by the index
+                        if (elementType.IsValueType)
+                        {
+                            ilGenerator.Emit(OpCodes.Stelem, elementType); // Store the value onto the element specifed by the index
+                        }
+                        else
+                        {
+                            ilGenerator.Emit(OpCodes.Stelem_Ref);
+                        }
                     }
                     else
                     {
-                        ilGenerator.Emit(OpCodes.Stelem_Ref);
+                        var setMethod = arrayIndexingExpression.Array.ReturnTypeNode!
+                    .GetCLRType()!
+                    .GetProperty("Item")!
+                    .GetSetMethod();
+                        ilGenerator.Emit(OpCodes.Callvirt, setMethod!);
                     }
                     break;
                 case StandardFieldAccessmentExpression standardFieldAccessmentExpression:
@@ -338,28 +349,39 @@ namespace NEN
             AssembleExpression(ilGenerator, arrayIndexingExpression.Array); // Load the array onto the stack
             if (!arrayIndexingExpression.IsLoading) return; // Don't load unless specified
             AssembleExpression(ilGenerator, arrayIndexingExpression.Index); // Load the index onto the stack
-            Type elementType = LowerTypeNode(arrayIndexingExpression.ReturnTypeNode!);
-            if (elementType.IsValueType)
+            if (arrayIndexingExpression.Array.ReturnTypeNode!.GetCLRType()!.IsArray)
             {
-                ilGenerator.Emit(OpCodes.Ldelem, elementType);
+                Type elementType = arrayIndexingExpression.ReturnTypeNode!.GetCLRType()!;
+                if (elementType.IsValueType)
+                {
+                    ilGenerator.Emit(OpCodes.Ldelem, elementType);
+                }
+                else
+                {
+                    ilGenerator.Emit(OpCodes.Ldelem_Ref);
+                }
             }
             else
             {
-                ilGenerator.Emit(OpCodes.Ldelem_Ref);
+                var getMethod = arrayIndexingExpression.Array.ReturnTypeNode!
+                    .GetCLRType()!
+                    .GetProperty("Item")!
+                    .GetGetMethod();
+                ilGenerator.Emit(OpCodes.Callvirt, getMethod!);
             }
         }
 
         private void AssembleNewArrayExpression(ILGenerator ilGenerator, NewArrayExpression newArrayExpression)
         {
             AssembleExpression(ilGenerator, newArrayExpression.Size!);
-            Type arrayElementType = LowerTypeNode(((ArrayType)newArrayExpression.ReturnTypeNode!).ElementTypeNode);
+            Type arrayElementType = (newArrayExpression.ReturnTypeNode! as ArrayType)!.ElementTypeNode.GetCLRType()!;
             ilGenerator.Emit(OpCodes.Newarr, arrayElementType);
             for (int i = 0; i < newArrayExpression.Elements.Length; i++)
             {
                 ilGenerator.Emit(OpCodes.Dup); // Load a reference to the array onto the stack
                 ilGenerator.Emit(OpCodes.Ldc_I4, i); // Load the index onto the stack
                 AssembleExpression(ilGenerator, newArrayExpression.Elements[i]); // Load value or reference onto the stack
-                Type elementType = LowerTypeNode(newArrayExpression.Elements[i].ReturnTypeNode!);
+                Type elementType = newArrayExpression.Elements[i].ReturnTypeNode!.GetCLRType()!;
                 if (elementType.IsValueType && arrayElementType.IsValueType)
                 {
                     ilGenerator.Emit(OpCodes.Stelem, elementType);
@@ -379,7 +401,7 @@ namespace NEN
         private void AssembleBoxExpression(ILGenerator ilGenerator, BoxExpression boxExpression)
         {
             AssembleExpression(ilGenerator, boxExpression.Expression);
-            ilGenerator.Emit(OpCodes.Box, LowerTypeNode(boxExpression.ReturnTypeNode!));
+            ilGenerator.Emit(OpCodes.Box, boxExpression.ReturnTypeNode!.GetCLRType()!);
         }
 
         private void AssembleThisExpression(ILGenerator ilGenerator)
@@ -502,19 +524,19 @@ namespace NEN
 
         private void AssembleLiteralExpression( ILGenerator ilGenerator, LiteralExpression literalExpression)
         {
-            if (LowerTypeNode(literalExpression.ReturnTypeNode!).FullName == PrimitiveType.String)
+            if (literalExpression.ReturnTypeNode!.GetCLRType()!.FullName == PrimitiveType.String)
             {
                 ilGenerator.Emit(OpCodes.Ldstr, literalExpression.Value);
             }
-            else if (LowerTypeNode(literalExpression.ReturnTypeNode!).FullName == PrimitiveType.Int64)
+            else if (literalExpression.ReturnTypeNode!.GetCLRType()!.FullName == PrimitiveType.Int64)
             {
                 ilGenerator.Emit(OpCodes.Ldc_I8, Int64.Parse(literalExpression.Value));
             }
-            else if (LowerTypeNode(literalExpression.ReturnTypeNode!).FullName == PrimitiveType.Int32)
+            else if (literalExpression.ReturnTypeNode!.GetCLRType()!.FullName == PrimitiveType.Int32)
             {
                 ilGenerator.Emit(OpCodes.Ldc_I4, Int32.Parse(literalExpression.Value));
             }
-            else if (LowerTypeNode(literalExpression.ReturnTypeNode!).FullName == PrimitiveType.Boolean)
+            else if (literalExpression.ReturnTypeNode!.GetCLRType()!.FullName == PrimitiveType.Boolean)
             {
                 if (literalExpression.Value == "đúng")
                     ilGenerator.Emit(OpCodes.Ldc_I4_1);
@@ -529,16 +551,6 @@ namespace NEN
         }
 
         /* Helpers */
-
-        static private Type LowerTypeNode(TypeNode typeNode)
-        {
-            return typeNode switch
-            {
-                NamedType namedType => namedType.CLRType!,
-                ArrayType arrayType => LowerTypeNode(arrayType.ElementTypeNode).MakeArrayType(1),
-                _ => throw new NotImplementedException()
-            };
-        }
 
         private void SetupTargetFramework()
         {

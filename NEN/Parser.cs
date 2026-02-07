@@ -765,12 +765,34 @@ namespace NEN
                 EndLine = endLine,
                 EndColumn = endColumn
             };
+            if (Current(out var token) && token?.Value == "<")
+            {
+                ConsumeOrThrowIfNotEqual(TokenType.Operator, "<");
+                List<TypeNode> argumentTypes = [];
+                while (Current(out token) && token?.Value != ">")
+                {
+                    argumentTypes.Add(ParseType());
+                    if (Current(out token) && token?.Value != ">") ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ",");
+                }
+                ConsumeOrThrowIfNotEqual(TokenType.Operator, ">");
+                type = new GenericType
+                {
+                    Namespaces = type.Namespaces,
+                    Name = $"{type.Name}<{string.Join(",", argumentTypes.Select(t => t.CLRFullName))}>",
+                    OpenGenericName = $"{type.Name}`{argumentTypes.Count}",
+                    TypeArguments = [.. argumentTypes],
+                    StartLine = startLine,
+                    StartColumn = startColumn,
+                    EndLine = endLine,
+                    EndColumn = endColumn
+                };
+            }
             int nesting = 1;
             ExpressionNode? size = null;
             while (Current(out var lBrack) && lBrack?.Value == "[")
             {
                 ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "[");
-                if (nesting == 1 && Current(out var token) && token?.Value != "]")
+                if (nesting == 1 && Current(out token) && token?.Value != "]")
                 {
                     size = ParseExpression(0);
                 }
@@ -794,7 +816,7 @@ namespace NEN
                     if (Current(out var lBrace) && lBrace?.Value == "{")
                     {
                         ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "{");
-                        while (Current(out var token) && token?.Value != "}")
+                        while (Current(out token) && token?.Value != "}")
                         {
                             elements.Add(ParseExpression(0));
                             if (Current(out var rBrace) && rBrace?.Value != "}") ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ",");
@@ -810,13 +832,14 @@ namespace NEN
                         EndLine = endLine,
                         EndColumn = endColumn 
                     };
-                case NamedType namedType:
+                case NamedType:
+                case GenericType:
                     List<AssignmentStatement> assignments = [];
                     if (Current(out var lParen) && lParen?.Value == "(")
                     {
                         var arguments = ParseArguments();
                         return new ConstructorCallExpression {
-                            ReturnTypeNode = namedType,
+                            ReturnTypeNode = type,
                             Arguments = arguments,
                             StartLine = startLine,
                             StartColumn = startColumn,
@@ -837,9 +860,9 @@ namespace NEN
                             var (endAssignmentLine, endAssignmentColumn) = GetPreviousEndPosition();
                             assignments.Add(new AssignmentStatement { 
                                 Destination = new StandardFieldAccessmentExpression {
-                                    ReturnTypeNode = namedType,
+                                    ReturnTypeNode = type,
                                     Object = new DuplicateExpression { 
-                                        ReturnTypeNode = namedType, 
+                                        ReturnTypeNode = type, 
                                         StartLine = startAssignmentLine, 
                                         StartColumn = startAssignmentColumn,
                                         EndLine = endFieldLine,
@@ -857,12 +880,12 @@ namespace NEN
                                 EndLine = endAssignmentLine,
                                 EndColumn = endAssignmentColumn
                             });
-                            if (Current(out var token) && token?.Value != "}") ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ",");
+                            if (Current(out token) && token?.Value != "}") ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ",");
                         }
                         ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "}");
                     }
                     return new InlineConstructionExpression { 
-                        ReturnTypeNode = namedType, 
+                        ReturnTypeNode = type, 
                         FieldInitializations = [..assignments] , 
                         StartLine = startLine, 
                         StartColumn = startColumn,
@@ -886,7 +909,28 @@ namespace NEN
                 EndLine = endLine,
                 EndColumn = endColumn
             };
-            while (Current(out var token) && token?.Value == "[")
+            if (Current(out var token) && token?.Value == "<")
+            {
+                ConsumeOrThrowIfNotEqual(TokenType.Operator, "<");
+                List<TypeNode> argumentTypes = [];
+                while(Current(out token) && token?.Value != ">")
+                {
+                    argumentTypes.Add(ParseType());
+                    if (Current(out token) && token?.Value != ">") ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ",");
+                }
+                ConsumeOrThrowIfNotEqual(TokenType.Operator, ">");
+                type = new GenericType {
+                    Namespaces = type.Namespaces,
+                    Name = $"{type.Name}<{string.Join(",", argumentTypes.Select(t => t.CLRFullName))}>",
+                    OpenGenericName = type.Name,
+                    TypeArguments = [..argumentTypes],
+                    StartLine = startLine,
+                    StartColumn = startColumn,
+                    EndLine = endLine,
+                    EndColumn = endColumn
+                };
+            }
+            while (Current(out token) && token?.Value == "[")
             {
                 ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "[");
                 ConsumeOrThrowIfNotEqual(TokenType.Punctuator, "]");
