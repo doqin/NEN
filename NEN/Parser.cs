@@ -28,35 +28,7 @@ namespace NEN
             List<UsingNamespaceStatement> usingNamespaceStatements = [];
             while (index < tokens.Length)
             {
-                var token = Consume();
-                switch (token!.Type)
-                {
-                    case TokenType.Keyword:
-                        switch (token.Value)
-                        {
-                            case "sử_dụng":
-                                var (namespaceIdentifiers, startLine, startColumn, endLine, endColumn) = ParseIdentifier();
-                                usingNamespaceStatements.Add(
-                                    new UsingNamespaceStatement {
-                                        Namespace = namespaceIdentifiers,
-                                        StartLine = startLine,
-                                        StartColumn = startColumn,
-                                        EndLine = endLine,
-                                        EndColumn = endColumn,
-                                    }
-                                );
-                                ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ";");
-                                break;
-                            case "lớp":
-                                classes.Add(ParseClass());
-                                break;
-                            default:
-                                throw new ExpectedException(content, "lớp", token.StartLine, token.StartColumn, token.EndLine, token.EndColumn);
-                        }
-                        break;
-                    default:
-                        throw new ExpectedException(content, "lớp", token.StartLine, token.StartColumn, token.EndLine, token.EndColumn);
-                }
+                ParseMain([], classes, usingNamespaceStatements);
             }
             return new ModulePart { 
                 SourceName = moduleName, 
@@ -66,7 +38,60 @@ namespace NEN
             };
         }
 
-        private ClassNode ParseClass()
+        private void ParseMain(List<string> namespaces, List<ClassNode> classes, List<UsingNamespaceStatement> usingNamespaceStatements)
+        {
+            var token = Consume();
+            switch (token!.Type)
+            {
+                case TokenType.Keyword:
+                    switch (token.Value)
+                    {
+                        case "sử_dụng":
+                            var (namespaceIdentifiers, startLine, startColumn, endLine, endColumn) = ParseIdentifier();
+                            usingNamespaceStatements.Add(
+                                new UsingNamespaceStatement
+                                {
+                                    Namespace = namespaceIdentifiers,
+                                    StartLine = startLine,
+                                    StartColumn = startColumn,
+                                    EndLine = endLine,
+                                    EndColumn = endColumn,
+                                }
+                            );
+                            ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ";");
+                            break;
+                        case "không_gian":
+                            (namespaceIdentifiers, startLine, startColumn, endLine, endColumn) = ParseIdentifier();
+                            usingNamespaceStatements.Add(
+                                new UsingNamespaceStatement
+                                {
+                                    IsResolved = true,
+                                    Namespace = namespaceIdentifiers,
+                                    StartLine = startLine,
+                                    StartColumn = startColumn,
+                                    EndLine = endLine,
+                                    EndColumn = endColumn,
+                                }
+                            );
+                            while (Current(out var end) && end?.Value != "kết_thúc")
+                            {
+                                ParseMain(new([.. namespaces, .. namespaceIdentifiers]), classes, usingNamespaceStatements);
+                            }
+                            ConsumeOrThrowIfNotEqual(TokenType.Keyword, "kết_thúc");
+                            break;
+                        case "lớp":
+                            classes.Add(ParseClass([..namespaces]));
+                            break;
+                        default:
+                            throw new ExpectedException(content, "lớp", token.StartLine, token.StartColumn, token.EndLine, token.EndColumn);
+                    }
+                    break;
+                default:
+                    throw new ExpectedException(content, "lớp", token.StartLine, token.StartColumn, token.EndLine, token.EndColumn);
+            }
+        }
+
+        private ClassNode ParseClass(string[] namespaces)
         {
             var (startLine, startColumn) = GetCurrentStartPosition();
             var classIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên lớp");
@@ -80,7 +105,7 @@ namespace NEN
                 switch (token!.Value)
                 {
                     case "@":
-                        var (left, right) = ParseMarker(classIdentifier.Value);
+                        var (left, right) = ParseMarker(namespaces, classIdentifier.Value);
                         if (left != null)
                         {
                             switch(left)
@@ -107,7 +132,7 @@ namespace NEN
                         constructors.Add(ParseConstructor(classIdentifier.Value));
                         break;
                     case "phương_thức":
-                        methods.Add(ParseMethod(classIdentifier.Value));
+                        methods.Add(ParseMethod(namespaces, classIdentifier.Value));
                         break;
                     case "thuộc_tính":
                         fields.Add(ParseFieldDeclarationStatement(classIdentifier.Value));
@@ -121,6 +146,7 @@ namespace NEN
             if (!Current(out _)) OutOfTokenHelper("kết_thúc");
             Consume();
             return new ClassNode { 
+                Namespaces = namespaces,
                 Name = classIdentifier!.Value, 
                 Constructors = [..constructors],
                 Methods = [.. methods], 
@@ -136,7 +162,7 @@ namespace NEN
             "Chính", "Tĩnh", "Công_Khai"
         ];
 
-        private (AST.MethodBase?, FieldDeclarationStatement?) ParseMarker(string className, MethodAttributes methodAttributes = MethodAttributes.Private, FieldAttributes fieldAttributes = FieldAttributes.Private, bool isEntryPoint = false)
+        private (AST.MethodBase?, FieldDeclarationStatement?) ParseMarker(string[] namespaces, string className, MethodAttributes methodAttributes = MethodAttributes.Private, FieldAttributes fieldAttributes = FieldAttributes.Private, bool isEntryPoint = false)
         {
             var annotationIdentifier = ConsumeOrThrow(TokenType.Identifier, "thuộc tính phương thức");
             if (!markers.Contains(annotationIdentifier.Value)) throw new ExpectedException(content, "thuộc tính phương thức", annotationIdentifier.StartLine, annotationIdentifier.StartColumn, annotationIdentifier.EndLine, annotationIdentifier.EndColumn);
@@ -195,9 +221,9 @@ namespace NEN
             switch(token.Value)
             {
                 case "@":
-                    return ParseMarker(className, methodAttributes, fieldAttributes, isEntryPoint);
+                    return ParseMarker(namespaces, className, methodAttributes, fieldAttributes, isEntryPoint);
                 case "phương_thức":
-                    return (ParseMethod(className, methodAttributes, isEntryPoint), null);
+                    return (ParseMethod(namespaces, className, methodAttributes, isEntryPoint), null);
                 case "phương_thức_khởi_tạo":
                     return (ParseConstructor(className, methodAttributes), null);
                 case "thuộc_tính":
@@ -267,7 +293,7 @@ namespace NEN
             };
         }
 
-        private MethodNode ParseMethod(string className, MethodAttributes methodAttributes = MethodAttributes.Private, bool isEntryPoint = false)
+        private MethodNode ParseMethod(string[] namespaces, string className, MethodAttributes methodAttributes = MethodAttributes.Private, bool isEntryPoint = false)
         {
             var (startLine, startColumn) = GetCurrentStartPosition();
             var methodIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên phương thức");
@@ -304,7 +330,7 @@ namespace NEN
             return new MethodNode { 
                 DeclaringTypeNode = new NamedType
                 {
-                    Namespaces = [],
+                    Namespaces = namespaces,
                     Name = className,
                     StartLine = startLine,
                     StartColumn = startColumn,

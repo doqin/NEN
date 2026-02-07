@@ -42,7 +42,7 @@ namespace NEN
                             Destination = new StaticFieldAccessmentExpression {
                                 ReturnTypeNode = f.Variable.TypeNode,
                                 TypeNode = new NamedType {
-                                    Namespaces = [], // TODO: change when namespaces are implemented
+                                    Namespaces = c.Namespaces,
                                     Name = c.Name,
                                     StartLine = c.StartLine,
                                     StartColumn = c.StartColumn,
@@ -69,7 +69,7 @@ namespace NEN
                                 ReturnTypeNode = f.Variable.TypeNode,
                                 Object = new ThisExpression {
                                     ReturnTypeNode = new NamedType {
-                                        Namespaces = [],
+                                        Namespaces = c.Namespaces,
                                         Name = c.Name,
                                         StartLine = f.StartLine,
                                         StartColumn = f.StartColumn,
@@ -103,7 +103,7 @@ namespace NEN
             {
                 AnalyzeStatement(modulePart, c, [], [], statement);
             }
-            if (!moduleConstructors.TryAdd((c.Name, []), defaultConstructor.ConstructorBuilder))
+            if (!moduleConstructors.TryAdd((c.CLRFullName, []), defaultConstructor.ConstructorBuilder))
             {
                 throw new("Internal error");
             }

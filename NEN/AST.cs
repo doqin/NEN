@@ -81,12 +81,14 @@ namespace NEN
 
         public class ClassNode : ASTNode
         {
+            public required string[] Namespaces { set; get; }
             public required string Name { get; set; }
             public FieldDeclarationStatement[] Fields { get; set; } = [];
             public MethodNode[] Methods { get; set; } = [];
             public TypeBuilder? TypeBuilder { get; set; }
             public ConstructorNode[]? Constructors { get; set; }
-
+            public string FullName => string.Join("::", [.. Namespaces, Name]);
+            public string CLRFullName => string.Join(".", [..Namespaces, Name]);
             internal override void CollectSymbols(
                 TextDocument document, 
                 HashSet<Symbol> symbols, 

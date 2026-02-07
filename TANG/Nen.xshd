@@ -33,6 +33,7 @@
 		<Keywords color="Keyword">
 			<Word>lớp</Word>
 			<Word>phương_thức</Word>
+			<Word>phương_thức_khởi_tạo</Word>
 			<Word>quay_lại</Word>
 			<Word>trả_về</Word>
 			<Word>kết_thúc</Word>
@@ -48,6 +49,7 @@
 			<Word>không_thì</Word>
 			<Word>trong_khi</Word>
 			<Word>thoát</Word>
+			<Word>không_gian</Word>
 		</Keywords>
 
 	</RuleSet>

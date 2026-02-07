@@ -7,6 +7,7 @@ namespace NEN
 {
     public partial class StaticAnalyzer(string assemblyName, ModulePart[] moduleParts, string[] assemblyPaths)
     {
+        private HashSet<string> moduleNamespaces = [];
         private readonly Dictionary<string, Type> moduleTypes = [];
         private readonly Dictionary<(string, Type[]), MethodInfo> moduleMethods = new(new MethodSignatureComparer());
         private readonly Dictionary<(string, Type[]), ConstructorInfo> moduleConstructors = new(new MethodSignatureComparer());
@@ -20,16 +21,17 @@ namespace NEN
             // Declaring the types and fields in every module
             foreach (var modulePart in module.ModuleParts)
             {
-                foreach (var usingNamespaceStatement in modulePart.UsingNamespaces)
-                {
-                    AnalyzeUsingNamespaceStatement(modulePart, usingNamespaceStatement);
-                }
                 // Define every class in the module
                 foreach (var c in modulePart.Classes)
                 {
                     DefineClass(modulePart, c);
                 }
-                
+            }
+            foreach (var modulePart in module.ModuleParts) {
+                foreach (var usingNamespaceStatement in modulePart.UsingNamespaces)
+                {
+                    AnalyzeUsingNamespaceStatement(modulePart, usingNamespaceStatement);
+                }
                 foreach (var c in modulePart.Classes)
                 {
                     // Define every field in the classes
@@ -41,20 +43,20 @@ namespace NEN
                         }
                         field.FieldInfo = c.TypeBuilder!.DefineField(
                             field.Variable.Name,
-                            GetTypeFromTypeNode(modulePart, [], field.Variable.TypeNode),
+                            GetTypeFromTypeNode(modulePart, [], field.Variable.TypeNode!),
                             field.FieldAttributes
                             );
-                        if (!moduleFields.TryAdd(string.Join(".", [c.Name, field.Variable.Name]), field.FieldInfo))
+                        if (!moduleFields.TryAdd(string.Join(".", [..c.Namespaces, c.Name, field.Variable.Name]), field.FieldInfo))
                         {
                             throw new("Internal error");
                         }
                     }
-                    
                 }
             }
             // Declaring every method and constructor in every classes in every module
             foreach (var modulePart in module.ModuleParts)
             {
+
                 foreach (var c in modulePart.Classes)
                 {
                     // Decide if type needs to generate a default constructor
@@ -123,13 +125,14 @@ namespace NEN
 
         private void DefineClass(ModulePart modulePart, ClassNode c)
         {
+            moduleNamespaces.Add(string.Join(".", c.Namespaces));
             c.TypeBuilder = module.ModuleBuilder!.DefineType(
-                c.Name,
+                c.CLRFullName,
                 TypeAttributes.Public | TypeAttributes.Class
             );
-            if (!moduleTypes.TryAdd(c.Name, c.TypeBuilder))
+            if (!moduleTypes.TryAdd(c.CLRFullName, c.TypeBuilder))
             {
-                throw new RedefinedException(modulePart.Source, c.Name, c.StartLine, c.StartColumn, c.EndLine, c.EndColumn);
+                throw new RedefinedException(modulePart.Source, c.FullName, c.StartLine, c.StartColumn, c.EndLine, c.EndColumn);
             }
         }
 
@@ -143,10 +146,10 @@ namespace NEN
             List<Type> paramTypes = [];
             foreach (var parameter in constructor.Parameters)
             {
-                var paramType = GetTypeFromTypeNode(modulePart, typeTable, parameter.TypeNode);
+                var paramType = GetTypeFromTypeNode(modulePart, typeTable, parameter.TypeNode!);
                 parameter.TypeNode = CreateTypeNodeFromType(
                     paramType,
-                    parameter.TypeNode.StartLine,
+                    parameter.TypeNode!.StartLine,
                     parameter.TypeNode.StartColumn,
                     parameter.TypeNode.EndLine,
                     parameter.TypeNode.EndColumn);
@@ -172,11 +175,11 @@ namespace NEN
             {
                 ParameterBuilder p = constructor.ConstructorBuilder.DefineParameter(i + 1, ParameterAttributes.None, constructor.Parameters[i].Name);
             }
-            if (!moduleConstructors.TryAdd((c.Name, [..paramTypes]), constructor.ConstructorBuilder))
+            if (!moduleConstructors.TryAdd((c.CLRFullName, [..paramTypes]), constructor.ConstructorBuilder))
             {
                 throw new RedefinedException(
                     modulePart.Source,
-                    $"{c.Name}({string.Join(", ", constructor.Parameters.Select(p => p.TypeNode.FullName))})",
+                    $"{c.FullName}({string.Join(", ", constructor.Parameters.Select(p => p.TypeNode!.FullName))})",
                     constructor.StartLine,
                     constructor.StartColumn,
                     constructor.EndLine,
@@ -202,10 +205,10 @@ namespace NEN
             List<Type> paramTypes = [];
             foreach (var parameter in method.Parameters)
             {
-                var paramType = GetTypeFromTypeNode(modulePart, typeTable, parameter.TypeNode);
+                var paramType = GetTypeFromTypeNode(modulePart, typeTable, parameter.TypeNode!);
                 parameter.TypeNode = CreateTypeNodeFromType(
                     paramType, 
-                    parameter.TypeNode.StartLine, 
+                    parameter.TypeNode!.StartLine, 
                     parameter.TypeNode.StartColumn,
                     parameter.TypeNode.EndLine,
                     parameter.TypeNode.EndColumn);
@@ -233,12 +236,12 @@ namespace NEN
                 int index = i + 1;
                 ParameterBuilder p = method.MethodBuilder.DefineParameter(index, ParameterAttributes.None, method.Parameters[i].Name);
             }
-            string methodFullName = string.Join('.', [c.Name, method.MethodName]);
+            string methodFullName = string.Join('.', [c.CLRFullName, method.MethodName]);
             if (!moduleMethods.TryAdd((methodFullName, [.. paramTypes]), method.MethodBuilder))
             {
                 throw new RedefinedException(
                     modulePart.Source, 
-                    $"{string.Join("::", [c.Name, method.MethodName])}({string.Join(", ", method.Parameters.Select(p => p.TypeNode.FullName))})", 
+                    $"{string.Join("::", [c.FullName, method.MethodName])}({string.Join(", ", method.Parameters.Select(p => p.TypeNode.FullName))})", 
                     method.StartLine, 
                     method.StartColumn, 
                     method.EndLine, 
@@ -249,6 +252,8 @@ namespace NEN
 
         private void AnalyzeUsingNamespaceStatement(ModulePart modulePart, UsingNamespaceStatement usingNamespaceStatement)
         {
+            if (usingNamespaceStatement.IsResolved) return;
+            if (moduleNamespaces.Contains(string.Join(".", usingNamespaceStatement.Namespace))) return;
             Type? type = module.CoreAssembly!.GetType(string.Join(".", usingNamespaceStatement.Namespace));
             if (type != null)
             {
@@ -1112,13 +1117,13 @@ namespace NEN
             standardMethodCallExpression.Object = objec;
             if (
                 currentMethod.GetMethodInfo()!.IsStatic &&
-                string.Join(".", [c.Name, standardMethodCallExpression.MethodName]) ==
+                string.Join(".", [c.CLRFullName, standardMethodCallExpression.MethodName]) ==
                 string.Join(".", [typeNode.CLRFullName, standardMethodCallExpression.MethodName])
             )
             {
                 throw new StaticIllegalAccessmentException(
                     modulePart.Source,
-                    string.Join("::", [c.Name, standardMethodCallExpression.MethodName]),
+                    string.Join("::", [c.FullName, standardMethodCallExpression.MethodName]),
                     standardMethodCallExpression.StartLine,
                     standardMethodCallExpression.StartColumn,
                     standardMethodCallExpression.EndLine,
@@ -1152,7 +1157,14 @@ namespace NEN
             Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, 
             StaticMethodCallExpression staticMethodCallExpression)
         {
-            staticMethodCallExpression.TypeNode.CLRType = GetTypeFromTypeNode(modulePart, typeTable, staticMethodCallExpression.TypeNode);
+            var type = GetTypeFromTypeNode(modulePart, typeTable, staticMethodCallExpression.TypeNode);
+            staticMethodCallExpression.TypeNode = (CreateTypeNodeFromType(
+                type,
+                staticMethodCallExpression.TypeNode.StartLine,
+                staticMethodCallExpression.TypeNode.StartColumn,
+                staticMethodCallExpression.TypeNode.EndLine,
+                staticMethodCallExpression.TypeNode.EndColumn
+                ) as NamedType)!;
             var methodFullName = string.Join(".", [staticMethodCallExpression.TypeNode.CLRFullName, staticMethodCallExpression.MethodName]);
             AnalyzeMethodCallExpression(
                 modulePart, 
@@ -1201,7 +1213,7 @@ namespace NEN
             {
                 throw new MethodCallFromOutsideException(modulePart.Source, ambiguousMethodCallExpression.StartLine, ambiguousMethodCallExpression.StartColumn, ambiguousMethodCallExpression.EndLine, ambiguousMethodCallExpression.EndColumn);
             }
-            var methodFullName = string.Join(".", [c.Name, ambiguousMethodCallExpression.MethodName]);
+            var methodFullName = string.Join(".", [c.CLRFullName, ambiguousMethodCallExpression.MethodName]);
             AnalyzeMethodCallExpression(modulePart, c, typeTable, localSymbolTable, ref ambiguousMethodCallExpression, methodFullName);
             if (ambiguousMethodCallExpression.MethodInfo!.IsStatic)
             {
@@ -1241,14 +1253,14 @@ namespace NEN
                 {
                     throw new StaticIllegalAccessmentException(
                         modulePart.Source, 
-                        string.Join("::", [c.Name, ambiguousMethodCallExpression.MethodName]), 
+                        string.Join("::", [c.FullName, ambiguousMethodCallExpression.MethodName]), 
                         ambiguousMethodCallExpression.StartLine, 
                         ambiguousMethodCallExpression.StartColumn,
                         ambiguousMethodCallExpression.EndLine,
                         ambiguousMethodCallExpression.EndColumn
                     );
                 }
-                GetTypeFromName(typeTable, c.Name, out var t);
+                GetTypeFromName(typeTable, c.CLRFullName, out var t);
                 ambiguousMethodCallExpression = new StandardMethodCallExpression
                 {
                     Arguments = ambiguousMethodCallExpression.Arguments,
@@ -1256,7 +1268,7 @@ namespace NEN
                     {
                         ReturnTypeNode = new NamedType
                         {
-                            Namespaces = [c.Name],
+                            Namespaces = [..c.Namespaces, c.Name],
                             Name = "này",
                             CLRType = t ?? throw new("Internal error"),
                             StartLine = ambiguousMethodCallExpression.StartLine,
@@ -1318,7 +1330,7 @@ namespace NEN
                     {
                         try
                         {
-                            GetTypeFromName(typeTable, c.Name, out var t);
+                            GetTypeFromName(typeTable, c.CLRFullName, out var t);
                             isFromSameOrParentType = AnalyzeTypes(
                                 modulePart,
                                 typeTable,
@@ -1504,7 +1516,7 @@ namespace NEN
                         ReturnTypeNode = field.Variable.TypeNode,
                         TypeNode = new NamedType
                         {
-                            Namespaces = [], // TODO: change when namespaces are implemented
+                            Namespaces = c.Namespaces,
                             Name = c.Name,
                             StartLine = expression.StartLine,
                             StartColumn = expression.StartColumn,
@@ -1519,7 +1531,7 @@ namespace NEN
                         EndColumn = expression.EndColumn
                     };
                     AnalyzeStaticFieldAccessmentExpression(modulePart, typeTable, localSymbolTable, (StaticFieldAccessmentExpression)expression);
-                    return expression.ReturnTypeNode;
+                    return expression.ReturnTypeNode!;
                 }
                 else
                 {
@@ -1529,7 +1541,7 @@ namespace NEN
                         {
                             ReturnTypeNode = new NamedType
                             {
-                                Namespaces = [],
+                                Namespaces = c.Namespaces,
                                 Name = c.Name,
                                 StartLine = expression.StartLine,
                                 StartColumn = expression.StartColumn,
@@ -1633,8 +1645,7 @@ namespace NEN
                 return t!;
             }
             string typeNamespace = string.Join(".", typeNode.Namespaces);
-            string typeName = typeNode.Name;
-            if (string.IsNullOrEmpty(typeName))
+            if (string.IsNullOrEmpty(typeNode.Name))
             {
                 throw new ArgumentException("Internal error");
             }
@@ -1642,9 +1653,9 @@ namespace NEN
             {
                 case ArrayType arrayTypeNode:
                     var elementType = GetTypeFromTypeNode(modulePart, typeTable, arrayTypeNode.ElementTypeNode);
-                    var arrayType = arrayTypeNode.Rank == 1
-                        ? elementType.MakeArrayType()
-                        : elementType.MakeArrayType(arrayTypeNode.Rank);
+                    var arrayType = arrayTypeNode.Rank == 1 ? 
+                        elementType.MakeArrayType() : 
+                        elementType.MakeArrayType(arrayTypeNode.Rank);
                     if (!typeTable.TryAdd(typeNode.CLRFullName, arrayType))
                     {
                         throw new("Internal error");
@@ -1656,13 +1667,24 @@ namespace NEN
                         .Select(n => string.Join(".", n.Namespace))
                         .Where(e => e.EndsWith(typeNamespace))
                         .ToArray();
-                    if (namespaces.Length == 0)
+                    var typeNames = namespaces.Select(n => string.Join(".", [n, typeNode.Name])).ToArray();
+                    if (typeNamespace == "") typeNames = [..typeNames, typeNode.Name];
+                    foreach (var typeName in typeNames)
                     {
-                        namespaces = [typeNamespace];
+                        var tempType = moduleTypes.GetValueOrDefault(typeName);
+                        if (tempType != null && type != null && tempType.FullName != type.FullName)
+                        {
+                            string tn = typeNode.FullName;
+                            string ftn = string.Join("::", type.FullName!.Split("."));
+                            string stn = string.Join("::", tempType.FullName!.Split("."));
+                            throw new AmbiguousTypeUsage(modulePart.Source, tn, ftn, stn, typeNode.StartLine, typeNode.StartColumn, typeNode.EndLine, typeNode.EndColumn);
+                        }
+                        if (tempType == null && type != null) continue;
+                        type = tempType;
                     }
-                    foreach (var n in namespaces)
+                    foreach (var typeName in typeNames)
                     {
-                        var tempType = module.CoreAssembly!.GetType(string.Join(".", [n, typeName]));
+                        var tempType = module.CoreAssembly!.GetType(typeName);
                         if (tempType != null && type != null && tempType.FullName != type.FullName)
                         {
                             string tn = typeNode.FullName;
