@@ -1667,6 +1667,10 @@ namespace NEN
                         .Select(n => string.Join(".", n.Namespace))
                         .Where(e => e.EndsWith(typeNamespace))
                         .ToArray();
+                    if (namespaces.Length == 0)
+                    {
+                        namespaces = [typeNamespace];
+                    }
                     var typeNames = namespaces.Select(n => string.Join(".", [n, typeNode.Name])).ToArray();
                     if (typeNamespace == "") typeNames = [..typeNames, typeNode.Name];
                     foreach (var typeName in typeNames)
