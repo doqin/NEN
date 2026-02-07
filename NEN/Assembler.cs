@@ -223,7 +223,7 @@ namespace NEN
                     var elementType = arrayIndexingExpression.ReturnTypeNode!.GetCLRType()!;
                     AssembleExpression(ilGenerator, arrayIndexingExpression.Index); // Load the index onto the stack
                     AssembleExpression(ilGenerator, assignmentStatement.Source);
-                    if (assignmentStatement.Source.ReturnTypeNode!.GetCLRType()!.IsArray)
+                    if (arrayIndexingExpression.Array.ReturnTypeNode!.GetCLRType()!.IsArray)
                     {
                         if (elementType.IsValueType)
                         {
@@ -237,9 +237,9 @@ namespace NEN
                     else
                     {
                         var setMethod = arrayIndexingExpression.Array.ReturnTypeNode!
-                    .GetCLRType()!
-                    .GetProperty("Item")!
-                    .GetSetMethod();
+                            .GetCLRType()!
+                            .GetProperty("Item")!
+                            .GetSetMethod();
                         ilGenerator.Emit(OpCodes.Callvirt, setMethod!);
                     }
                     break;

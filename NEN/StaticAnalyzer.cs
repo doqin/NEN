@@ -923,10 +923,6 @@ namespace NEN
             AnalyzeExpression(modulePart, c, typeTable, localSymbolTable, ref arrayNode);
             arrayIndexingExpression.Array = arrayNode;
             var arrayType = GetTypeFromTypeNode(modulePart, typeTable, arrayNode.ReturnTypeNode!);
-            if (!arrayType.IsArray && !arrayType.IsCollectible)
-            {
-                throw new IndexingOnNonArrayException(modulePart.Source, arrayNode.ReturnTypeNode!.FullName, arrayIndexingExpression.StartLine, arrayIndexingExpression.StartColumn, arrayIndexingExpression.EndLine, arrayIndexingExpression.EndColumn);
-            }
             var indexNode = arrayIndexingExpression.Index;
             AnalyzeExpression(modulePart, c, typeTable, localSymbolTable, ref indexNode);
             arrayIndexingExpression.Index = indexNode;
@@ -934,7 +930,7 @@ namespace NEN
             {
                 throw new InvalidArrayIndexingTypeException(modulePart.Source, indexNode.ReturnTypeNode.FullName, indexNode.StartLine, indexNode.StartColumn, indexNode.EndLine, indexNode.EndColumn);
             }
-            var elementType = GetIndexerReturnType(arrayType);
+            var elementType = GetIndexerReturnType(arrayType) ?? throw new IndexingOnNonArrayException(modulePart.Source, arrayNode.ReturnTypeNode!.FullName, arrayIndexingExpression.StartLine, arrayIndexingExpression.StartColumn, arrayIndexingExpression.EndLine, arrayIndexingExpression.EndColumn); ;
             arrayIndexingExpression.ReturnTypeNode = CreateTypeNodeFromType(
                 elementType!, 
                 arrayIndexingExpression.StartLine, 
@@ -944,7 +940,7 @@ namespace NEN
             return arrayIndexingExpression.ReturnTypeNode;
         }
 
-        public static Type GetIndexerReturnType(Type collectionType)
+        public static Type? GetIndexerReturnType(Type collectionType)
         {
             if (collectionType.IsArray) return collectionType.GetElementType()!;
 
@@ -958,10 +954,9 @@ namespace NEN
 
             var indexerProperty = collectionType.GetProperties()
                 .FirstOrDefault(p => p.GetIndexParameters().Length > 0 &&
-                                     (indexerName == null || p.Name == indexerName))
-                ?? throw new ArgumentException($"Type {collectionType.Name} does not have an indexer.");
+                                     (indexerName == null || p.Name == indexerName));
 
-            return indexerProperty.PropertyType;
+            return indexerProperty?.PropertyType;
         }
 
         private TypeNode AnalyzeNewArrayExpression(
