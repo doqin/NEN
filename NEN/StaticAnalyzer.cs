@@ -96,6 +96,11 @@ namespace NEN
                 // Analyze the method bodies in each class
                 foreach (var c in modulePart.Classes)
                 {
+                    if (c.BaseTypeNode != null)
+                    {
+                        var baseType = GetTypeFromTypeNode(modulePart, typeTable, c.BaseTypeNode);
+                        c.BaseTypeNode = CreateTypeNodeFromType(baseType, c.BaseTypeNode.StartLine, c.BaseTypeNode.StartColumn, c.BaseTypeNode.EndLine, c.BaseTypeNode.EndColumn);
+                    }
                     AnalyzeClass(modulePart, c, typeTable);
                 }
             }
@@ -130,7 +135,8 @@ namespace NEN
             moduleNamespaces.Add(string.Join(".", c.Namespaces));
             c.TypeBuilder = module.ModuleBuilder!.DefineType(
                 c.CLRFullName,
-                TypeAttributes.Public | TypeAttributes.Class
+                TypeAttributes.Public | TypeAttributes.Class,
+                c.BaseTypeNode == null ? null : GetTypeFromTypeNode(modulePart, [], c.BaseTypeNode)
             );
             if (!moduleTypes.TryAdd(c.CLRFullName, c.TypeBuilder))
             {
@@ -710,42 +716,9 @@ namespace NEN
                 staticFieldAccessmentExpression.TypeNode.EndLine,
                 staticFieldAccessmentExpression.TypeNode.EndColumn
             );
-            if (staticFieldAccessmentExpression.FieldInfo != null) { }
-            else if (moduleFields.TryGetValue(
-                string.Join(
-                    ".",
-                [
-                        ..staticFieldAccessmentExpression.TypeNode.Namespaces,
-                        staticFieldAccessmentExpression.TypeNode.Name,
-                        staticFieldAccessmentExpression.FieldName
-                        ]),
-                out var fieldInfo
-                )
-            )
-            {
-                if (!fieldInfo.IsPublic)
-                    throw new InvalidFieldAccessmentException(
-                        modulePart.Source,
-                        staticFieldAccessmentExpression!.FieldName,
-                        staticFieldAccessmentExpression.StartLine,
-                        staticFieldAccessmentExpression.StartColumn,
-                        staticFieldAccessmentExpression.EndLine,
-                        staticFieldAccessmentExpression.EndColumn
-                    );
-                staticFieldAccessmentExpression.FieldInfo = fieldInfo;
-            }
-            else
-            {
-                staticFieldAccessmentExpression.FieldInfo = fieldType.GetField(staticFieldAccessmentExpression.FieldName, BindingFlags.Public);
-                if (staticFieldAccessmentExpression.FieldInfo == null)
-                    throw new InvalidFieldAccessmentException(
-                        modulePart.Source,
-                        staticFieldAccessmentExpression!.FieldName,
-                        staticFieldAccessmentExpression.StartLine,
-                        staticFieldAccessmentExpression.StartColumn,
-                        staticFieldAccessmentExpression.EndLine,
-                        staticFieldAccessmentExpression.EndColumn
-                    );
+            if (staticFieldAccessmentExpression.FieldInfo == null) {
+                var fieldCLRFullName = string.Join(".", [.. staticFieldAccessmentExpression.TypeNode.Namespaces, staticFieldAccessmentExpression.TypeNode.Name, staticFieldAccessmentExpression.FieldName]);
+                staticFieldAccessmentExpression.FieldInfo = SearchForFieldInfo(staticFieldAccessmentExpression.FieldName, fieldCLRFullName, fieldType, modulePart.Source, staticFieldAccessmentExpression.StartLine, staticFieldAccessmentExpression.StartColumn, staticFieldAccessmentExpression.EndLine, staticFieldAccessmentExpression.EndColumn);
             }
             staticFieldAccessmentExpression.ReturnTypeNode = CreateTypeNodeFromType(
                 staticFieldAccessmentExpression.FieldInfo!.FieldType,
@@ -767,45 +740,10 @@ namespace NEN
             var fieldObject = standardFieldAccessmentExpression.Object;
             var objectTypeNode = AnalyzeExpression(modulePart, c, typeTable, localSymbolTable, ref fieldObject);
             standardFieldAccessmentExpression.Object = fieldObject;
-            if (standardFieldAccessmentExpression.FieldInfo != null) { }
-            else if (moduleFields.TryGetValue(
-                string.Join(
-                    ".",
-                    [
-                        ..objectTypeNode.Namespaces,
-                        objectTypeNode.Name,
-                        standardFieldAccessmentExpression.FieldName
-                        ]
-                    ),
-                out var fieldInfo
-                )
-            )
-            {
-                if (!fieldInfo.IsPublic)
-                    throw new InvalidFieldAccessmentException(
-                        modulePart.Source,
-                        standardFieldAccessmentExpression!.FieldName,
-                        standardFieldAccessmentExpression.StartLine,
-                        standardFieldAccessmentExpression.StartColumn,
-                        standardFieldAccessmentExpression.EndLine,
-                        standardFieldAccessmentExpression.EndColumn
-                    );
-                standardFieldAccessmentExpression.FieldInfo = fieldInfo;
-            }
-            else
-            {
+            if (standardFieldAccessmentExpression.FieldInfo == null) {
+                var fieldCLRFullName = string.Join(".", [.. objectTypeNode.Namespaces, objectTypeNode.Name, standardFieldAccessmentExpression.FieldName]);
                 var fieldObjectType = GetTypeFromTypeNode(modulePart, typeTable, fieldObject.ReturnTypeNode!);
-                if (standardFieldAccessmentExpression.FieldInfo == null)
-                    standardFieldAccessmentExpression.FieldInfo = fieldObjectType.GetField(standardFieldAccessmentExpression.FieldName, BindingFlags.Public);
-                if (standardFieldAccessmentExpression.FieldInfo == null)
-                    throw new InvalidFieldAccessmentException(
-                        modulePart.Source,
-                        standardFieldAccessmentExpression!.FieldName,
-                        standardFieldAccessmentExpression.StartLine,
-                        standardFieldAccessmentExpression.StartColumn,
-                        standardFieldAccessmentExpression.EndLine,
-                        standardFieldAccessmentExpression.EndColumn
-                    );
+                standardFieldAccessmentExpression.FieldInfo = SearchForFieldInfo(standardFieldAccessmentExpression!.FieldName, fieldCLRFullName, fieldObjectType, modulePart.Source, standardFieldAccessmentExpression.StartLine, standardFieldAccessmentExpression.StartColumn, standardFieldAccessmentExpression.EndLine, standardFieldAccessmentExpression.EndColumn);
             }
             standardFieldAccessmentExpression.ReturnTypeNode = CreateTypeNodeFromType(
                 standardFieldAccessmentExpression.FieldInfo!.FieldType,
@@ -815,6 +753,24 @@ namespace NEN
                 standardFieldAccessmentExpression.EndColumn
             );
             return standardFieldAccessmentExpression.ReturnTypeNode;
+        }
+
+        FieldInfo SearchForFieldInfo(string fieldName, string fieldCLRFullName, Type fieldDeclarationType, string[] source, int startLine, int startColumn, int endLine, int endColumn)
+        {
+            if (!moduleFields.TryGetValue(
+            fieldCLRFullName,
+            out var fieldInfo))
+            {
+                fieldInfo = fieldDeclarationType.GetField(fieldName, BindingFlags.Public);
+            }
+            if (fieldInfo == null && fieldDeclarationType.BaseType != null)
+            {
+                fieldCLRFullName = string.Join(".", [fieldDeclarationType.BaseType.FullName, fieldName]);
+                fieldInfo = SearchForFieldInfo(fieldName, fieldCLRFullName, fieldDeclarationType.BaseType, source, startLine, startColumn, endLine, endColumn);
+            }
+            if (fieldInfo == null) throw new InvalidFieldAccessmentException(source, fieldName, startLine, startColumn, endLine, endColumn);
+            if (!fieldInfo.IsPublic) throw new InvalidFieldAccessmentException(source, fieldName, startLine, startColumn, endLine, endColumn);
+            return fieldInfo;
         }
 
         private TypeNode AnalyzeConstructorCallExpression(
@@ -1323,8 +1279,9 @@ namespace NEN
             Dictionary<string, Type> typeTable,
             Dictionary<string, (TypeNode, LocalBuilder)> localSymbolTable, 
             ref T methodCallExpression, 
-            string methodFullName, 
-            Type? type = null) where T : AmbiguousMethodCallExpression
+            string methodCLRFullName, 
+            Type? type = null
+        ) where T : AmbiguousMethodCallExpression
         {
             // Analyze the argument expressions
             List<Type> argumentTypes = [];
@@ -1335,93 +1292,51 @@ namespace NEN
             }
             if (methodCallExpression.MethodInfo == null)
             {
-                // Get method info
-                if (moduleMethods.TryGetValue(
-                    (methodFullName,
-                   [.. argumentTypes]),
-                    out var methodInfo
-                    )
-                )
+                MethodInfo searchForMethodInfo(string methodName, string methodCLRFullName, Type? type, int startLine, int startColumn, int endLine, int endColumn)
                 {
-                    bool isFromSameOrParentType;
-                    if (type != null)
+                    // Get method info
+                    if (moduleMethods.TryGetValue((methodCLRFullName, [.. argumentTypes]), out var methodInfo))
                     {
-                        try
+                        bool isFromSameOrParentType;
+                        if (type != null)
                         {
-                            GetTypeFromName(typeTable, c.CLRFullName, out var t);
-                            isFromSameOrParentType = AnalyzeTypes(
-                                modulePart,
-                                typeTable,
-                            CreateTypeNodeFromType(
-                                t!, 
-                                methodCallExpression.StartLine, 
-                                methodCallExpression.StartColumn,
-                                methodCallExpression.EndLine,
-                                methodCallExpression.EndColumn),
-                        CreateTypeNodeFromType(
-                            type!, 
-                            methodCallExpression.StartLine, 
-                            methodCallExpression.StartColumn,
-                            methodCallExpression.EndLine,
-                            methodCallExpression.EndColumn)
-                            );
-                        } catch(Exception) {
-                            isFromSameOrParentType = false;
+                            try
+                            {
+                                // Check if the method is from the declaring type or the parent type or not
+                                GetTypeFromName(typeTable, c.CLRFullName, out var t);
+                                var methodType = CreateTypeNodeFromType(t!, startLine, startColumn, endLine, endColumn);
+                                var declaringType = CreateTypeNodeFromType(type!, startLine, startColumn, endLine, endColumn);
+                                isFromSameOrParentType = AnalyzeTypes(modulePart, typeTable, methodType, declaringType);
+                            }
+                            catch (Exception)
+                            {
+                                isFromSameOrParentType = false;
+                            }
                         }
+                        else
+                        {
+                            isFromSameOrParentType = true;
+                        }
+                        if (!methodInfo.IsPublic && !isFromSameOrParentType)
+                            throw new InvalidMethodCallException(modulePart.Source, methodName, [.. argumentTypes], startLine, startColumn, endLine, endColumn);
                     }
+                    // The type is not specific to this module
                     else
                     {
-                        isFromSameOrParentType = true;
+                        if (type as TypeBuilder == null)
+                        {
+                            methodInfo = type?.GetMethod(methodName, [.. argumentTypes]);
+                            if (methodInfo?.IsPublic == false) throw new InvalidMethodCallException(modulePart.Source, methodName, [.. argumentTypes], startLine, startColumn, endLine, endColumn);
+                        }
                     }
-                    if (!methodInfo.IsPublic && !isFromSameOrParentType
-                    ) throw new InvalidMethodCallException(
-                        modulePart.Source,
-                        methodCallExpression.MethodName,
-                        [.. argumentTypes],
-                        methodCallExpression.StartLine,
-                        methodCallExpression.StartColumn,
-                        methodCallExpression.EndLine,
-                        methodCallExpression.EndColumn
-                    );
-                    methodCallExpression.MethodInfo = methodInfo;
+                    if (methodInfo == null && type?.BaseType != null)  methodInfo = searchForMethodInfo(
+                        methodName, 
+                        string.Join(".", [type!.BaseType.FullName, methodName]), 
+                        type!.BaseType, startLine, startColumn, endLine, endColumn);
+                    if (methodInfo == null) throw new InvalidMethodCallException(modulePart.Source, methodName, [.. argumentTypes], startLine, startColumn, endLine, endColumn);
+                    return methodInfo;
                 }
-                else
-                {
-                    if (type as TypeBuilder == null)
-                    {
-                        methodCallExpression.MethodInfo = type?.GetMethod(
-                        methodCallExpression.MethodName,
-                        [.. argumentTypes]
-                        ) ?? throw new InvalidMethodCallException(
-                            modulePart.Source,
-                            methodCallExpression.MethodName,
-                            [.. argumentTypes],
-                            methodCallExpression.StartLine,
-                            methodCallExpression.StartColumn,
-                            methodCallExpression.EndLine,
-                            methodCallExpression.EndColumn
-                        );
-
-                        if (!methodCallExpression.MethodInfo.IsPublic) throw new InvalidMethodCallException(
-                            modulePart.Source,
-                            methodCallExpression.MethodName,
-                            [.. argumentTypes],
-                            methodCallExpression.StartLine,
-                            methodCallExpression.StartColumn,
-                            methodCallExpression.EndLine,
-                            methodCallExpression.EndColumn
-                        );
-                    }
-                    else throw new InvalidMethodCallException(
-                            modulePart.Source,
-                            methodCallExpression.MethodName,
-                            [.. argumentTypes],
-                            methodCallExpression.StartLine,
-                            methodCallExpression.StartColumn,
-                            methodCallExpression.EndLine,
-                            methodCallExpression.EndColumn
-                        );
-                }
+                methodCallExpression.MethodInfo = searchForMethodInfo(methodCallExpression.MethodName, methodCLRFullName, type, methodCallExpression.StartLine, methodCallExpression.StartColumn, methodCallExpression.EndLine, methodCallExpression.EndColumn);
             }
             // Analyze the argument again in case of needing boxing
             AnalyzeArguments(modulePart, typeTable, ref methodCallExpression);
@@ -1446,7 +1361,8 @@ namespace NEN
             else if (literalExpression.Value.EndsWith('L'))
             {
                 string[] namespaceAndName = PrimitiveType.Int64.Split(".");
-                literalExpression.ReturnTypeNode = new NamedType { 
+                literalExpression.ReturnTypeNode = new NamedType 
+                { 
                     Namespaces = namespaceAndName[0..^1],
                     Name = namespaceAndName[^1],
                     CLRType = module.CoreAssembly!.GetType(PrimitiveType.Int64) ?? throw new("Internal error"), 
@@ -1460,7 +1376,8 @@ namespace NEN
             else if (Int32.TryParse(literalExpression.Value, out _))
             {
                 string[] namespaceAndName = PrimitiveType.Int32.Split(".");
-                literalExpression.ReturnTypeNode = new NamedType {
+                literalExpression.ReturnTypeNode = new NamedType 
+                {
                     Namespaces = namespaceAndName[0..^1],
                     Name = namespaceAndName[^1],
                     CLRType = module.CoreAssembly!.GetType(PrimitiveType.Int32) ?? throw new("Internal error"), 
@@ -1525,6 +1442,51 @@ namespace NEN
                 return expression.ReturnTypeNode!;
             }
             var field = c.Fields.FirstOrDefault(f => f.Variable.Name == variableName);
+            if (field == null && c.BaseTypeNode != null)
+            {
+                try
+                {
+                    var fieldInfo = SearchForFieldInfo(
+                    variableName,
+                    string.Join(".", [c.BaseTypeNode.CLRFullName, variableName]),
+                    c.BaseTypeNode.GetCLRType()!,
+                    modulePart.Source,
+                    variableExpression.StartLine,
+                    variableExpression.StartColumn,
+                    variableExpression.EndLine,
+                    variableExpression.EndColumn);
+                    field = new FieldDeclarationStatement
+                    {
+                        DeclaringTypeNode = (CreateTypeNodeFromType(
+                            fieldInfo.DeclaringType!,
+                            variableExpression.StartLine,
+                            variableExpression.StartColumn,
+                            variableExpression.EndLine,
+                            variableExpression.EndColumn) as NamedType)!,
+                        Variable = new VariableNode {
+                            SymbolKind = Symbols.SymbolKind.Field,
+                            StartLine = variableExpression.StartLine,
+                            StartColumn = variableExpression.StartColumn,
+                            EndLine = variableExpression.EndLine,
+                            EndColumn = variableExpression.EndColumn,
+                            Name = variableName,
+                            TypeNode = CreateTypeNodeFromType(
+                                fieldInfo.FieldType,
+                                variableExpression.StartLine,
+                                variableExpression.StartColumn,
+                                variableExpression.EndLine,
+                                variableExpression.EndColumn),
+                        },
+                        FieldAttributes = fieldInfo.Attributes,
+                        FieldInfo = fieldInfo,
+                        StartLine = variableExpression.StartLine,
+                        StartColumn = variableExpression.StartColumn,
+                        EndLine = variableExpression.EndLine,
+                        EndColumn = variableExpression.EndColumn,
+                    };
+                }
+                catch(Exception) { }
+            }
             if (field != null)
             {
                 if (field.FieldAttributes.HasFlag(FieldAttributes.Static))
@@ -1579,7 +1541,7 @@ namespace NEN
                         EndColumn = expression.EndColumn
                     };
                     AnalyzeStandardFieldAccessmentExpression(modulePart, c, typeTable, localSymbolTable, (StandardFieldAccessmentExpression)expression);
-                    return expression.ReturnTypeNode;
+                    return expression.ReturnTypeNode!;
                 }
             }
             if (localSymbolTable.TryGetValue(variableExpression.Name, out var res))

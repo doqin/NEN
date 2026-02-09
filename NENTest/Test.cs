@@ -565,6 +565,37 @@ namespace NENTest
             SaveAssemblyWithEntrypoint(ab, mainMethod, assemblyName);
         }
 
+        [TestMethod]
+        public void InheritanceTest()
+        {
+            var assemblyName = "InheritanceTest";
+            var (ab, context, coreAssembly) = CreateAssembly(assemblyName, []);
+            var mb = ab.DefineDynamicModule(assemblyName);
+            var parentTb = mb.DefineType("Parent", TypeAttributes.Public | TypeAttributes.Class, null);
+            var fooMb = parentTb.DefineMethod("Foo", MethodAttributes.Public);
+            var fooIl = fooMb.GetILGenerator();
+            fooIl.Emit(OpCodes.Ldstr, "Bar!");
+            fooIl.Emit(OpCodes.Call,
+                coreAssembly!
+                    .GetType("System.Console")!
+                    .GetMethod("WriteLine", [coreAssembly.GetType("System.String")!])!);
+            fooIl.Emit(OpCodes.Ret);
+            parentTb.CreateType();
+            var childTb = mb.DefineType("Child", TypeAttributes.Public | TypeAttributes.Class, parentTb);
+            childTb.CreateType();
+            var progTb = mb.DefineType("Program", TypeAttributes.Public | TypeAttributes.Class);
+            var mainMb = progTb.DefineMethod("Main", MethodAttributes.Public | MethodAttributes.Static, coreAssembly!.GetType("System.Void"), []);
+            var mainIl = mainMb.GetILGenerator();
+            mainIl.Emit(OpCodes.Newobj, childTb.GetConstructor(Type.EmptyTypes)!);
+            var loc = mainIl.DeclareLocal(childTb);
+            mainIl.Emit(OpCodes.Stloc, loc);
+            mainIl.Emit(OpCodes.Ldloc, loc);
+            mainIl.Emit(OpCodes.Call, fooMb);
+            mainIl.Emit(OpCodes.Ret);
+            progTb.CreateType();
+            SaveAssemblyWithEntrypoint(ab, mainMb, assemblyName);
+        }
+
         private static void SaveAssemblyWithEntrypoint(PersistedAssemblyBuilder ab, MethodBuilder mainMethod, string assemblyName)
         {
             MetadataBuilder metadataBuilder = ab.GenerateMetadata(out BlobBuilder ilStream, out BlobBuilder fieldData, out MetadataBuilder pdbBuilder);

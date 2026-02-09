@@ -96,12 +96,18 @@ namespace NEN
             var (startLine, startColumn) = GetCurrentStartPosition();
             var classIdentifier = ConsumeOrThrow(TokenType.Identifier, "tên lớp");
             var (endLine, endColumn) = GetPreviousEndPosition();
+            TypeNode? baseType = null;
+            if (Current(out var token) && token?.Value == "kế_thừa")
+            {
+                ConsumeOrThrowIfNotEqual(TokenType.Keyword, "kế_thừa");
+                baseType = ParseType();
+            }
             List<ConstructorNode> constructors = [];
             List<MethodNode> methods = [];
             List<FieldDeclarationStatement> fields = [];
             while (Current(out var end) && end?.Value != "kết_thúc")
             {
-                var token = Consume();
+                token = Consume();
                 switch (token!.Value)
                 {
                     case "@":
@@ -146,6 +152,7 @@ namespace NEN
             if (!Current(out _)) OutOfTokenHelper("kết_thúc");
             Consume();
             return new ClassNode { 
+                BaseTypeNode = baseType,
                 Namespaces = namespaces,
                 Name = classIdentifier!.Value, 
                 Constructors = [..constructors],

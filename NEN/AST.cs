@@ -20,13 +20,13 @@ namespace NEN
                 return Helper.GetTreeString<ASTNode>($"Bộ phận mô đun: {SourceName}", [.. UsingNamespaces, .. Classes]);
             }
             internal void CollectSymbols(
-                TextDocument document, 
-                HashSet<Symbol> symbols, 
-                List<SymbolSpan> symbolSpans, 
-                bool collectPrivates, 
+                TextDocument document,
+                HashSet<Symbol> symbols,
+                List<SymbolSpan> symbolSpans,
+                bool collectPrivates,
                 bool collectSpans)
             {
-                foreach(var c in Classes)
+                foreach (var c in Classes)
                 {
                     c.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
                 }
@@ -50,7 +50,7 @@ namespace NEN
             {
                 HashSet<Symbol> symbols = new(new SymbolComparer());
                 List<SymbolSpan> symbolSpans = [];
-                foreach(var modulePart in ModuleParts)
+                foreach (var modulePart in ModuleParts)
                 {
                     if (modulePart.SourceName == sourceFile)
                     {
@@ -61,7 +61,7 @@ namespace NEN
                         modulePart.CollectSymbols(document, symbols, symbolSpans, false, false);
                     }
                 }
-                return ([..symbols], [..symbolSpans]);
+                return ([.. symbols], [.. symbolSpans]);
             }
         }
         public abstract class ASTNode
@@ -71,16 +71,17 @@ namespace NEN
             public required int EndLine { set; get; }
             public required int EndColumn { set; get; }
             internal abstract void CollectSymbols(
-                TextDocument document, 
+                TextDocument document,
                 HashSet<Symbol> symbols,
-                List<SymbolSpan> symbolSpans, 
-                bool collectPrivates, 
+                List<SymbolSpan> symbolSpans,
+                bool collectPrivates,
                 bool collectSpans
             );
         }
 
         public class ClassNode : ASTNode
         {
+            public TypeNode? BaseTypeNode { get; set; } = null;
             public required string[] Namespaces { set; get; }
             public required string Name { get; set; }
             public FieldDeclarationStatement[] Fields { get; set; } = [];
@@ -88,17 +89,18 @@ namespace NEN
             public TypeBuilder? TypeBuilder { get; set; }
             public ConstructorNode[]? Constructors { get; set; }
             public string FullName => string.Join("::", [.. Namespaces, Name]);
-            public string CLRFullName => string.Join(".", [..Namespaces, Name]);
+            public string CLRFullName => string.Join(".", [.. Namespaces, Name]);
             internal override void CollectSymbols(
-                TextDocument document, 
-                HashSet<Symbol> symbols, 
-                List<SymbolSpan> symbolSpans, 
-                bool collectPrivates, 
+                TextDocument document,
+                HashSet<Symbol> symbols,
+                List<SymbolSpan> symbolSpans,
+                bool collectPrivates,
                 bool collectSpans
             )
             {
                 var classSymbol = new ClassSymbol { Name = Name };
                 symbols.Add(classSymbol);
+                BaseTypeNode?.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
                 foreach (var field in Fields)
                 {
                     field.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
@@ -114,12 +116,12 @@ namespace NEN
                 if (collectSpans)
                 {
                     Helper.AddSpan(
-                        document, 
-                        symbolSpans, 
-                        StartLine, 
-                        StartColumn, 
-                        EndLine, 
-                        EndColumn, 
+                        document,
+                        symbolSpans,
+                        StartLine,
+                        StartColumn,
+                        EndLine,
+                        EndColumn,
                         SymbolKind.Class
                     ); // Class name
                 }
