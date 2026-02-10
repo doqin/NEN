@@ -42,12 +42,12 @@ namespace NEN
         }
 
         internal static void AddSpan(
-            TextDocument document, 
-            List<SymbolSpan> spans, 
-            int startLine, 
-            int startColumn, 
-            int endLine, 
-            int endColumn, 
+            TextDocument document,
+            List<SymbolSpan> spans,
+            int startLine,
+            int startColumn,
+            int endLine,
+            int endColumn,
             SymbolKind kind
         )
         {
@@ -75,33 +75,37 @@ namespace NEN
             return documentLine.Offset + cappedColumn;
         }
 
-        internal static Symbols.MethodBase MethodNodeToMethodSymbol(AST.MethodBase methodBase)
+        internal static Symbols.MethodBase? MethodNodeToMethodSymbol(AST.MethodBase methodBase)
         {
+            if (methodBase?.DeclaringTypeNode.GetCLRType() == null || 
+                methodBase?.Parameters.Where(p => p.TypeNode?.GetCLRType() == null).Any() == true) 
+                    return null;
             return methodBase switch
             {
                 MethodNode methodNode => new MethodSymbol
                 {
                     Name = methodNode.MethodName,
-                    DeclaringType = TypeNodeToTypeSymbol(methodNode.DeclaringTypeNode),
-                    Parameters = [.. methodNode.Parameters.Select(p => TypeNodeToTypeSymbol(p.TypeNode!))]
+                    DeclaringType = TypeNodeToTypeSymbol(methodNode.DeclaringTypeNode)!,
+                    Parameters = [.. methodNode.Parameters.Select(p => TypeNodeToTypeSymbol(p.TypeNode!))!]
                 },
                 ConstructorNode constructorNode => new ConstructorSymbol
                 {
                     Name = constructorNode.DeclaringTypeNode.FullName,
-                    DeclaringType = TypeNodeToTypeSymbol(constructorNode.DeclaringTypeNode),
-                    Parameters = [.. constructorNode.Parameters.Select(p => TypeNodeToTypeSymbol(p.TypeNode!))]
+                    DeclaringType = TypeNodeToTypeSymbol(constructorNode.DeclaringTypeNode)!,
+                    Parameters = [.. constructorNode.Parameters.Select(p => TypeNodeToTypeSymbol(p.TypeNode!))!]
                 },
                 _ => throw new NotImplementedException(),
             };
         }
 
-        internal static Symbols.TypeSymbol TypeNodeToTypeSymbol(AST.TypeNode typeNode)
+        internal static Symbols.TypeSymbol? TypeNodeToTypeSymbol(AST.TypeNode typeNode)
         {
-            if (typeNode.GetCLRType()!.IsClass)
+            if (typeNode.GetCLRType() == null) return null;
+            if (typeNode.GetCLRType()!.IsClass == true)
             {
                 return new ClassSymbol { Name = typeNode.FullName };
             }
-            else if (typeNode.GetCLRType()!.IsAnsiClass)
+            else if (typeNode.GetCLRType()!.IsAnsiClass == true)
             {
                 return new ANSISymbol { Name = typeNode.FullName };
             }

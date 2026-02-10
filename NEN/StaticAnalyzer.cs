@@ -13,44 +13,57 @@ namespace NEN
         private readonly Dictionary<(string, Type[]), MethodInfo> moduleMethods = new(new MethodSignatureComparer());
         private readonly Dictionary<(string, Type[]), ConstructorInfo> moduleConstructors = new(new MethodSignatureComparer());
         private readonly Dictionary<string, FieldInfo> moduleFields = [];
+        private readonly List<NENException> exceptions = [];
         private readonly AST.Module module = new() { Name = assemblyName, ModuleParts = moduleParts };
         private AST.MethodBase? currentMethod = null;
 
-        public AST.Module Analyze()
+        public (AST.Module, AggregateException) Analyze()
         {
+            exceptions.Clear();
             SetupModule();
+            var mp = moduleParts.First(mp => mp.Classes.Select(c => c.Methods.Select(m => m.IsEntryPoint)).Any());
+            var classes = mp.Classes.Where(c => c.Methods.Any(m => m.IsEntryPoint));
+            var methods = classes.Select(c => c.Methods.Where(m => m.IsEntryPoint)).Aggregate((left, right) => [.. left, .. right]);
+            if (methods.Count() > 1)
+            {
+                var method = methods.First();
+                exceptions.Add(new MultipleEntryPointException(mp.SourceName, method.StartLine, method.StartColumn, method.EndLine, method.EndColumn));
+            }
             // Declaring the types and fields in every module
             foreach (var modulePart in module.ModuleParts)
             {
                 // Define every class in the module
                 foreach (var c in modulePart.Classes)
                 {
-                    DefineClass(modulePart, c);
+                    ExecuteWithRecovery(() => DefineClass(modulePart, c));
                 }
             }
             foreach (var modulePart in module.ModuleParts) {
                 foreach (var usingNamespaceStatement in modulePart.UsingNamespaces)
                 {
-                    AnalyzeUsingNamespaceStatement(modulePart, usingNamespaceStatement);
+                    ExecuteWithRecovery(() => AnalyzeUsingNamespaceStatement(modulePart, usingNamespaceStatement));
                 }
                 foreach (var c in modulePart.Classes)
                 {
                     // Define every field in the classes
                     foreach (var field in c.Fields)
                     {
-                        if (c.Fields.Where(f => f.Variable.Name == field.Variable.Name).ToArray().Length > 1)
+                        ExecuteWithRecovery(() =>
                         {
-                            throw new RedefinedException(modulePart.SourceName, field.Variable.Name, field.Variable.StartLine, field.Variable.StartColumn, field.Variable.EndLine, field.Variable.EndColumn);
-                        }
-                        field.FieldInfo = c.TypeBuilder!.DefineField(
-                            field.Variable.Name,
-                            GetTypeFromTypeNode(modulePart, [], field.Variable.TypeNode!),
-                            field.FieldAttributes
-                            );
-                        if (!moduleFields.TryAdd(string.Join(".", [.. c.Namespaces, c.Name, field.Variable.Name]), field.FieldInfo))
-                        {
-                            throw new("Internal error");
-                        }
+                            if (c.Fields.Where(f => f.Variable.Name == field.Variable.Name).ToArray().Length > 1)
+                            {
+                                throw new RedefinedException(modulePart.SourceName, field.Variable.Name, field.Variable.StartLine, field.Variable.StartColumn, field.Variable.EndLine, field.Variable.EndColumn);
+                            }
+                            field.FieldInfo = c.TypeBuilder!.DefineField(
+                                field.Variable.Name,
+                                GetTypeFromTypeNode(modulePart, [], field.Variable.TypeNode!),
+                                field.FieldAttributes
+                                );
+                            if (!moduleFields.TryAdd(string.Join(".", [.. c.Namespaces, c.Name, field.Variable.Name]), field.FieldInfo))
+                            {
+                                throw new("Internal error");
+                            }
+                        });
                     }
                 }
             }
@@ -66,29 +79,36 @@ namespace NEN
                             f => f.InitialValue != null &&
                             !f.FieldAttributes.HasFlag(FieldAttributes.Static))
                         .ToArray();
-                    if (c.Constructors != null && fieldsWithInitialization.Length > 0)
-                        throw new FieldInitializationOutsideDefaultConstructorException(
-                            modulePart.SourceName,
-                            fieldsWithInitialization.First().StartLine,
-                            fieldsWithInitialization.First().StartColumn,
-                            fieldsWithInitialization.First().EndLine,
-                            fieldsWithInitialization.First().EndColumn
-                        );
-                    if (c.Constructors == null) GenerateDefaultConstructor(modulePart, c);
-                    else
+                    ExecuteWithRecovery(() =>
                     {
-                        foreach (var constructor in c.Constructors)
+                        if (c.Constructors != null && fieldsWithInitialization.Length > 0)
+                            throw new FieldInitializationOutsideDefaultConstructorException(
+                                modulePart.SourceName,
+                                fieldsWithInitialization.First().StartLine,
+                                fieldsWithInitialization.First().StartColumn,
+                                fieldsWithInitialization.First().EndLine,
+                                fieldsWithInitialization.First().EndColumn
+                            );
+                        if (c.Constructors == null) GenerateDefaultConstructor(modulePart, c);
+                        else
                         {
-                            DefineConstructor(modulePart, c, [], constructor);
+                            foreach (var constructor in c.Constructors)
+                            {
+                                ExecuteWithRecovery(() => DefineConstructor(modulePart, c, [], constructor));
+                            }
                         }
-                    }
 
-                    // Define every method in the classes
-                    foreach (var method in c.Methods)
-                    {
-                        DefineMethod(modulePart, c, [], method);
-                    }
+                        // Define every method in the classes
+                        foreach (var method in c.Methods)
+                        {
+                            ExecuteWithRecovery(() => DefineMethod(modulePart, c, [], method));
+                        }
+                    });
                 }
+            }
+            if (exceptions.Count > 0)
+            {
+                return (module, new AggregateException(exceptions));
             }
             foreach (var modulePart in module.ModuleParts)
             {
@@ -96,15 +116,18 @@ namespace NEN
                 // Analyze the method bodies in each class
                 foreach (var c in modulePart.Classes)
                 {
-                    if (c.BaseTypeNode != null)
+                    ExecuteWithRecovery(() =>
                     {
-                        var baseType = GetTypeFromTypeNode(modulePart, typeTable, c.BaseTypeNode);
-                        c.BaseTypeNode.SetCLRType(baseType);
-                    }
-                    AnalyzeClass(modulePart, c, typeTable);
+                        if (c.BaseTypeNode != null)
+                        {
+                            var baseType = GetTypeFromTypeNode(modulePart, typeTable, c.BaseTypeNode);
+                            c.BaseTypeNode.SetCLRType(baseType);
+                        }
+                        AnalyzeClass(modulePart, c, typeTable);
+                    });
                 }
             }
-            return module;
+            return (module, new AggregateException(exceptions));
         }
 
         private void SetupModule()
@@ -270,7 +293,7 @@ namespace NEN
         {
             foreach (var init in c.Fields)
             {
-                AnalyzeFieldDeclarationStatement(modulePart, c, typeTable, init);
+                ExecuteWithRecovery(() => AnalyzeFieldDeclarationStatement(modulePart, c, typeTable, init));
             }
             foreach (var constructor in c.Constructors!) // should have at least one by the time we're analyzing them
             {
@@ -291,7 +314,7 @@ namespace NEN
                         EndColumn = constructor.DeclaringTypeNode.EndColumn
                     },..constructor.Parameters];
                 constructor.Parameters = parameters;
-                AnalyzeConstructor(modulePart, c, typeTable, constructor);
+                ExecuteWithRecovery(() => AnalyzeConstructor(modulePart, c, typeTable, constructor));
             }
             foreach (var method in c.Methods)
             {
@@ -312,7 +335,7 @@ namespace NEN
                         EndColumn = method.ReturnTypeNode.EndColumn
                     },..method.Parameters];
                 method.Parameters = parameters;
-                AnalyzeMethod(modulePart, c, typeTable, method);
+                ExecuteWithRecovery(() => AnalyzeMethod(modulePart, c, typeTable, method));
             }
         }
 
@@ -322,7 +345,7 @@ namespace NEN
             currentMethod = constructor;
             foreach (var statement in constructor.Statements)
             {
-                AnalyzeStatement(modulePart, c, typeTable, localSymbolTable, statement);
+                ExecuteWithRecovery(() => AnalyzeStatement(modulePart, c, typeTable, localSymbolTable, statement));
             }
             currentMethod = null;
         }
@@ -333,9 +356,21 @@ namespace NEN
             currentMethod = method;
             foreach (var statement in method.Statements)
             {
-                AnalyzeStatement(modulePart, c, typeTable, localSymbolTable, statement);
+                ExecuteWithRecovery(() => AnalyzeStatement(modulePart, c, typeTable, localSymbolTable, statement));
             }
             currentMethod = null;
+        }
+
+        private void ExecuteWithRecovery(Action action)
+        {
+            try
+            {
+                action();
+            }
+            catch (NENException ex)
+            {
+                exceptions.Add(ex);
+            }
         }
 
         private void AnalyzeStatement(

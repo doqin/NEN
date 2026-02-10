@@ -181,7 +181,8 @@ namespace NEN
             internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
             {
                 base.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
-                symbols.Add(Helper.MethodNodeToMethodSymbol(this));
+                var symbol = Helper.MethodNodeToMethodSymbol(this);
+                if (symbol != null) symbols.Add(symbol);
                 if (collectSpans)
                 {
                     Helper.AddSpan(document, symbolSpans, StartLine, StartColumn, EndLine, EndColumn, SymbolKind.Method);
@@ -210,7 +211,8 @@ namespace NEN
             internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
             {
                 base.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
-                symbols.Add(Helper.MethodNodeToMethodSymbol(this));
+                var symbol = Helper.MethodNodeToMethodSymbol(this);
+                if (symbol != null) symbols.Add(symbol);
                 if (collectSpans)
                 {
                     // Maybe change it later
@@ -245,7 +247,7 @@ namespace NEN
                         EndColumn,
                         SymbolKind); // symbol name
                 }
-                TypeNode!.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                TypeNode?.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
             }
         }
 
@@ -288,7 +290,11 @@ namespace NEN
             }
             internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
             {
-                symbols.Add(Helper.TypeNodeToTypeSymbol(this));
+                var typeSymbol = Helper.TypeNodeToTypeSymbol(this);
+                if (typeSymbol != null)
+                {
+                    symbols.Add(typeSymbol);
+                }
                 if (collectSpans)
                 {
                     // TODO: Add more types later
@@ -317,7 +323,11 @@ namespace NEN
             }
             internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
             {
-                symbols.Add(Helper.TypeNodeToTypeSymbol(this));
+                var typeSymbol = Helper.TypeNodeToTypeSymbol(this);
+                if (typeSymbol != null)
+                {
+                    symbols.Add(typeSymbol);
+                }
                 foreach(var typeArgument in TypeArguments)
                 {
                     typeArgument.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
@@ -473,11 +483,15 @@ namespace NEN
             {
                 if (collectPrivates)
                 {
-                    symbols.Add(new LocalSymbol
+                    var methodSymbol = Helper.MethodNodeToMethodSymbol(DeclaringMethod!);
+                    if (methodSymbol != null)
                     {
-                        Method = Helper.MethodNodeToMethodSymbol(DeclaringMethod!),
-                        Name = Variable.Name
-                    });
+                        symbols.Add(new LocalSymbol
+                        {
+                            Method = methodSymbol,
+                            Name = Variable.Name
+                        });
+                    }
                 }
                 Variable.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
                 InitialValue?.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
@@ -502,10 +516,15 @@ namespace NEN
             {
                 if (FieldAttributes.HasFlag(FieldAttributes.Public) || collectPrivates)
                 {
-                    symbols.Add(new FieldSymbol {
-                        DeclaringType = Helper.TypeNodeToTypeSymbol(DeclaringTypeNode),
-                        Name = Variable.Name
-                    });
+                    var typeSymbol = Helper.TypeNodeToTypeSymbol(DeclaringTypeNode);
+                    if (typeSymbol != null)
+                    {
+                        symbols.Add(new FieldSymbol
+                        {
+                            DeclaringType = typeSymbol,
+                            Name = Variable.Name
+                        });
+                    }
                 }
                 Variable.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
                 InitialValue?.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);

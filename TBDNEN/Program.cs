@@ -74,15 +74,19 @@ namespace TBDNEN
                 throw new($"Không tìm thấy tệp nào tên '{f.FileName}'");
             }
             Directory.CreateDirectory(Path.Combine(workingDirectory, projMetadata!.đích)!);
+            AggregateException parserExceptions = new();
             foreach (var fileName in projMetadata!.nguồn)
             {
                 Token[] tokens = Lexer.Tokenize(fileName);
                 var parser = new Parser(fileName, tokens);
-                var modulePart = parser.Parse();
+                var (modulePart, tempExceptions) = parser.Parse();
+                parserExceptions = new AggregateException([..parserExceptions.InnerExceptions, ..tempExceptions.InnerExceptions]);
                 moduleParts.Add(modulePart);
             }
+            if (parserExceptions.InnerExceptions.Count > 0) throw parserExceptions;
             var analyzer = new StaticAnalyzer(projMetadata.tên, [.. moduleParts], []);
-            var module = analyzer.Analyze();
+            var (module, analyzerExceptions) = analyzer.Analyze();
+            if (analyzerExceptions.InnerExceptions.Count > 0) throw analyzerExceptions;
             var assembler = new Assembler(module, Path.Combine(workingDirectory, projMetadata!.đích)!);
             assembler.Assemble();
             Console.WriteLine($"Hoàn thành biên dịch! OK");

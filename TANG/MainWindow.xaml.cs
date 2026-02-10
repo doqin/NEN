@@ -12,6 +12,7 @@ using System.Windows.Media;
 using TANG.Modal;
 using System.Diagnostics;
 using MahApps.Metro.IconPacks;
+using NEN.Exceptions;
 
 namespace TANG
 {
@@ -192,11 +193,11 @@ namespace TANG
                 explorer.Items.Clear();
                 AddTreeItem(explorer, workingDirectory);
             }
-            catch (NEN.Exceptions.NENException ex)
+            catch (AggregateException ex)
             {
                 var buildError = new BuildError
                 {
-                    Text = ex.Message
+                    Text = string.Join("\n", ex.InnerExceptions.Select(i => i.Message))
                 };
                 buildError.Show();
             }

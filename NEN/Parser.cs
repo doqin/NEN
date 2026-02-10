@@ -11,6 +11,7 @@ namespace NEN
     {
         private readonly string sourceName = sourceName;
         private readonly Token[] tokens = tokens;
+        private readonly List<NENException> exceptions = [];
         private int index = 0;
 
         /// <summary>
@@ -21,19 +22,21 @@ namespace NEN
         /// source file.</returns>
         /// <exception cref="ExpectedException">Thrown if the token stream does not match the expected module structure, such as when a class declaration is
         /// missing or an unexpected token is encountered.</exception>
-        public ModulePart Parse()
+        public (ModulePart, AggregateException) Parse()
         {
+            exceptions.Clear();
             List<ClassNode> classes = [];
             List<UsingNamespaceStatement> usingNamespaceStatements = [];
             while (index < tokens.Length)
             {
-                ParseMain([], classes, usingNamespaceStatements);
+                ExecuteWithRecovery(() => ParseMain([], classes, usingNamespaceStatements));
             }
-            return new ModulePart { 
+            var modulePart = new ModulePart { 
                 SourceName = sourceName, 
                 Classes = [.. classes], 
                 UsingNamespaces = [.. usingNamespaceStatements.Distinct()] 
             };
+            return (modulePart, new AggregateException(exceptions));
         }
 
         private void ParseMain(List<string> namespaces, List<ClassNode> classes, List<UsingNamespaceStatement> usingNamespaceStatements)
@@ -73,7 +76,7 @@ namespace NEN
                             );
                             while (Current(out var end) && end?.Value != "kết_thúc")
                             {
-                                ParseMain(new([.. namespaces, .. namespaceIdentifiers]), classes, usingNamespaceStatements);
+                                ExecuteWithRecovery(() => ParseMain(new([.. namespaces, .. namespaceIdentifiers]), classes, usingNamespaceStatements));
                             }
                             ConsumeOrThrowIfNotEqual(TokenType.Keyword, "kết_thúc");
                             break;
@@ -105,47 +108,51 @@ namespace NEN
             List<FieldDeclarationStatement> fields = [];
             while (Current(out var end) && end?.Value != "kết_thúc")
             {
-                token = Consume();
-                switch (token!.Value)
+                ExecuteWithRecovery(() =>
                 {
-                    case "@":
-                        var (left, right) = ParseMarker(namespaces, classIdentifier.Value);
-                        if (left != null)
-                        {
-                            switch(left)
+                    var token = Consume();
+                    switch (token!.Value)
+                    {
+                        case "@":
+                            var (left, right) = ParseMarker(namespaces, classIdentifier.Value);
+                            if (left != null)
                             {
-                                case MethodNode method:
-                                    methods.Add(method); break;
-                                case ConstructorNode constructor:
-                                    constructors.Add(constructor); break;
-                                default:
-                                    throw new NotImplementedException();
+                                switch(left)
+                                {
+                                    case MethodNode method:
+                                        methods.Add(method); break;
+                                    case ConstructorNode constructor:
+                                        constructors.Add(constructor); break;
+                                    default:
+                                        throw new NotImplementedException();
+                                }
                             }
-                        }
-                        else if (right != null)
-                        {
-                            fields.Add(right);
+                            else if (right != null)
+                            {
+                                fields.Add(right);
+                                ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ";");
+                            }
+                            else
+                            {
+                                throw new("Internal error");
+                            }
+                            break;
+                        case "phương_thức_khởi_tạo":
+                            constructors.Add(ParseConstructor(classIdentifier.Value));
+                            break;
+                        case "phương_thức":
+                            methods.Add(ParseMethod(namespaces, classIdentifier.Value));
+                            break;
+                        case "thuộc_tính":
+                            fields.Add(ParseFieldDeclarationStatement(classIdentifier.Value));
                             ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ";");
-                        }
-                        else
-                        {
-                            throw new("Internal error");
-                        }
-                        break;
-                    case "phương_thức_khởi_tạo":
-                        constructors.Add(ParseConstructor(classIdentifier.Value));
-                        break;
-                    case "phương_thức":
-                        methods.Add(ParseMethod(namespaces, classIdentifier.Value));
-                        break;
-                    case "thuộc_tính":
-                        fields.Add(ParseFieldDeclarationStatement(classIdentifier.Value));
-                        ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ";");
-                        break;
-                    default:
-                        UnexpectedHelper(token);
-                        break;
+                            break;
+                        default:
+                            UnexpectedHelper(token);
+                            break;
+                    }
                 }
+                );
             }
             if (!Current(out _)) OutOfTokenHelper("kết_thúc");
             Consume();
@@ -1164,6 +1171,42 @@ namespace NEN
         private int GetCurrentIndex()
         {
             return index;
+        }
+
+        private void ExecuteWithRecovery(Action action)
+        {
+            var startIndex = index;
+            try
+            {
+                action();
+            }
+            catch (NENException ex)
+            {
+                exceptions.Add(ex);
+                RecoverAfterError(startIndex);
+            }
+        }
+
+        private void RecoverAfterError(int startIndex)
+        {
+            if (index <= startIndex)
+            {
+                index = Math.Min(startIndex + 1, tokens.Length);
+            }
+            while (index < tokens.Length)
+            {
+                var token = tokens[index];
+                if (token.Type == TokenType.Punctuator && token.Value == ";")
+                {
+                    index++;
+                    break;
+                }
+                if (token.Type == TokenType.Keyword && (token.Value == "kết_thúc" || token.Value == "lớp" || token.Value == "sử_dụng" || token.Value == "không_gian"))
+                {
+                    break;
+                }
+                index++;
+            }
         }
     }
 }

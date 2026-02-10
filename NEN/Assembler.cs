@@ -129,7 +129,6 @@ namespace NEN
         {   
             if (method.IsEntryPoint)
             {
-                if (entryPointMethod != null) throw new MultipleEntryPointException(modulePart.SourceName, method.StartLine, method.StartColumn, method.EndLine, method.EndColumn);
                 entryPointMethod = method.MethodBuilder;
             }
             var ilGenerator = method.MethodBuilder!.GetILGenerator();

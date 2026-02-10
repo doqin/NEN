@@ -47,10 +47,18 @@ namespace NENTest
             Token[] tokens = Lexer.Tokenize($"Example sources\\{fileName}.nen");
             // PrintTokens(tokens);
             var parser = new Parser(fileName, tokens);
-            var modulePart = parser.Parse();
+            var (modulePart, parserExceptions) = parser.Parse();
+            if (parserExceptions.InnerExceptions.Count > 0)
+            {
+                throw parserExceptions;
+            }
             Console.WriteLine($"Parser result:\n{modulePart}");
             var analyzer = new StaticAnalyzer(fileName, [modulePart], []);
-            analyzer.Analyze();
+            var (_, analyzerExceptions) = analyzer.Analyze();
+            if (analyzerExceptions.InnerExceptions.Count > 0)
+            {
+                throw analyzerExceptions;
+            }
             Console.WriteLine($"Static Analyzer result:\n{modulePart}");
         }
 
@@ -59,17 +67,27 @@ namespace NENTest
         {
             string assemblyName = "AssemblerTest";
             List<ModulePart> moduleParts = [];
+            AggregateException parserExceptions = new();
             foreach (var fileName in Directory.GetFiles("Example sources\\AssemblyTest", "*.nen"))
             {
                 Token[] tokens = Lexer.Tokenize(fileName);
                 // PrintTokens(tokens);
                 var parser = new Parser(fileName, tokens);
-                var modulePart = parser.Parse();
+                (var modulePart, var tempExceptions) = parser.Parse();
+                parserExceptions = new AggregateException([..parserExceptions.InnerExceptions, ..tempExceptions.InnerExceptions]);
                 Console.WriteLine($"Kết quả Parser:\n{modulePart}");
                 moduleParts.Add(modulePart);
             }
+            if (parserExceptions.InnerExceptions.Count > 0)
+            {
+                throw parserExceptions;
+            }
             var analyzer = new StaticAnalyzer(assemblyName, [..moduleParts], []);
-            var module = analyzer.Analyze();
+            (var module, var analyzerExceptions) = analyzer.Analyze();
+            if (analyzerExceptions.InnerExceptions.Count > 0)
+            {
+                throw analyzerExceptions;
+            }
             Console.WriteLine($"Kết quả Static Analyzer:\n{module}");
             var assembler = new Assembler(module);
             assembler.Assemble();
@@ -82,7 +100,11 @@ namespace NENTest
             Token[] tokens = Lexer.Tokenize(filePath);
             // PrintTokens(tokens);
             var parser = new Parser(filePath, tokens);
-            var modulePart = parser.Parse();
+            var (modulePart, parserExceptions) = parser.Parse();
+            if (parserExceptions.InnerExceptions.Count > 0)
+            {
+                throw parserExceptions;
+            }
             if (printTokens)
             {
                 Console.WriteLine($"Parser result:\n{modulePart}");
@@ -90,13 +112,25 @@ namespace NENTest
             var analyzer = new StaticAnalyzer(fileName, [modulePart], []);
             try
             {
-                analyzer.Analyze();
+                var (_, analyzerExceptions) = analyzer.Analyze();
+                if (analyzerExceptions.InnerExceptions.Count > 0)
+                {
+                    throw analyzerExceptions;
+                }
             }
-            catch (T e)
+            catch (AggregateException e)
             {
-                Console.WriteLine(e.Message);
+                foreach (T ee in e.InnerExceptions)
+                {
+                    if (ee == null)
+                    {
+                        goto error;
+                    }
+                    Console.WriteLine(e.Message);
+                }
                 return;
             }
+        error:
             throw new Exception("Test failed");
         }
 
@@ -106,20 +140,36 @@ namespace NENTest
             Token[] tokens = Lexer.Tokenize(filePath);
             // PrintTokens(tokens);
             var parser = new Parser(filePath, tokens);
-            var modulePart = parser.Parse();
+            var (modulePart, parserExceptions) = parser.Parse();
+            if (parserExceptions.InnerExceptions.Count > 0)
+            {
+                throw parserExceptions;
+            }
             Console.WriteLine($"Parser result:\n{modulePart}");
             var analyzer = new StaticAnalyzer(fileName, [modulePart], []);
-            var module = analyzer.Analyze();
+            var (module, analyzerExceptions) = analyzer.Analyze();
+            if (analyzerExceptions.InnerExceptions.Count > 0)
+            {
+                throw analyzerExceptions;
+            }
             var assembler = new Assembler(module);
             try
             {
                 assembler.Assemble();
             }
-            catch (T e)
+            catch (AggregateException e)
             {
-                Console.WriteLine(e.Message);
+                foreach(T ee in e.InnerExceptions)
+                {
+                    if (ee == null)
+                    {
+                        goto error;
+                    }
+                    Console.WriteLine(e.Message);
+                }
                 return;
             }
+        error:
             throw new Exception("Test failed");
         }
 
@@ -201,7 +251,7 @@ namespace NENTest
         [TestMethod]
         public void MultipleEntryPointTest()
         {
-            GeneralAssemblerTest<MultipleEntryPointException>("MultipleEntryPointTest");
+            GeneralStaticAnalyzerTest<MultipleEntryPointException>("MultipleEntryPointTest");
         }
 
         private static void PrintTokens(Token[] tokens)

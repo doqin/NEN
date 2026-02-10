@@ -189,14 +189,17 @@ namespace TANG
                 return;
             }
 
+            Module? module = null;
             try
             {
                 List<ModulePart> moduleParts = [];
+                var parserExceptions = new AggregateException();
                 string moduleName = "Trình soạn thảo";
 
                 if (TryLoadProjectMetadata(out var project, out var projectRoot) && project != null)
                 {
                     moduleName = string.IsNullOrWhiteSpace(project.tên) ? moduleName : project.tên;
+                    
                     foreach (var source in project.nguồn ?? [])
                     {
                         var resolvedPath = ResolveProjectPath(projectRoot, source);
@@ -218,7 +221,9 @@ namespace TANG
                         }
 
                         var parser = new Parser(resolvedPath, tokens);
-                        moduleParts.Add(parser.Parse());
+                        var (modulePart, tempExceptions) = parser.Parse();
+                        parserExceptions = new AggregateException([..parserExceptions.InnerExceptions, ..tempExceptions.InnerExceptions]);
+                        moduleParts.Add(modulePart);
                     }
                 }
 
@@ -226,38 +231,57 @@ namespace TANG
                 {
                     var tokens = Lexer.TokenizeFromText(content);
                     var parser = new Parser(FilePath ?? "Trình soạn thảo", tokens);
-                    moduleParts.Add(parser.Parse());
+                    var (modulePart, tempExceptions) = parser.Parse();
+                    parserExceptions = new AggregateException([.. parserExceptions.InnerExceptions, .. tempExceptions.InnerExceptions]);
+                    moduleParts.Add(modulePart);
                 }
-
+                if (parserExceptions.InnerExceptions.Count > 0)
+                {
+                    throw parserExceptions;
+                }
                 var analyzer = new StaticAnalyzer(moduleName, [.. moduleParts], []);
-                var module = analyzer.Analyze();
+                (module, var moduleExceptions) = analyzer.Analyze();
+                if (moduleExceptions.InnerExceptions.Count > 0)
+                {
+                    throw moduleExceptions;
+                }
                 var (symbols, spans) = module.CollectSymbols(FilePath!, textEditor.Document);
                 symbolCompletions = [.. symbols];
                 ApplySymbolSpans(spans);
                 textMarkerService?.Clear();
             }
-            catch (NENException ex) // only catch NENExceptions, if a regular exception happens we gotta fix it
+            catch (AggregateException ex)
             {
-                //ClearSymbolColorizer();
+                if (module != null) {
+                    var (symbols, spans) = module.CollectSymbols(FilePath!, textEditor.Document);
+                    symbolCompletions = [.. symbols];
+                    ApplySymbolSpans(spans);
+                }
                 if (textMarkerService != null)
                 {
                     textMarkerService.Clear();
-                    try
+                    for (int i = 0; i < ex.InnerExceptions.Count; i++)
                     {
-                        if (ex.StartLine > 0 && ex.StartLine <= textEditor.Document.LineCount)
+                        if (ex.InnerExceptions[i] is not NENException) throw (ex.InnerExceptions[i] as Exception)!;
+                        var nenEx = ex.InnerExceptions[i] as NENException;
+                        //ClearSymbolColorizer();
+                        try
                         {
-                            var line = textEditor.Document.GetLineByNumber(ex.StartLine);
-                            var startOffset = line.Offset + ex.StartColumn;
-                            var endOffset = line.Offset + ex.EndColumn;
-                            if (startOffset < line.Offset) startOffset = line.Offset;
-                            if (endOffset > line.EndOffset) endOffset = line.EndOffset;
-                            if (endOffset > startOffset)
+                            if (nenEx!.StartLine > 0 && nenEx.StartLine <= textEditor.Document.LineCount)
                             {
-                                textMarkerService.Add(new TextMarker(startOffset, endOffset - startOffset, ex.ErrorMessage));
+                                var line = textEditor.Document.GetLineByNumber(nenEx.StartLine);
+                                var startOffset = line.Offset + nenEx.StartColumn;
+                                var endOffset = line.Offset + nenEx.EndColumn;
+                                if (startOffset < line.Offset) startOffset = line.Offset;
+                                if (endOffset > line.EndOffset) endOffset = line.EndOffset;
+                                if (endOffset > startOffset)
+                                {
+                                    textMarkerService.Add(new TextMarker(startOffset, endOffset - startOffset, nenEx.ErrorMessage));
+                                }
                             }
                         }
+                        catch { }
                     }
-                    catch { }
                 }
             }
         }
