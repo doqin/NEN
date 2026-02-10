@@ -99,9 +99,10 @@ namespace TANG
                 }));
             }
 
-            if (!string.IsNullOrEmpty(currentWord))
+            var normalizedWord = Types.NENCompletionData.Normalize(currentWord);
+            if (!string.IsNullOrEmpty(normalizedWord))
             {
-                completionWindow.CompletionList.SelectItem(currentWord);
+                completionWindow.CompletionList.SelectItem(normalizedWord);
             }
 
             completionWindow.Show();
@@ -394,7 +395,7 @@ namespace TANG
             {
                 { NEN.Symbols.SymbolKind.Class, CreateBrush(78, 201, 176) },
                 { NEN.Symbols.SymbolKind.Method, CreateBrush(220, 220, 170) },
-                { NEN.Symbols.SymbolKind.Field, CreateBrush(156, 220, 254) },
+                { NEN.Symbols.SymbolKind.Field, CreateBrush(220, 220, 220) },
                 { NEN.Symbols.SymbolKind.Parameter, CreateBrush(156, 220, 254) },
                 { NEN.Symbols.SymbolKind.Local, CreateBrush(156, 220, 254) }
             };
@@ -415,9 +416,12 @@ namespace TANG
                         {
                             element.TextRunProperties.SetForegroundBrush(brush);
                         }
-                        if (span.Kind is NEN.Symbols.SymbolKind.Class or NEN.Symbols.SymbolKind.Method or NEN.Symbols.SymbolKind.Field)
+                        if (!IsSystemDarkTheme())
                         {
-                            element.TextRunProperties.SetTypeface(CreateTypeface(element.TextRunProperties, FontWeights.SemiBold));
+                            if (span.Kind is NEN.Symbols.SymbolKind.Class or NEN.Symbols.SymbolKind.Method or NEN.Symbols.SymbolKind.Field)
+                            {
+                                element.TextRunProperties.SetTypeface(CreateTypeface(element.TextRunProperties, FontWeights.SemiBold));
+                            }
                         }
                     });
                 }
