@@ -761,7 +761,11 @@ namespace NEN
             fieldCLRFullName,
             out var fieldInfo))
             {
-                fieldInfo = fieldDeclarationType.GetField(fieldName, BindingFlags.Public);
+                try
+                {
+                    fieldInfo = fieldDeclarationType.GetField(fieldName, BindingFlags.Public);
+                }
+                catch(Exception) { }
             }
             if (fieldInfo == null && fieldDeclarationType.BaseType != null)
             {
@@ -1295,7 +1299,32 @@ namespace NEN
                 MethodInfo searchForMethodInfo(string methodName, string methodCLRFullName, Type? type, int startLine, int startColumn, int endLine, int endColumn)
                 {
                     // Get method info
-                    if (moduleMethods.TryGetValue((methodCLRFullName, [.. argumentTypes]), out var methodInfo))
+                    bool IsAssignable(Type parameterType, Type argumentType) => parameterType.IsAssignableFrom(argumentType) || argumentType.IsSubclassOf(parameterType);
+
+                    MethodInfo? methodInfo = null;
+
+                    foreach (var entry in moduleMethods)
+                    {
+                        var keyMethodName = entry.Key.Item1;
+                        var keyMethodTypes = entry.Key.Item2;
+                        if (!string.Equals(keyMethodName, methodCLRFullName, StringComparison.Ordinal)) continue;
+                        if (keyMethodTypes.Length != argumentTypes.Count) continue;
+                        bool compatible = true;
+                        for (int i = 0; i < keyMethodTypes.Length; i++)
+                        {
+                            if (!IsAssignable(keyMethodTypes[i], argumentTypes[i]))
+                            {
+                                compatible = false;
+                                break;
+                            }
+                        }
+                        if (compatible)
+                        {
+                            methodInfo = entry.Value;
+                            break;
+                        }
+                    }
+                    if (methodInfo != null)
                     {
                         bool isFromSameOrParentType;
                         if (type != null)
