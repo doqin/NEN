@@ -37,32 +37,34 @@
                     </MenuItem>
                 </MenuItem>
             </Menu>
-            <ToolBarTray DockPanel.Dock="Top" Background="Transparent">
+            <ToolBarTray DockPanel.Dock="Top">
                 <ToolBar Margin="4" 
-                         Background="#FFFFFFFF"
-                         BorderBrush="#FFACACAC" 
                          BorderThickness="1">
                     <Button IsEnabled="False">
-                        <iconPacks:PackIconRemixIcon Kind="ArrowGoBackFill" Padding="2"/>
+                        <iconPacks:PackIconRemixIcon Kind="ArrowGoBackFill"/>
                     </Button>
                     <Button IsEnabled="False">
-                        <iconPacks:PackIconRemixIcon Kind="ArrowGoForwardFill" Padding="2"/>
+                        <iconPacks:PackIconRemixIcon Kind="ArrowGoForwardFill"/>
                     </Button>
                     <Separator/>
                     <Button x:Name="SaveButton" Click="Save_Click">
-                        <iconPacks:PackIconMaterial Kind="ContentSaveOutline" Foreground="CornflowerBlue" Padding="2"/>
+                        <iconPacks:PackIconMaterial Kind="ContentSaveOutline" Foreground="CornflowerBlue"/>
                     </Button>
                     <Separator/>
                     <Button x:Name="Build" Click="Build_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <iconPacks:PackIconMaterial Kind="CogOutline" Padding="2"/>
-                            <TextBlock Text="Xây dựng" Margin="4 0 0 0"/>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="CogOutline"/>
+                            <TextBlock Text="Xây dựng" 
+                                       Margin="5 0 0 0"
+                                       VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Button x:Name="Run" Click="Run_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <iconPacks:PackIconMaterialDesign Kind="PlayArrowRound" Padding="2" Foreground="LightGreen"/>
-                            <TextBlock Text="Chạy" Margin="4 0 0 0"/>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <iconPacks:PackIconMaterialDesign Kind="PlayArrowRound" Foreground="LightGreen"/>
+                            <TextBlock Text="Chạy" 
+                                       Margin="5 0 0 0" 
+                                       VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                 </ToolBar>
@@ -73,18 +75,25 @@
                     <ColumnDefinition Width="5"/>
                     <ColumnDefinition Width="300"/>
                 </Grid.ColumnDefinitions>
-                <TabControl x:Name="editorTab">
+                <TabControl x:Name="editorTab" Margin="5">
                     <TabControl.ItemTemplate>
                         <DataTemplate>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock x:Name="TabHeader" Text="{Binding DisplayHeader}" MouseDown="TabHeader_MouseDown"/>
+                            <DockPanel VerticalAlignment="Center">
+                                <TextBlock x:Name="TabHeader" 
+                                           Text="{Binding DisplayHeader}" 
+                                           MouseDown="TabHeader_MouseDown"
+                                           VerticalAlignment="Center"
+                                           Margin="5"/>
+                                <TextBlock Text=""/>
                                 <Button  
-                                        Content="✕" 
-                                        Background="Transparent" 
-                                        BorderBrush="Transparent" 
-                                        Margin="5 0 0 0" 
-                                        Click="Close_Click"/>
-                            </StackPanel>
+                                    Content="✕" 
+                                    Background="Transparent" 
+                                    BorderBrush="Transparent" 
+                                    Click="Close_Click"
+                                    DockPanel.Dock="Right"
+                                    VerticalAlignment="Center"
+                                    HorizontalAlignment="Right"/>
+                            </DockPanel>
                         </DataTemplate>
                     </TabControl.ItemTemplate>
                     <TabControl.ContentTemplate>
@@ -101,7 +110,7 @@
                 </TabControl>
 
                 <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" Background="Transparent"/>
-                <GroupBox Header="Duyệt tệp tin" Grid.Column="2">
+                <GroupBox Header="Duyệt tệp tin" Grid.Column="2" BorderThickness="0.1">
                     <TreeView x:Name="explorer" BorderThickness="0">
                         <TreeView.ContextMenu>
                             <ContextMenu>

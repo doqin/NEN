@@ -1,29 +1,17 @@
-﻿using ICSharpCode.AvalonEdit;
-using ICSharpCode.AvalonEdit.Highlighting;
-using ICSharpCode.AvalonEdit.Highlighting.Xshd;
-using Microsoft.VisualBasic;
+﻿using Microsoft.VisualBasic;
 using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.DirectoryServices;
 using System.IO;
-using System.Linq;
-using System.Linq.Expressions;
-using System.Text;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Xml;
 using TANG.Modal;
 using System.Diagnostics;
-using ICSharpCode.AvalonEdit.CodeCompletion;
+using MahApps.Metro.IconPacks;
 
 namespace TANG
 {
@@ -66,10 +54,31 @@ namespace TANG
             var files = Directory.GetFiles(path);
             foreach (var dir in directories)
             {
+                var stackPanel = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                };
+                var folderIcon = new PackIconRemixIcon
+                {
+                    Kind = PackIconRemixIconKind.Folder6Line,
+                    Foreground = Brushes.Gold,
+                    Padding = new Thickness(1),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 5, 0)
+                };
+                var folderName = new TextBlock { 
+                    Text = Path.GetRelativePath(path, dir),
+                    Margin = new Thickness(5, 0, 5, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                stackPanel.Children.Add(folderIcon);
+                stackPanel.Children.Add(folderName);
                 var ite = new TreeViewItem
                 {
-                    Header = Path.GetRelativePath(path, dir),
-                    Tag = dir
+                    Header = stackPanel,
+                    Tag = dir,
+                    Padding = new(1),
+                    Margin = new(0)
                 };
                 ite.ContextMenu = BuildItemContextMenu(ite);
                 item.Items.Add(ite);
@@ -77,10 +86,48 @@ namespace TANG
             }
             foreach (var file in files)
             {
+                var stackPanel = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                };
+                var fileIcon = new PackIconRemixIcon
+                {
+                    Kind = PackIconRemixIconKind.File2Line,
+                    Padding = new Thickness(1),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 5, 0),
+                };
+                var fileName = new TextBlock
+                {
+                    Text = Path.GetFileName(file),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(5, 0, 5, 0)
+                };
+                if (fileName.Text.EndsWith(".nen"))
+                {
+                    var nenIcon = new TextBlock
+                    {
+                        Text = "NEN",
+                        Foreground = Brushes.MediumPurple,
+                        FontStretch = FontStretches.UltraCondensed,
+                        FontSize = 10,
+                        FontWeight = FontWeights.Bold,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(0, 0, 5, 0)
+                    };
+                    stackPanel.Children.Add(nenIcon);
+                }
+                else
+                {
+                    stackPanel.Children.Add(fileIcon);
+                }
+                stackPanel.Children.Add(fileName);
                 var ite = new TreeViewItem
                 {
-                    Header = Path.GetFileName(file),
-                    Tag = file
+                    Header = stackPanel,
+                    Tag = file,
+                    Padding = new(1),
+                    Margin = new(0)
                 };
                 ite.ContextMenu = BuildItemContextMenu(ite);
                 ite.MouseDoubleClick += (o, e) =>

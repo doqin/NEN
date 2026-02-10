@@ -5,6 +5,7 @@ using ICSharpCode.AvalonEdit.Highlighting;
 using ICSharpCode.AvalonEdit.Highlighting.Xshd;
 using ICSharpCode.AvalonEdit.Rendering;
 using ICSharpCode.AvalonEdit.Search;
+using Microsoft.Win32;
 using NEN;
 using NEN.AST;
 using NEN.Exceptions;
@@ -299,10 +300,51 @@ namespace TANG
             }
         }
 
+        static bool IsSystemDarkTheme()
+        {
+            try
+            {
+                using var personalize = Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize");
+                var raw = personalize?.GetValue("AppsUseLightTheme");
+                var value = raw is int i ? i : raw is byte b ? b : (int?)null;
+                // 0 = dark, 1 = light
+                return value.HasValue && value.Value == 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private void LoadHighlighting()
         {
             using var reader = XmlReader.Create("Nen.xshd");
-            textEditor.SyntaxHighlighting = HighlightingLoader.Load(reader, HighlightingManager.Instance);
+            var highlighting = HighlightingLoader.Load(reader, HighlightingManager.Instance);
+            if (IsSystemDarkTheme())
+            {
+                ApplyDarkThemeHighlighting(highlighting);
+            }
+            textEditor.SyntaxHighlighting = highlighting;
+        }
+
+        static void ApplyDarkThemeHighlighting(IHighlightingDefinition highlighting)
+        {
+            var palette = new Dictionary<string, Color>
+            {
+                { "Keyword", Color.FromRgb(86, 156, 214) },
+                { "Comment", Color.FromRgb(87, 166, 74) },
+                { "String", Color.FromRgb(214, 157, 133) },
+                { "Marker", Color.FromRgb(78, 201, 176) },
+                { "Number", Color.FromRgb(181, 206, 168) }
+            };
+
+            foreach (var color in highlighting.NamedHighlightingColors)
+            {
+                if (palette.TryGetValue(color.Name, out var brushColor))
+                {
+                    color.Foreground = new SimpleHighlightingBrush(brushColor);
+                }
+            }
         }
 
         private (int startOffset, string currentWord) GetCurrentWord()
@@ -335,15 +377,27 @@ namespace TANG
             public SymbolColorizer(IReadOnlyList<NEN.Symbols.SymbolSpan> spans)
             {
                 this.spans = spans;
-                brushes = new Dictionary<NEN.Symbols.SymbolKind, Brush>
-                {
-                    { NEN.Symbols.SymbolKind.Class, CreateBrush(38, 127, 153) },
-                    { NEN.Symbols.SymbolKind.Method, CreateBrush(121, 94, 38) },
-                    { NEN.Symbols.SymbolKind.Field, CreateBrush(0, 16, 128) },
-                    { NEN.Symbols.SymbolKind.Parameter, CreateBrush(0, 16, 128) },
-                    { NEN.Symbols.SymbolKind.Local, CreateBrush(0, 16, 128) }
-                };
+                var isDarkTheme = IsSystemDarkTheme();
+                brushes = isDarkTheme ? CreateDarkThemeBrushes() : CreateLightThemeBrushes();
             }
+
+            static Dictionary<NEN.Symbols.SymbolKind, Brush> CreateLightThemeBrushes() => new()
+            {
+                { NEN.Symbols.SymbolKind.Class, CreateBrush(38, 127, 153) },
+                { NEN.Symbols.SymbolKind.Method, CreateBrush(121, 94, 38) },
+                { NEN.Symbols.SymbolKind.Field, CreateBrush(0, 16, 128) },
+                { NEN.Symbols.SymbolKind.Parameter, CreateBrush(0, 16, 128) },
+                { NEN.Symbols.SymbolKind.Local, CreateBrush(0, 16, 128) }
+            };
+
+            static Dictionary<NEN.Symbols.SymbolKind, Brush> CreateDarkThemeBrushes() => new()
+            {
+                { NEN.Symbols.SymbolKind.Class, CreateBrush(78, 201, 176) },
+                { NEN.Symbols.SymbolKind.Method, CreateBrush(220, 220, 170) },
+                { NEN.Symbols.SymbolKind.Field, CreateBrush(156, 220, 254) },
+                { NEN.Symbols.SymbolKind.Parameter, CreateBrush(156, 220, 254) },
+                { NEN.Symbols.SymbolKind.Local, CreateBrush(156, 220, 254) }
+            };
 
             protected override void ColorizeLine(DocumentLine line)
             {
