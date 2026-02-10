@@ -42,6 +42,7 @@ namespace TANG
         CompletionWindow? completionWindow;
         DispatcherTimer analysisTimer;
         SymbolColorizer? symbolColorizer;
+        TextMarkerService? textMarkerService;
         NEN.Symbols.Symbol[] symbolCompletions = [];
 
         public EditorControl()
@@ -57,6 +58,11 @@ namespace TANG
             };
             textEditor.TextArea.TextEntered += textEditor_TextArea_TextEntered;
             textEditor.TextArea.TextEntering += textEditor_TextArea_TextEntering;
+
+            textMarkerService = new TextMarkerService(textEditor);
+            textEditor.TextArea.TextView.BackgroundRenderers.Add(textMarkerService);
+            textEditor.MouseHover += TextEditor_MouseHover;
+
             SearchPanel.Install(textEditor.TextArea);
             LoadHighlighting();
             analysisTimer = new DispatcherTimer
@@ -228,10 +234,31 @@ namespace TANG
                 var (symbols, spans) = module.CollectSymbols(FilePath!, textEditor.Document);
                 symbolCompletions = [.. symbols];
                 ApplySymbolSpans(spans);
+                textMarkerService?.Clear();
             }
-            catch (NENException) // only catch NENExceptions, if a regular exception happens we gotta fix it
+            catch (NENException ex) // only catch NENExceptions, if a regular exception happens we gotta fix it
             {
-                ClearSymbolColorizer();
+                //ClearSymbolColorizer();
+                if (textMarkerService != null)
+                {
+                    textMarkerService.Clear();
+                    try
+                    {
+                        if (ex.StartLine > 0 && ex.StartLine <= textEditor.Document.LineCount)
+                        {
+                            var line = textEditor.Document.GetLineByNumber(ex.StartLine);
+                            var startOffset = line.Offset + ex.StartColumn;
+                            var endOffset = line.Offset + ex.EndColumn;
+                            if (startOffset < line.Offset) startOffset = line.Offset;
+                            if (endOffset > line.EndOffset) endOffset = line.EndOffset;
+                            if (endOffset > startOffset)
+                            {
+                                textMarkerService.Add(new TextMarker(startOffset, endOffset - startOffset, ex.ErrorMessage));
+                            }
+                        }
+                    }
+                    catch { }
+                }
             }
         }
 
@@ -439,6 +466,102 @@ namespace TANG
                 var current = properties.Typeface;
                 return new Typeface(current.FontFamily, current.Style, fontWeight, current.Stretch);
             }
+        }
+
+        void TextEditor_MouseHover(object sender, MouseEventArgs e)
+        {
+            var pos = textEditor.GetPositionFromPoint(e.GetPosition(textEditor));
+            if (pos.HasValue)
+            {
+                var offset = textEditor.Document.GetOffset(pos.Value.Line, pos.Value.Column);
+                var marker = textMarkerService?.GetMarkersAtOffset(offset).FirstOrDefault();
+                if (marker != null)
+                {
+                    var toolTip = new ToolTip { Content = marker.ErrorMessage, IsOpen = true, StaysOpen = false };
+                    e.Handled = true;
+                }
+            }
+        }
+
+        sealed class TextMarkerService : IBackgroundRenderer
+        {
+            readonly TextEditor textEditor;
+            readonly TextSegmentCollection<TextMarker> markers;
+
+            public TextMarkerService(TextEditor textEditor)
+            {
+                this.textEditor = textEditor;
+                this.markers = new TextSegmentCollection<TextMarker>(textEditor.Document);
+            }
+
+            public void Add(TextMarker marker)
+            {
+                markers.Add(marker);
+                textEditor.TextArea.TextView.Redraw(marker);
+            }
+
+            public void Clear()
+            {
+                var old = markers.ToArray();
+                markers.Clear();
+                foreach (var m in old) textEditor.TextArea.TextView.Redraw(m);
+            }
+
+            public IEnumerable<TextMarker> GetMarkersAtOffset(int offset) => markers.FindSegmentsContaining(offset);
+
+            public KnownLayer Layer => KnownLayer.Selection;
+
+            public void Draw(TextView textView, DrawingContext drawingContext)
+            {
+                if (!textView.VisualLinesValid) return;
+                var visualLines = textView.VisualLines;
+                if (visualLines.Count == 0) return;
+                int viewStart = visualLines.First().FirstDocumentLine.Offset;
+                int viewEnd = visualLines.Last().LastDocumentLine.EndOffset;
+
+                foreach (var marker in markers.FindOverlappingSegments(viewStart, viewEnd - viewStart))
+                {
+                    foreach (var r in BackgroundGeometryBuilder.GetRectsForSegment(textView, marker))
+                    {
+                        var startPoint = r.BottomLeft;
+                        var endPoint = r.BottomRight;
+                        var brush = Brushes.Red;
+                        var pen = new Pen(brush, 1);
+                        pen.Freeze();
+
+                        double offset = 2.5;
+                        int count = Math.Max((int)((endPoint.X - startPoint.X) / offset) + 1, 4);
+
+                        var geometry = new StreamGeometry();
+                        using (var ctx = geometry.Open())
+                        {
+                            ctx.BeginFigure(startPoint, false, false);
+                            ctx.PolyLineTo(CreatePoints(startPoint, endPoint, offset, count).ToArray(), true, false);
+                        }
+                        geometry.Freeze();
+
+                        drawingContext.DrawGeometry(Brushes.Transparent, pen, geometry);
+                    }
+                }
+            }
+
+            static IEnumerable<Point> CreatePoints(Point start, Point end, double offset, int count)
+            {
+                for (int i = 0; i < count; i++)
+                    yield return new Point(start.X + (i * offset), start.Y - ((i + 1) % 2 == 0 ? offset : 0));
+            }
+        }
+
+        sealed class TextMarker : TextSegment
+        {
+            public TextMarker(int startOffset, int length, string errorMessage)
+            {
+                StartOffset = startOffset;
+                Length = length;
+                ErrorMessage = errorMessage;
+            }
+
+            public string ErrorMessage { get; }
         }
     }
 }
