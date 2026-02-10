@@ -99,7 +99,7 @@ namespace NEN
                     if (c.BaseTypeNode != null)
                     {
                         var baseType = GetTypeFromTypeNode(modulePart, typeTable, c.BaseTypeNode);
-                        c.BaseTypeNode = CreateTypeNodeFromType(baseType, c.BaseTypeNode.StartLine, c.BaseTypeNode.StartColumn, c.BaseTypeNode.EndLine, c.BaseTypeNode.EndColumn);
+                        c.BaseTypeNode.SetCLRType(baseType);
                     }
                     AnalyzeClass(modulePart, c, typeTable);
                 }
@@ -155,12 +155,7 @@ namespace NEN
             foreach (var parameter in constructor.Parameters)
             {
                 var paramType = GetTypeFromTypeNode(modulePart, typeTable, parameter.TypeNode!);
-                parameter.TypeNode = CreateTypeNodeFromType(
-                    paramType,
-                    parameter.TypeNode!.StartLine,
-                    parameter.TypeNode.StartColumn,
-                    parameter.TypeNode.EndLine,
-                    parameter.TypeNode.EndColumn);
+                parameter.TypeNode!.SetCLRType(paramType);
                 if (constructor.Parameters.Where(p => p.Name == parameter.Name).ToArray().Length > 1)
                 {
                     throw new RedefinedException(
@@ -203,23 +198,13 @@ namespace NEN
             MethodNode method)
         {
             var type = GetTypeFromTypeNode(modulePart, typeTable, method.ReturnTypeNode);
-            method.ReturnTypeNode = CreateTypeNodeFromType(
-                type,
-                method.ReturnTypeNode.StartLine,
-                method.ReturnTypeNode.StartColumn,
-                method.ReturnTypeNode.EndLine,
-                method.ReturnTypeNode.EndColumn);
+            method.ReturnTypeNode.SetCLRType(type);
             method.DeclaringTypeNode.CLRType = c.TypeBuilder;
             List<Type> paramTypes = [];
             foreach (var parameter in method.Parameters)
             {
                 var paramType = GetTypeFromTypeNode(modulePart, typeTable, parameter.TypeNode!);
-                parameter.TypeNode = CreateTypeNodeFromType(
-                    paramType,
-                    parameter.TypeNode!.StartLine,
-                    parameter.TypeNode.StartColumn,
-                    parameter.TypeNode.EndLine,
-                    parameter.TypeNode.EndColumn);
+                parameter.TypeNode!.SetCLRType(paramType);
                 if (method.Parameters.Where(p => p.Name == parameter.Name).ToArray().Length > 1)
                 {
                     throw new RedefinedException(
@@ -528,13 +513,7 @@ namespace NEN
         {
             fieldDeclarationStatement.DeclaringTypeNode.CLRType = c.TypeBuilder;
             var type = GetTypeFromTypeNode(modulePart, typeTable, fieldDeclarationStatement.Variable.TypeNode!);
-            fieldDeclarationStatement.Variable.TypeNode = CreateTypeNodeFromType(
-                type,
-                fieldDeclarationStatement.Variable.TypeNode!.StartLine,
-                fieldDeclarationStatement.Variable.TypeNode.StartColumn,
-                fieldDeclarationStatement.Variable.TypeNode.EndLine,
-                fieldDeclarationStatement.Variable.TypeNode.EndColumn
-            );
+            fieldDeclarationStatement.Variable.TypeNode!.SetCLRType(type);
             if (fieldDeclarationStatement.InitialValue != null) {
                 var expr = fieldDeclarationStatement.InitialValue;
                 AnalyzeExpression(modulePart, c, typeTable, [], ref expr);
@@ -560,13 +539,7 @@ namespace NEN
             if (localDeclarationStatement.Variable.TypeNode != null)
             {
                 var type = GetTypeFromTypeNode(modulePart, typeTable, localDeclarationStatement.Variable.TypeNode);
-                localDeclarationStatement.Variable.TypeNode = CreateTypeNodeFromType(
-                    type,
-                    localDeclarationStatement.Variable.TypeNode.StartLine,
-                    localDeclarationStatement.Variable.TypeNode.StartColumn,
-                    localDeclarationStatement.Variable.TypeNode.EndLine,
-                    localDeclarationStatement.Variable.TypeNode.EndColumn
-                );
+                localDeclarationStatement.Variable.TypeNode.SetCLRType(type);
             }
             if (localDeclarationStatement.InitialValue != null)
             {
@@ -664,12 +637,7 @@ namespace NEN
             DuplicateExpression duplicateExpression)
         {
             var returnType = GetTypeFromTypeNode(modulePart, typeTable, duplicateExpression.ReturnTypeNode!);
-            duplicateExpression.ReturnTypeNode = CreateTypeNodeFromType(
-                returnType,
-                duplicateExpression.StartLine,
-                duplicateExpression.StartColumn,
-                duplicateExpression.EndLine,
-                duplicateExpression.EndColumn);
+            duplicateExpression.ReturnTypeNode!.SetCLRType(returnType);
             return duplicateExpression.ReturnTypeNode;
         }
 
@@ -679,12 +647,7 @@ namespace NEN
             ThisExpression thisExpression)
         {
             var returnType = GetTypeFromTypeNode(modulePart, typeTable, thisExpression.ReturnTypeNode!);
-            thisExpression.ReturnTypeNode = CreateTypeNodeFromType(
-                returnType,
-                thisExpression.StartLine,
-                thisExpression.StartColumn,
-                thisExpression.EndLine,
-                thisExpression.EndColumn);
+            thisExpression.ReturnTypeNode!.SetCLRType(returnType);
             return thisExpression.ReturnTypeNode;
         }
 
@@ -709,16 +672,19 @@ namespace NEN
             StaticFieldAccessmentExpression staticFieldAccessmentExpression)
         {
             var fieldType = GetTypeFromTypeNode(modulePart, typeTable, staticFieldAccessmentExpression.TypeNode);
-            staticFieldAccessmentExpression.TypeNode = CreateTypeNodeFromType(
-                fieldType,
-                staticFieldAccessmentExpression.TypeNode.StartLine,
-                staticFieldAccessmentExpression.TypeNode.StartColumn,
-                staticFieldAccessmentExpression.TypeNode.EndLine,
-                staticFieldAccessmentExpression.TypeNode.EndColumn
-            );
+            staticFieldAccessmentExpression.TypeNode!.SetCLRType(fieldType);
             if (staticFieldAccessmentExpression.FieldInfo == null) {
-                var fieldCLRFullName = string.Join(".", [.. staticFieldAccessmentExpression.TypeNode.Namespaces, staticFieldAccessmentExpression.TypeNode.Name, staticFieldAccessmentExpression.FieldName]);
-                staticFieldAccessmentExpression.FieldInfo = SearchForFieldInfo(staticFieldAccessmentExpression.FieldName, fieldCLRFullName, fieldType, modulePart.Source, staticFieldAccessmentExpression.StartLine, staticFieldAccessmentExpression.StartColumn, staticFieldAccessmentExpression.EndLine, staticFieldAccessmentExpression.EndColumn);
+                var fieldCLRFullName = string.Join(".", [staticFieldAccessmentExpression.TypeNode.GetCLRType()!.FullName!, staticFieldAccessmentExpression.FieldName]);
+                staticFieldAccessmentExpression.FieldInfo = SearchForFieldInfo(
+                    staticFieldAccessmentExpression.FieldName, 
+                    fieldCLRFullName, 
+                    fieldType, 
+                    modulePart.Source, 
+                    staticFieldAccessmentExpression.StartLine, 
+                    staticFieldAccessmentExpression.StartColumn, 
+                    staticFieldAccessmentExpression.EndLine, 
+                    staticFieldAccessmentExpression.EndColumn
+                    );
             }
             staticFieldAccessmentExpression.ReturnTypeNode = CreateTypeNodeFromType(
                 staticFieldAccessmentExpression.FieldInfo!.FieldType,
@@ -741,7 +707,7 @@ namespace NEN
             var objectTypeNode = AnalyzeExpression(modulePart, c, typeTable, localSymbolTable, ref fieldObject);
             standardFieldAccessmentExpression.Object = fieldObject;
             if (standardFieldAccessmentExpression.FieldInfo == null) {
-                var fieldCLRFullName = string.Join(".", [.. objectTypeNode.Namespaces, objectTypeNode.Name, standardFieldAccessmentExpression.FieldName]);
+                var fieldCLRFullName = string.Join(".", [objectTypeNode.GetCLRType()!.FullName!, standardFieldAccessmentExpression.FieldName]);
                 var fieldObjectType = GetTypeFromTypeNode(modulePart, typeTable, fieldObject.ReturnTypeNode!);
                 standardFieldAccessmentExpression.FieldInfo = SearchForFieldInfo(standardFieldAccessmentExpression!.FieldName, fieldCLRFullName, fieldObjectType, modulePart.Source, standardFieldAccessmentExpression.StartLine, standardFieldAccessmentExpression.StartColumn, standardFieldAccessmentExpression.EndLine, standardFieldAccessmentExpression.EndColumn);
             }
@@ -818,13 +784,7 @@ namespace NEN
                     constructorCallExpression.EndLine,
                     constructorCallExpression.EndColumn
                 );
-            constructorCallExpression.ReturnTypeNode = CreateTypeNodeFromType(
-                returnType,
-                constructorCallExpression.ReturnTypeNode!.StartLine,
-                constructorCallExpression.ReturnTypeNode!.StartColumn,
-                constructorCallExpression.ReturnTypeNode!.EndLine,
-                constructorCallExpression.ReturnTypeNode!.EndColumn
-            );
+            constructorCallExpression.ReturnTypeNode!.SetCLRType(returnType);
             return constructorCallExpression.ReturnTypeNode;
         }
 
@@ -862,13 +822,7 @@ namespace NEN
                     inlineConstructionExpression.EndLine,
                     inlineConstructionExpression.EndColumn
                 );
-            inlineConstructionExpression.ReturnTypeNode = CreateTypeNodeFromType(
-                returnType,
-                inlineConstructionExpression.ReturnTypeNode!.StartLine,
-                inlineConstructionExpression.ReturnTypeNode.StartColumn,
-                inlineConstructionExpression.ReturnTypeNode.EndLine,
-                inlineConstructionExpression.ReturnTypeNode.EndColumn
-            );
+            inlineConstructionExpression.ReturnTypeNode!.SetCLRType(returnType);
             return inlineConstructionExpression.ReturnTypeNode;
         }
 
@@ -928,12 +882,7 @@ namespace NEN
         {
             int? size = null;
             Type type = GetTypeFromTypeNode(modulePart, typeTable,newArrayExpression.ReturnTypeNode!);
-            newArrayExpression.ReturnTypeNode = CreateTypeNodeFromType(
-                type, 
-                newArrayExpression.ReturnTypeNode!.StartLine, 
-                newArrayExpression.ReturnTypeNode.StartColumn,
-                newArrayExpression.ReturnTypeNode.EndLine,
-                newArrayExpression.ReturnTypeNode.EndColumn);
+            newArrayExpression.ReturnTypeNode!.SetCLRType(type);
 
             // Analyze size expression if not null
             if (newArrayExpression.Size != null)
@@ -1089,26 +1038,17 @@ namespace NEN
             {
                 throw new MethodCallFromOutsideException(modulePart.Source, standardMethodCallExpression.StartLine, standardMethodCallExpression.StartColumn, standardMethodCallExpression.EndLine, standardMethodCallExpression.EndColumn);
             }
-            var objec = standardMethodCallExpression.Object;
-            var typeNode = AnalyzeExpression(modulePart, c, typeTable, localSymbolTable, ref objec);
+            var obj = standardMethodCallExpression.Object;
+            var typeNode = AnalyzeExpression(modulePart, c, typeTable, localSymbolTable, ref obj);
             var methodInfo = standardMethodCallExpression.MethodInfo;
-            standardMethodCallExpression.Object = objec;
-            if (
-                currentMethod.GetMethodInfo()!.IsStatic &&
+            standardMethodCallExpression.Object = obj;
+            if (currentMethod.GetMethodInfo()!.IsStatic &&
                 string.Join(".", [c.CLRFullName, standardMethodCallExpression.MethodName]) ==
-                string.Join(".", [typeNode.CLRFullName, standardMethodCallExpression.MethodName])
-            )
+                string.Join(".", [typeNode.CLRFullName, standardMethodCallExpression.MethodName]))
             {
-                throw new StaticIllegalAccessmentException(
-                    modulePart.Source,
-                    string.Join("::", [c.FullName, standardMethodCallExpression.MethodName]),
-                    standardMethodCallExpression.StartLine,
-                    standardMethodCallExpression.StartColumn,
-                    standardMethodCallExpression.EndLine,
-                    standardMethodCallExpression.EndColumn
-                );
+                throw new StaticIllegalAccessmentException(modulePart.Source, string.Join("::", [c.FullName, standardMethodCallExpression.MethodName]), standardMethodCallExpression.StartLine, standardMethodCallExpression.StartColumn, standardMethodCallExpression.EndLine, standardMethodCallExpression.EndColumn);
             }
-            var methodFullName = string.Join(".", [typeNode.CLRFullName, standardMethodCallExpression.MethodName]);
+            var methodFullName = string.Join(".", [typeNode.GetCLRType()!.FullName, standardMethodCallExpression.MethodName]);
             AnalyzeMethodCallExpression(
                 modulePart,
                 c,
@@ -1117,7 +1057,7 @@ namespace NEN
                 ref standardMethodCallExpression, 
                 methodFullName, 
                 GetTypeFromTypeNode(modulePart, typeTable, typeNode)
-                );
+            );
             standardMethodCallExpression.ReturnTypeNode = CreateTypeNodeFromType(
                 GetReturnTypeFromMethodBase(standardMethodCallExpression.MethodInfo!)!,
                 standardMethodCallExpression.StartLine,
@@ -1136,14 +1076,8 @@ namespace NEN
             StaticMethodCallExpression staticMethodCallExpression)
         {
             var type = GetTypeFromTypeNode(modulePart, typeTable, staticMethodCallExpression.TypeNode);
-            staticMethodCallExpression.TypeNode = (CreateTypeNodeFromType(
-                type,
-                staticMethodCallExpression.TypeNode.StartLine,
-                staticMethodCallExpression.TypeNode.StartColumn,
-                staticMethodCallExpression.TypeNode.EndLine,
-                staticMethodCallExpression.TypeNode.EndColumn
-                ) as NamedType)!;
-            var methodFullName = string.Join(".", [staticMethodCallExpression.TypeNode.CLRFullName, staticMethodCallExpression.MethodName]);
+            staticMethodCallExpression.TypeNode.SetCLRType(type);
+            var methodFullName = string.Join(".", [staticMethodCallExpression.TypeNode.GetCLRType()!.FullName, staticMethodCallExpression.MethodName]);
             AnalyzeMethodCallExpression(
                 modulePart, 
                 c, 
@@ -1191,8 +1125,8 @@ namespace NEN
             {
                 throw new MethodCallFromOutsideException(modulePart.Source, ambiguousMethodCallExpression.StartLine, ambiguousMethodCallExpression.StartColumn, ambiguousMethodCallExpression.EndLine, ambiguousMethodCallExpression.EndColumn);
             }
-            var methodFullName = string.Join(".", [c.CLRFullName, ambiguousMethodCallExpression.MethodName]);
-            AnalyzeMethodCallExpression(modulePart, c, typeTable, localSymbolTable, ref ambiguousMethodCallExpression, methodFullName);
+            var methodCLRFullName = string.Join(".", [c.CLRFullName, ambiguousMethodCallExpression.MethodName]);
+            AnalyzeMethodCallExpression(modulePart, c, typeTable, localSymbolTable, ref ambiguousMethodCallExpression, methodCLRFullName);
             if (ambiguousMethodCallExpression.MethodInfo!.IsStatic)
             {
                 var typeNode = CreateTypeNodeFromType(
@@ -1477,7 +1411,7 @@ namespace NEN
                 {
                     var fieldInfo = SearchForFieldInfo(
                     variableName,
-                    string.Join(".", [c.BaseTypeNode.CLRFullName, variableName]),
+                    string.Join(".", [c.BaseTypeNode.GetCLRType()!.FullName, variableName]),
                     c.BaseTypeNode.GetCLRType()!,
                     modulePart.Source,
                     variableExpression.StartLine,
@@ -1720,7 +1654,9 @@ namespace NEN
                     List<Type> typeArguments = [];
                     foreach (var typeArgument in genericType.TypeArguments)
                     {
-                        typeArguments.Add(GetTypeFromTypeNode(modulePart, typeTable, typeArgument));
+                        var argType = GetTypeFromTypeNode(modulePart, typeTable, typeArgument);
+                        typeArgument.SetCLRType(argType);
+                        typeArguments.Add(argType);
                     }
                     type = type.MakeGenericType([.. typeArguments]);
                     if (!typeTable.TryAdd(typeNode.CLRFullName, type))

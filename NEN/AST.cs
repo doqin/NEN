@@ -265,6 +265,7 @@ namespace NEN
             public string FullName => string.Join("::", [.. Namespaces, Name]);
             public string CLRFullName => string.Join(".", [.. Namespaces, Name]);
             public abstract Type? GetCLRType();
+            public abstract void SetCLRType(Type type);
         }
 
         public class NamedType : TypeNode
@@ -282,7 +283,10 @@ namespace NEN
             {
                 return CLRType;
             }
-
+            public override void SetCLRType(Type type)
+            {
+                CLRType = type;
+            }
             internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
             {
                 symbols.Add(Helper.TypeNodeToTypeSymbol(this));
@@ -307,6 +311,10 @@ namespace NEN
             public override Type? GetCLRType()
             {
                 return CLRType;
+            }
+            public override void SetCLRType(Type type)
+            {
+                CLRType = type;
             }
             internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
             {
@@ -342,7 +350,10 @@ namespace NEN
             {
                 return ElementTypeNode.GetCLRType()!.MakeArrayType();
             }
-
+            public override void SetCLRType(Type type)
+            {
+                ElementTypeNode.SetCLRType(type.GetElementType()!);
+            }
             internal override void CollectSymbols(TextDocument document, HashSet<Symbol> symbols, List<SymbolSpan> symbolSpans, bool collectPrivates, bool collectSpans)
             {
                 ElementTypeNode.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
