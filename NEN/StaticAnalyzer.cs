@@ -890,7 +890,7 @@ namespace NEN
                 ExpressionNode sizeNode = newArrayExpression.Size;
                 var sizeType = AnalyzeExpression(modulePart, c, typeTable, localSymbolTable, ref sizeNode);
                 newArrayExpression.Size = sizeNode;
-                if (sizeType.CLRFullName != PrimitiveType.Int32 && sizeType.CLRFullName != PrimitiveType.Int64)
+                if (sizeType.GetCLRType()!.FullName != PrimitiveType.Int32 && sizeType.GetCLRType()!.FullName != PrimitiveType.Int64)
                 {
                     throw new InvalidArraySizeTypeException(modulePart.Source, sizeType.FullName, sizeNode.StartLine, sizeNode.StartColumn, sizeNode.EndLine, sizeNode.EndColumn);
                 }
@@ -1535,8 +1535,8 @@ namespace NEN
             binaryExpression.Left = left;
             binaryExpression.Right = right;
 
-            var leftTypeFullName = leftType.CLRFullName;
-            var rightTypeFullName = rightType.CLRFullName;
+            var leftTypeFullName = leftType.GetCLRType()!.FullName;
+            var rightTypeFullName = rightType.GetCLRType()!.FullName;
             if (leftTypeFullName != rightTypeFullName) throw new TypeDiscrepancyException(modulePart.Source, leftType, rightType, binaryExpression.StartLine, binaryExpression.StartColumn, binaryExpression.EndLine, binaryExpression.EndColumn);
             
             if (binaryExpression.Operator == "và" || 
