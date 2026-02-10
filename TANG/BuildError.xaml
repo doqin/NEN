@@ -7,10 +7,12 @@
         mc:Ignorable="d"
         Title="Gặp lỗi khi xây dựng chương trình" Height="237" Width="585">
     <Grid>
-        <RichTextBox IsReadOnly="True" FontFamily="Consolas" Margin="5">
+        <RichTextBox IsReadOnly="True" Margin="5">
             <FlowDocument>
                 <Paragraph>
-                    <Run x:Name="run" Text="{Binding Text, RelativeSource={RelativeSource AncestorType=Window}}"></Run>
+                    <Run x:Name="run" 
+                         Text="{Binding Text, RelativeSource={RelativeSource AncestorType=Window}}"
+                         FontFamily="Consolas"/>
                 </Paragraph>
             </FlowDocument>
         </RichTextBox>

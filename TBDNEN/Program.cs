@@ -76,8 +76,8 @@ namespace TBDNEN
             Directory.CreateDirectory(Path.Combine(workingDirectory, projMetadata!.đích)!);
             foreach (var fileName in projMetadata!.nguồn)
             {
-                (string[] lines, Token[] tokens) = Lexer.Tokenize(fileName);
-                var parser = new Parser(fileName, lines, tokens);
+                Token[] tokens = Lexer.Tokenize(fileName);
+                var parser = new Parser(fileName, tokens);
                 var modulePart = parser.Parse();
                 moduleParts.Add(modulePart);
             }

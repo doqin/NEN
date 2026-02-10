@@ -8,6 +8,13 @@ namespace NEN
 {
     internal class Helper
     {
+        internal static string? ReadLine(string filePath, int lineIndex)
+        {
+            using var reader = new StreamReader(filePath);
+            string? line = null;
+            for (int i = 0; i < lineIndex && (line = reader.ReadLine()) != null; i++) { }
+            return line;
+        }
         internal static string GetTreeString<T>(string? head, T[] nodes)
         {
             var str = string.IsNullOrEmpty(head) ? "" : $"{head}\n";

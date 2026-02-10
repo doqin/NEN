@@ -196,30 +196,30 @@ namespace TANG
                         var resolvedPath = ResolveProjectPath(projectRoot, source);
                         if (string.IsNullOrWhiteSpace(resolvedPath)) continue;
 
-                        (string[] lines, Token[] tokens) tokenized;
+                        Token[] tokens;
 
                         if (!string.IsNullOrWhiteSpace(FilePath) && string.Equals(resolvedPath, FilePath, StringComparison.OrdinalIgnoreCase))
                         {
-                            tokenized = Lexer.TokenizeFromText(content);
+                            tokens = Lexer.TokenizeFromText(content);
                         }
                         else if (File.Exists(resolvedPath))
                         {
-                            tokenized = Lexer.Tokenize(resolvedPath);
+                            tokens = Lexer.Tokenize(resolvedPath);
                         }
                         else
                         {
                             continue;
                         }
 
-                        var parser = new Parser(resolvedPath, tokenized.lines, tokenized.tokens);
+                        var parser = new Parser(resolvedPath, tokens);
                         moduleParts.Add(parser.Parse());
                     }
                 }
 
                 if (moduleParts.Count == 0)
                 {
-                    var (lines, tokens) = Lexer.TokenizeFromText(content);
-                    var parser = new Parser(FilePath ?? "Trình soạn thảo", lines, tokens);
+                    var tokens = Lexer.TokenizeFromText(content);
+                    var parser = new Parser(FilePath ?? "Trình soạn thảo", tokens);
                     moduleParts.Add(parser.Parse());
                 }
 

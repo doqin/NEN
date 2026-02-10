@@ -11,7 +11,6 @@ namespace NEN
         public class ModulePart
         {
             public required string SourceName { get; set; }
-            public required string[] Source { get; set; }
             public ClassNode[] Classes { get; set; } = [];
             public UsingNamespaceStatement[] UsingNamespaces { get; set; } = [];
 

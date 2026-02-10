@@ -37,16 +37,15 @@ namespace NEN
         ];
 
         /// <summary>
-        /// Tokenizes the contents of the specified file, returning the file's lines and the corresponding tokens
-        /// identified in each line.
+        /// Tokenizes the contents of the specified file into an array of tokens representing lexical elements.
         /// </summary>
-        /// <remarks>The method reads the entire file into memory before processing. Each token includes
-        /// information about its type, value, and position within the file. The caller is responsible for handling any
-        /// exceptions that may occur when accessing the file.</remarks>
-        /// <param name="filePath">The path to the file to be tokenized. The file must exist and be accessible for reading.</param>
-        /// <returns>A tuple containing an array of strings representing the lines of the file, and an array of tokens extracted
-        /// from those lines. The tokens array will be empty if no tokens are found.</returns>
-        public static (string[], Token[]) Tokenize(string filePath)
+        /// <remarks>Each token includes information about its type, value, and position within the file.
+        /// The method analyzes all lines in the file and assigns line and column numbers to each token. If the file
+        /// cannot be read, an exception will be thrown.</remarks>
+        /// <param name="filePath">The path to the file to be tokenized. Must refer to a readable text file.</param>
+        /// <returns>An array of tokens extracted from the file. The array will be empty if the file contains no recognizable
+        /// tokens.</returns>
+        public static Token[] Tokenize(string filePath)
         {
             var lines = File.ReadAllLines(filePath);
             var regex = LexerRegex();
@@ -70,10 +69,10 @@ namespace NEN
                 }
             }
             Lexer.Analyse( tokens);
-            return (lines, [.. tokens]);
+            return [.. tokens];
         }
 
-        public static (string[], Token[]) TokenizeFromText(string content)
+        public static Token[] TokenizeFromText(string content)
         {
             var lines = content
                 .Replace("\r\n", "\n")
@@ -101,7 +100,7 @@ namespace NEN
                 }
             }
             Lexer.Analyse(tokens);
-            return (lines, [.. tokens]);
+            return [.. tokens];
         }
 
         private static void Analyse( List<Token> tokens)

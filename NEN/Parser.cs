@@ -7,12 +7,11 @@ using System.Reflection.Emit;
 
 namespace NEN
 {
-    public class Parser(string moduleName, string[] contentLines, Token[] tokens)
+    public class Parser(string sourceName, Token[] tokens)
     {
-        private readonly string moduleName = moduleName;
+        private readonly string sourceName = sourceName;
         private readonly Token[] tokens = tokens;
         private int index = 0;
-        private readonly string[] content = contentLines;
 
         /// <summary>
         /// Parses the current token stream and constructs a module part representing the source file, including its
@@ -31,8 +30,7 @@ namespace NEN
                 ParseMain([], classes, usingNamespaceStatements);
             }
             return new ModulePart { 
-                SourceName = moduleName, 
-                Source = content,
+                SourceName = sourceName, 
                 Classes = [.. classes], 
                 UsingNamespaces = [.. usingNamespaceStatements.Distinct()] 
             };
@@ -83,11 +81,11 @@ namespace NEN
                             classes.Add(ParseClass([..namespaces]));
                             break;
                         default:
-                            throw new ExpectedException(content, "lớp", token.StartLine, token.StartColumn, token.EndLine, token.EndColumn);
+                            throw new ExpectedException(sourceName, "lớp", token.StartLine, token.StartColumn, token.EndLine, token.EndColumn);
                     }
                     break;
                 default:
-                    throw new ExpectedException(content, "lớp", token.StartLine, token.StartColumn, token.EndLine, token.EndColumn);
+                    throw new ExpectedException(sourceName, "lớp", token.StartLine, token.StartColumn, token.EndLine, token.EndColumn);
             }
         }
 
@@ -172,16 +170,16 @@ namespace NEN
         private (AST.MethodBase?, FieldDeclarationStatement?) ParseMarker(string[] namespaces, string className, MethodAttributes methodAttributes = MethodAttributes.Private, FieldAttributes fieldAttributes = FieldAttributes.Private, bool isEntryPoint = false)
         {
             var annotationIdentifier = ConsumeOrThrow(TokenType.Identifier, "thuộc tính phương thức");
-            if (!markers.Contains(annotationIdentifier.Value)) throw new ExpectedException(content, "thuộc tính phương thức", annotationIdentifier.StartLine, annotationIdentifier.StartColumn, annotationIdentifier.EndLine, annotationIdentifier.EndColumn);
+            if (!markers.Contains(annotationIdentifier.Value)) throw new ExpectedException(sourceName, "thuộc tính phương thức", annotationIdentifier.StartLine, annotationIdentifier.StartColumn, annotationIdentifier.EndLine, annotationIdentifier.EndColumn);
             switch(annotationIdentifier.Value)
             {
                 case "Chính":
-                    if (isEntryPoint == true) throw new RedefinedException(content, "@Chính", annotationIdentifier.StartLine, annotationIdentifier.StartColumn, annotationIdentifier.EndLine, annotationIdentifier.EndColumn);
+                    if (isEntryPoint == true) throw new RedefinedException(sourceName, "@Chính", annotationIdentifier.StartLine, annotationIdentifier.StartColumn, annotationIdentifier.EndLine, annotationIdentifier.EndColumn);
                     isEntryPoint = true;
                     break;
                 case "Công_Khai":
                     if (methodAttributes.HasFlag(MethodAttributes.Public)) throw new RedefinedException(
-                        content, 
+                        sourceName, 
                         "@Công_Khai", 
                         annotationIdentifier.StartLine, 
                         annotationIdentifier.StartColumn, 
@@ -191,7 +189,7 @@ namespace NEN
                     methodAttributes &= ~MethodAttributes.Private;
                     methodAttributes |= MethodAttributes.Public;
                     if (fieldAttributes.HasFlag(FieldAttributes.Public)) throw new RedefinedException(
-                        content, 
+                        sourceName, 
                         "@Công_Khai", 
                         annotationIdentifier.StartLine, 
                         annotationIdentifier.StartColumn, 
@@ -203,7 +201,7 @@ namespace NEN
                     break;
                 case "Tĩnh":
                     if (methodAttributes.HasFlag(MethodAttributes.Static)) throw new RedefinedException(
-                        content, 
+                        sourceName, 
                         "@Tĩnh", 
                         annotationIdentifier.StartLine, 
                         annotationIdentifier.StartColumn, 
@@ -212,7 +210,7 @@ namespace NEN
                         );
                     methodAttributes |= MethodAttributes.Static;
                     if (fieldAttributes.HasFlag(FieldAttributes.Static)) throw new RedefinedException(
-                        content, 
+                        sourceName, 
                         "@Tĩnh", 
                         annotationIdentifier.StartLine, 
                         annotationIdentifier.StartColumn, 
@@ -238,7 +236,7 @@ namespace NEN
                 default:
                     var (el, ec) = GetCurrentEndPosition();
                     throw new ExpectedException(
-                        content, 
+                        sourceName, 
                         "phương_thức", 
                         GetCurrentLine(), 
                         GetCurrentColumn(), 
@@ -363,7 +361,7 @@ namespace NEN
             var fieldDeclaration = ParseLocalDeclarationStatement(startLine, startColumn);
             fieldDeclaration.Variable.SymbolKind = Symbols.SymbolKind.Field;
             var (endLine, endColumn) = GetPreviousEndPosition();
-            if (fieldDeclaration.Variable.TypeNode == null) throw new ImplicitTypeOnFieldException(content, startLine, startColumn, endLine, endColumn);
+            if (fieldDeclaration.Variable.TypeNode == null) throw new ImplicitTypeOnFieldException(sourceName, startLine, startColumn, endLine, endColumn);
             return new FieldDeclarationStatement
             {
                 DeclaringTypeNode = new NamedType
@@ -996,14 +994,14 @@ namespace NEN
 
         private void UnexpectedHelper(Token token)
         {
-            throw new UnexpectedException(content, token.Value, token.StartLine, token.StartColumn, token.EndLine, token.EndColumn);
+            throw new UnexpectedException(sourceName, token.Value, token.StartLine, token.StartColumn, token.EndLine, token.EndColumn);
         }
 
         private Token ConsumeOrThrow(TokenType expectedTokenTypes, string expected)
         {
             var token = Consume();
             if (token == null) OutOfTokenHelper(expected);
-            else if (!expectedTokenTypes.HasFlag(token.Type)) throw new ExpectedException(content, expected, token.StartLine, token.StartColumn, token.EndLine, token.EndColumn);
+            else if (!expectedTokenTypes.HasFlag(token.Type)) throw new ExpectedException(sourceName, expected, token.StartLine, token.StartColumn, token.EndLine, token.EndColumn);
             return token!;
         }
 
@@ -1017,14 +1015,14 @@ namespace NEN
         private Token ConsumeOrThrowIfNotEqual(TokenType expectedTokenTypes, string expected)
         {
             var token = ConsumeOrThrow(expectedTokenTypes, expected);
-            if (token.Value != expected) throw new ExpectedException(content, expected, token.StartLine, token.StartColumn, token.EndLine, token.EndColumn);
+            if (token.Value != expected) throw new ExpectedException(sourceName, expected, token.StartLine, token.StartColumn, token.EndLine, token.EndColumn);
             return token;
         }
 
         private void OutOfTokenHelper(string expected)
         {
             throw new ExpectedException(
-                content,
+                sourceName,
                 expected,
                 GetCurrentLine(),
                 GetCurrentColumn() + GetCurrentLength() + 1,

@@ -40,7 +40,7 @@ namespace NEN
                     {
                         if (c.Fields.Where(f => f.Variable.Name == field.Variable.Name).ToArray().Length > 1)
                         {
-                            throw new RedefinedException(modulePart.Source, field.Variable.Name, field.Variable.StartLine, field.Variable.StartColumn, field.Variable.EndLine, field.Variable.EndColumn);
+                            throw new RedefinedException(modulePart.SourceName, field.Variable.Name, field.Variable.StartLine, field.Variable.StartColumn, field.Variable.EndLine, field.Variable.EndColumn);
                         }
                         field.FieldInfo = c.TypeBuilder!.DefineField(
                             field.Variable.Name,
@@ -68,7 +68,7 @@ namespace NEN
                         .ToArray();
                     if (c.Constructors != null && fieldsWithInitialization.Length > 0)
                         throw new FieldInitializationOutsideDefaultConstructorException(
-                            modulePart.Source,
+                            modulePart.SourceName,
                             fieldsWithInitialization.First().StartLine,
                             fieldsWithInitialization.First().StartColumn,
                             fieldsWithInitialization.First().EndLine,
@@ -140,7 +140,7 @@ namespace NEN
             );
             if (!moduleTypes.TryAdd(c.CLRFullName, c.TypeBuilder))
             {
-                throw new RedefinedException(modulePart.Source, c.FullName, c.StartLine, c.StartColumn, c.EndLine, c.EndColumn);
+                throw new RedefinedException(modulePart.SourceName, c.FullName, c.StartLine, c.StartColumn, c.EndLine, c.EndColumn);
             }
         }
 
@@ -159,7 +159,7 @@ namespace NEN
                 if (constructor.Parameters.Where(p => p.Name == parameter.Name).ToArray().Length > 1)
                 {
                     throw new RedefinedException(
-                        modulePart.Source,
+                        modulePart.SourceName,
                         parameter.Name,
                         parameter.StartLine,
                         parameter.StartColumn,
@@ -181,7 +181,7 @@ namespace NEN
             if (!moduleConstructors.TryAdd((c.CLRFullName, [.. paramTypes]), constructor.ConstructorBuilder))
             {
                 throw new RedefinedException(
-                    modulePart.Source,
+                    modulePart.SourceName,
                     $"{c.FullName}({string.Join(", ", constructor.Parameters.Select(p => p.TypeNode!.FullName))})",
                     constructor.StartLine,
                     constructor.StartColumn,
@@ -208,7 +208,7 @@ namespace NEN
                 if (method.Parameters.Where(p => p.Name == parameter.Name).ToArray().Length > 1)
                 {
                     throw new RedefinedException(
-                        modulePart.Source,
+                        modulePart.SourceName,
                         parameter.Name,
                         parameter.StartLine,
                         parameter.StartColumn,
@@ -233,7 +233,7 @@ namespace NEN
             if (!moduleMethods.TryAdd((methodFullName, [.. paramTypes]), method.MethodBuilder))
             {
                 throw new RedefinedException(
-                    modulePart.Source,
+                    modulePart.SourceName,
                     $"{string.Join("::", [c.FullName, method.MethodName])}({string.Join(", ", method.Parameters.Select(p => p.TypeNode.FullName))})",
                     method.StartLine,
                     method.StartColumn,
@@ -250,12 +250,12 @@ namespace NEN
             Type? type = module.CoreAssembly!.GetType(string.Join(".", usingNamespaceStatement.Namespace));
             if (type != null)
             {
-                throw new InvalidUsingStatement(modulePart.Source, string.Join("::", usingNamespaceStatement.Namespace), usingNamespaceStatement.StartLine, usingNamespaceStatement.StartColumn, usingNamespaceStatement.EndLine, usingNamespaceStatement.EndColumn);
+                throw new InvalidUsingStatement(modulePart.SourceName, string.Join("::", usingNamespaceStatement.Namespace), usingNamespaceStatement.StartLine, usingNamespaceStatement.StartColumn, usingNamespaceStatement.EndLine, usingNamespaceStatement.EndColumn);
             }
             if (!module.AvailableNamespaces.Contains(string.Join(".", usingNamespaceStatement.Namespace)))
             {
                 throw new UnresolvedIdentifierException(
-                    modulePart.Source,
+                    modulePart.SourceName,
                     string.Join("::", usingNamespaceStatement.Namespace),
                     usingNamespaceStatement.StartLine,
                     usingNamespaceStatement.StartColumn,
@@ -361,7 +361,7 @@ namespace NEN
 
         private void AnalyzeBreakStatement(ModulePart modulePart, BreakStatement breakStatement, Label? endLabel)
         {
-            breakStatement.EndLabel = endLabel ?? throw new BreakOutsideLoopException(modulePart.Source, breakStatement.StartLine, breakStatement.StartColumn, breakStatement.EndLine, breakStatement.EndColumn);
+            breakStatement.EndLabel = endLabel ?? throw new BreakOutsideLoopException(modulePart.SourceName, breakStatement.StartLine, breakStatement.StartColumn, breakStatement.EndLine, breakStatement.EndColumn);
         }
 
         private void AnalyzeWhileStatement(
@@ -376,7 +376,7 @@ namespace NEN
             whileStatement.Condition = condition;
             if (conditionType!.CLRFullName != PrimitiveType.Boolean)
                 throw new InvalidIfConditionTypeException(
-                    modulePart.Source,
+                    modulePart.SourceName,
                     condition.ReturnTypeNode!.FullName,
                     condition.StartLine,
                     condition.StartColumn,
@@ -411,7 +411,7 @@ namespace NEN
             ifStatement.Condition = condition;
             if (conditionType!.CLRFullName != PrimitiveType.Boolean)
                 throw new InvalidIfConditionTypeException(
-                    modulePart.Source,
+                    modulePart.SourceName,
                     condition.ReturnTypeNode!.FullName,
                     condition.StartLine,
                     condition.StartColumn,
@@ -488,7 +488,7 @@ namespace NEN
                     fieldAccessmentExpression.IsLoading = false;
                     break;
                 default:
-                    throw new IllegalAssignmentException(modulePart.Source, dest.StartLine, dest.StartColumn, dest.EndLine, dest.EndColumn);
+                    throw new IllegalAssignmentException(modulePart.SourceName, dest.StartLine, dest.StartColumn, dest.EndLine, dest.EndColumn);
             }
             AnalyzeTypes(modulePart, typeTable, destType, srcType);
         }
@@ -534,7 +534,7 @@ namespace NEN
                 currentMethod?.Parameters.FirstOrDefault(p => p.Name == localDeclarationStatement.Variable.Name) != null
             )
             {
-                throw new RedefinedException(modulePart.Source, localDeclarationStatement.Variable.Name, localDeclarationStatement.Variable.StartLine, localDeclarationStatement.Variable.StartColumn, localDeclarationStatement.Variable.EndLine, localDeclarationStatement.Variable.EndColumn);
+                throw new RedefinedException(modulePart.SourceName, localDeclarationStatement.Variable.Name, localDeclarationStatement.Variable.StartLine, localDeclarationStatement.Variable.StartColumn, localDeclarationStatement.Variable.EndLine, localDeclarationStatement.Variable.EndColumn);
             }
             if (localDeclarationStatement.Variable.TypeNode != null)
             {
@@ -578,7 +578,7 @@ namespace NEN
                 )
             )
             {
-                throw new RedefinedException(modulePart.Source, localDeclarationStatement.Variable.Name, localDeclarationStatement.Variable.StartLine, localDeclarationStatement.Variable.StartColumn, localDeclarationStatement.Variable.EndLine, localDeclarationStatement.Variable.EndColumn);
+                throw new RedefinedException(modulePart.SourceName, localDeclarationStatement.Variable.Name, localDeclarationStatement.Variable.StartLine, localDeclarationStatement.Variable.StartColumn, localDeclarationStatement.Variable.EndLine, localDeclarationStatement.Variable.EndColumn);
             }
         }
 
@@ -595,7 +595,7 @@ namespace NEN
             var isAssignable = right.IsAssignableTo(left);
             if (!sameName && !isSubClass && !isAssignable)
             {
-                throw new TypeDiscrepancyException(modulePart.Source, leftNode, rightNode, leftNode.StartLine, leftNode.StartColumn, leftNode.EndLine, leftNode.EndColumn);
+                throw new TypeDiscrepancyException(modulePart.SourceName, leftNode, rightNode, leftNode.StartLine, leftNode.StartColumn, leftNode.EndLine, leftNode.EndColumn);
             }
             return true;
         }
@@ -679,7 +679,7 @@ namespace NEN
                     staticFieldAccessmentExpression.FieldName, 
                     fieldCLRFullName, 
                     fieldType, 
-                    modulePart.Source, 
+                    modulePart.SourceName, 
                     staticFieldAccessmentExpression.StartLine, 
                     staticFieldAccessmentExpression.StartColumn, 
                     staticFieldAccessmentExpression.EndLine, 
@@ -709,7 +709,7 @@ namespace NEN
             if (standardFieldAccessmentExpression.FieldInfo == null) {
                 var fieldCLRFullName = string.Join(".", [objectTypeNode.GetCLRType()!.FullName!, standardFieldAccessmentExpression.FieldName]);
                 var fieldObjectType = GetTypeFromTypeNode(modulePart, typeTable, fieldObject.ReturnTypeNode!);
-                standardFieldAccessmentExpression.FieldInfo = SearchForFieldInfo(standardFieldAccessmentExpression!.FieldName, fieldCLRFullName, fieldObjectType, modulePart.Source, standardFieldAccessmentExpression.StartLine, standardFieldAccessmentExpression.StartColumn, standardFieldAccessmentExpression.EndLine, standardFieldAccessmentExpression.EndColumn);
+                standardFieldAccessmentExpression.FieldInfo = SearchForFieldInfo(standardFieldAccessmentExpression!.FieldName, fieldCLRFullName, fieldObjectType, modulePart.SourceName, standardFieldAccessmentExpression.StartLine, standardFieldAccessmentExpression.StartColumn, standardFieldAccessmentExpression.EndLine, standardFieldAccessmentExpression.EndColumn);
             }
             standardFieldAccessmentExpression.ReturnTypeNode = CreateTypeNodeFromType(
                 standardFieldAccessmentExpression.FieldInfo!.FieldType,
@@ -721,7 +721,7 @@ namespace NEN
             return standardFieldAccessmentExpression.ReturnTypeNode;
         }
 
-        FieldInfo SearchForFieldInfo(string fieldName, string fieldCLRFullName, Type fieldDeclarationType, string[] source, int startLine, int startColumn, int endLine, int endColumn)
+        FieldInfo SearchForFieldInfo(string fieldName, string fieldCLRFullName, Type fieldDeclarationType, string sourceName, int startLine, int startColumn, int endLine, int endColumn)
         {
             if (!moduleFields.TryGetValue(
             fieldCLRFullName,
@@ -736,10 +736,10 @@ namespace NEN
             if (fieldInfo == null && fieldDeclarationType.BaseType != null)
             {
                 fieldCLRFullName = string.Join(".", [fieldDeclarationType.BaseType.FullName, fieldName]);
-                fieldInfo = SearchForFieldInfo(fieldName, fieldCLRFullName, fieldDeclarationType.BaseType, source, startLine, startColumn, endLine, endColumn);
+                fieldInfo = SearchForFieldInfo(fieldName, fieldCLRFullName, fieldDeclarationType.BaseType, sourceName, startLine, startColumn, endLine, endColumn);
             }
-            if (fieldInfo == null) throw new InvalidFieldAccessmentException(source, fieldName, startLine, startColumn, endLine, endColumn);
-            if (!fieldInfo.IsPublic) throw new InvalidFieldAccessmentException(source, fieldName, startLine, startColumn, endLine, endColumn);
+            if (fieldInfo == null) throw new InvalidFieldAccessmentException(sourceName, fieldName, startLine, startColumn, endLine, endColumn);
+            if (!fieldInfo.IsPublic) throw new InvalidFieldAccessmentException(sourceName, fieldName, startLine, startColumn, endLine, endColumn);
             return fieldInfo;
         }
 
@@ -776,7 +776,7 @@ namespace NEN
             }
             if (constructorCallExpression.ConstructorInfo == null || constructorCallExpression.ConstructorInfo!.IsPrivate)
                 throw new UnresolvedConstructorException(
-                    modulePart.Source,
+                    modulePart.SourceName,
                     returnType.FullName!,
                     [],
                     constructorCallExpression.StartLine,
@@ -814,7 +814,7 @@ namespace NEN
             }
             if (inlineConstructionExpression.ConstructorInfo == null || inlineConstructionExpression.ConstructorInfo!.IsPrivate)
                 throw new UnresolvedConstructorException(
-                    modulePart.Source,
+                    modulePart.SourceName,
                     returnType.FullName!,
                     [],
                     inlineConstructionExpression.StartLine,
@@ -842,9 +842,9 @@ namespace NEN
             arrayIndexingExpression.Index = indexNode;
             if (indexNode.ReturnTypeNode!.CLRFullName != PrimitiveType.Int32 && indexNode.ReturnTypeNode.CLRFullName != PrimitiveType.Int64)
             {
-                throw new InvalidArrayIndexingTypeException(modulePart.Source, indexNode.ReturnTypeNode.FullName, indexNode.StartLine, indexNode.StartColumn, indexNode.EndLine, indexNode.EndColumn);
+                throw new InvalidArrayIndexingTypeException(modulePart.SourceName, indexNode.ReturnTypeNode.FullName, indexNode.StartLine, indexNode.StartColumn, indexNode.EndLine, indexNode.EndColumn);
             }
-            var elementType = GetIndexerReturnType(arrayType) ?? throw new IndexingOnNonArrayException(modulePart.Source, arrayNode.ReturnTypeNode!.FullName, arrayIndexingExpression.StartLine, arrayIndexingExpression.StartColumn, arrayIndexingExpression.EndLine, arrayIndexingExpression.EndColumn); ;
+            var elementType = GetIndexerReturnType(arrayType) ?? throw new IndexingOnNonArrayException(modulePart.SourceName, arrayNode.ReturnTypeNode!.FullName, arrayIndexingExpression.StartLine, arrayIndexingExpression.StartColumn, arrayIndexingExpression.EndLine, arrayIndexingExpression.EndColumn); ;
             arrayIndexingExpression.ReturnTypeNode = CreateTypeNodeFromType(
                 elementType!, 
                 arrayIndexingExpression.StartLine, 
@@ -892,12 +892,12 @@ namespace NEN
                 newArrayExpression.Size = sizeNode;
                 if (sizeType.GetCLRType()!.FullName != PrimitiveType.Int32 && sizeType.GetCLRType()!.FullName != PrimitiveType.Int64)
                 {
-                    throw new InvalidArraySizeTypeException(modulePart.Source, sizeType.FullName, sizeNode.StartLine, sizeNode.StartColumn, sizeNode.EndLine, sizeNode.EndColumn);
+                    throw new InvalidArraySizeTypeException(modulePart.SourceName, sizeType.FullName, sizeNode.StartLine, sizeNode.StartColumn, sizeNode.EndLine, sizeNode.EndColumn);
                 }
                 size = GetValueIfLiteral(sizeNode);
                 if (size != null && size < 1)
                 {
-                    throw new NegativeArraySizeException(modulePart.Source, size.Value, sizeNode.StartLine, sizeNode.StartColumn, sizeNode.EndLine, sizeNode.EndColumn);
+                    throw new NegativeArraySizeException(modulePart.SourceName, size.Value, sizeNode.StartLine, sizeNode.StartColumn, sizeNode.EndLine, sizeNode.EndColumn);
                 }
             }
             // Analyze elements
@@ -929,7 +929,7 @@ namespace NEN
             if (newArrayExpression.Size == null && newArrayExpression.Elements.Length == 0)
             {
                 throw new NoSizeArrayWithoutInitializationException(
-                    modulePart.Source, 
+                    modulePart.SourceName, 
                     newArrayExpression.ReturnTypeNode!.StartLine, 
                     newArrayExpression.ReturnTypeNode!.StartColumn,
                     newArrayExpression.ReturnTypeNode!.EndLine,
@@ -939,7 +939,7 @@ namespace NEN
             if (size != null && size != newArrayExpression.Elements.Length && newArrayExpression.Elements.Length != 0)
             {
                 throw new ArraySizeDiscrepancyException(
-                    modulePart.Source, 
+                    modulePart.SourceName, 
                     size.Value, 
                     newArrayExpression.ReturnTypeNode!.StartLine, 
                     newArrayExpression.ReturnTypeNode.StartColumn,
@@ -1036,7 +1036,7 @@ namespace NEN
         {
             if (currentMethod == null)
             {
-                throw new MethodCallFromOutsideException(modulePart.Source, standardMethodCallExpression.StartLine, standardMethodCallExpression.StartColumn, standardMethodCallExpression.EndLine, standardMethodCallExpression.EndColumn);
+                throw new MethodCallFromOutsideException(modulePart.SourceName, standardMethodCallExpression.StartLine, standardMethodCallExpression.StartColumn, standardMethodCallExpression.EndLine, standardMethodCallExpression.EndColumn);
             }
             var obj = standardMethodCallExpression.Object;
             var typeNode = AnalyzeExpression(modulePart, c, typeTable, localSymbolTable, ref obj);
@@ -1046,7 +1046,7 @@ namespace NEN
                 string.Join(".", [c.CLRFullName, standardMethodCallExpression.MethodName]) ==
                 string.Join(".", [typeNode.CLRFullName, standardMethodCallExpression.MethodName]))
             {
-                throw new StaticIllegalAccessmentException(modulePart.Source, string.Join("::", [c.FullName, standardMethodCallExpression.MethodName]), standardMethodCallExpression.StartLine, standardMethodCallExpression.StartColumn, standardMethodCallExpression.EndLine, standardMethodCallExpression.EndColumn);
+                throw new StaticIllegalAccessmentException(modulePart.SourceName, string.Join("::", [c.FullName, standardMethodCallExpression.MethodName]), standardMethodCallExpression.StartLine, standardMethodCallExpression.StartColumn, standardMethodCallExpression.EndLine, standardMethodCallExpression.EndColumn);
             }
             var methodFullName = string.Join(".", [typeNode.GetCLRType()!.FullName, standardMethodCallExpression.MethodName]);
             AnalyzeMethodCallExpression(
@@ -1088,7 +1088,7 @@ namespace NEN
                 staticMethodCallExpression.TypeNode.CLRType);
             if (!(staticMethodCallExpression.MethodInfo as MethodInfo)!.IsStatic)
                 throw new StandardMethodCallLikeStaticMethodException(
-                    modulePart.Source,
+                    modulePart.SourceName,
                     staticMethodCallExpression.StartLine,
                     staticMethodCallExpression.StartColumn,
                     staticMethodCallExpression.EndLine,
@@ -1123,7 +1123,7 @@ namespace NEN
         {
             if (currentMethod == null)
             {
-                throw new MethodCallFromOutsideException(modulePart.Source, ambiguousMethodCallExpression.StartLine, ambiguousMethodCallExpression.StartColumn, ambiguousMethodCallExpression.EndLine, ambiguousMethodCallExpression.EndColumn);
+                throw new MethodCallFromOutsideException(modulePart.SourceName, ambiguousMethodCallExpression.StartLine, ambiguousMethodCallExpression.StartColumn, ambiguousMethodCallExpression.EndLine, ambiguousMethodCallExpression.EndColumn);
             }
             var methodCLRFullName = string.Join(".", [c.CLRFullName, ambiguousMethodCallExpression.MethodName]);
             AnalyzeMethodCallExpression(modulePart, c, typeTable, localSymbolTable, ref ambiguousMethodCallExpression, methodCLRFullName);
@@ -1164,7 +1164,7 @@ namespace NEN
                 if (currentMethod.GetMethodInfo()!.IsStatic)
                 {
                     throw new StaticIllegalAccessmentException(
-                        modulePart.Source, 
+                        modulePart.SourceName, 
                         string.Join("::", [c.FullName, ambiguousMethodCallExpression.MethodName]), 
                         ambiguousMethodCallExpression.StartLine, 
                         ambiguousMethodCallExpression.StartColumn,
@@ -1281,7 +1281,7 @@ namespace NEN
                             isFromSameOrParentType = true;
                         }
                         if (!methodInfo.IsPublic && !isFromSameOrParentType)
-                            throw new InvalidMethodCallException(modulePart.Source, methodName, [.. argumentTypes], startLine, startColumn, endLine, endColumn);
+                            throw new InvalidMethodCallException(modulePart.SourceName, methodName, [.. argumentTypes], startLine, startColumn, endLine, endColumn);
                     }
                     // The type is not specific to this module
                     else
@@ -1289,14 +1289,14 @@ namespace NEN
                         if (type as TypeBuilder == null)
                         {
                             methodInfo = type?.GetMethod(methodName, [.. argumentTypes]);
-                            if (methodInfo?.IsPublic == false) throw new InvalidMethodCallException(modulePart.Source, methodName, [.. argumentTypes], startLine, startColumn, endLine, endColumn);
+                            if (methodInfo?.IsPublic == false) throw new InvalidMethodCallException(modulePart.SourceName, methodName, [.. argumentTypes], startLine, startColumn, endLine, endColumn);
                         }
                     }
                     if (methodInfo == null && type?.BaseType != null)  methodInfo = searchForMethodInfo(
                         methodName, 
                         string.Join(".", [type!.BaseType.FullName, methodName]), 
                         type!.BaseType, startLine, startColumn, endLine, endColumn);
-                    if (methodInfo == null) throw new InvalidMethodCallException(modulePart.Source, methodName, [.. argumentTypes], startLine, startColumn, endLine, endColumn);
+                    if (methodInfo == null) throw new InvalidMethodCallException(modulePart.SourceName, methodName, [.. argumentTypes], startLine, startColumn, endLine, endColumn);
                     return methodInfo;
                 }
                 methodCallExpression.MethodInfo = searchForMethodInfo(methodCallExpression.MethodName, methodCLRFullName, type, methodCallExpression.StartLine, methodCallExpression.StartColumn, methodCallExpression.EndLine, methodCallExpression.EndColumn);
@@ -1413,7 +1413,7 @@ namespace NEN
                     variableName,
                     string.Join(".", [c.BaseTypeNode.GetCLRType()!.FullName, variableName]),
                     c.BaseTypeNode.GetCLRType()!,
-                    modulePart.Source,
+                    modulePart.SourceName,
                     variableExpression.StartLine,
                     variableExpression.StartColumn,
                     variableExpression.EndLine,
@@ -1515,7 +1515,7 @@ namespace NEN
             }
             else
             {
-                throw new UnresolvedIdentifierException(modulePart.Source, variableExpression.Name, variableExpression.StartLine, variableExpression.StartColumn, variableExpression.EndLine, variableExpression.EndColumn);
+                throw new UnresolvedIdentifierException(modulePart.SourceName, variableExpression.Name, variableExpression.StartLine, variableExpression.StartColumn, variableExpression.EndLine, variableExpression.EndColumn);
             }
         }
 
@@ -1537,7 +1537,7 @@ namespace NEN
 
             var leftTypeFullName = leftType.GetCLRType()!.FullName;
             var rightTypeFullName = rightType.GetCLRType()!.FullName;
-            if (leftTypeFullName != rightTypeFullName) throw new TypeDiscrepancyException(modulePart.Source, leftType, rightType, binaryExpression.StartLine, binaryExpression.StartColumn, binaryExpression.EndLine, binaryExpression.EndColumn);
+            if (leftTypeFullName != rightTypeFullName) throw new TypeDiscrepancyException(modulePart.SourceName, leftType, rightType, binaryExpression.StartLine, binaryExpression.StartColumn, binaryExpression.EndLine, binaryExpression.EndColumn);
             
             if (binaryExpression.Operator == "và" || 
                 binaryExpression.Operator == "hoặc" ||
@@ -1613,7 +1613,7 @@ namespace NEN
                         string tn = typeNode.FullName;
                         string ftn = string.Join("::", type.FullName!.Split("."));
                         string stn = string.Join("::", tempType.FullName!.Split("."));
-                        throw new AmbiguousTypeUsage(modulePart.Source, tn, ftn, stn, typeNode.StartLine, typeNode.StartColumn, typeNode.EndLine, typeNode.EndColumn);
+                        throw new AmbiguousTypeUsage(modulePart.SourceName, tn, ftn, stn, typeNode.StartLine, typeNode.StartColumn, typeNode.EndLine, typeNode.EndColumn);
                     }
                     if (tempType == null && type != null) continue;
                     type = tempType;
@@ -1626,14 +1626,14 @@ namespace NEN
                         string tn = typeNode.FullName;
                         string ftn = string.Join("::", type.FullName!.Split("."));
                         string stn = string.Join("::", tempType.FullName!.Split("."));
-                        throw new AmbiguousTypeUsage(modulePart.Source, tn, ftn, stn, typeNode.StartLine, typeNode.StartColumn, typeNode.EndLine, typeNode.EndColumn);
+                        throw new AmbiguousTypeUsage(modulePart.SourceName, tn, ftn, stn, typeNode.StartLine, typeNode.StartColumn, typeNode.EndLine, typeNode.EndColumn);
                     }
                     if (tempType == null && type != null) continue;
                     type = tempType;
                 }
                 if (type == null)
                 {
-                    throw new UnresolvedTypeException(modulePart.Source, typeNode.FullName, typeNode.StartLine, typeNode.StartColumn, typeNode.EndLine, typeNode.EndColumn);
+                    throw new UnresolvedTypeException(modulePart.SourceName, typeNode.FullName, typeNode.StartLine, typeNode.StartColumn, typeNode.EndLine, typeNode.EndColumn);
                 }
                 return type;
             }

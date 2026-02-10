@@ -1,8 +1,8 @@
-﻿using Microsoft.Testing.Extensions.CodeCoverage;
+﻿using Microsoft.CodeCoverage.Core.Reports.Coverage;
+using Microsoft.Testing.Extensions.CodeCoverage;
 using NEN;
-using NEN.Exceptions;
 using NEN.AST;
-using static NEN.Lexer;
+using NEN.Exceptions;
 using System.Diagnostics.Metrics;
 using System.Diagnostics.SymbolStore;
 using System.IO.Enumeration;
@@ -12,6 +12,7 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using System.Text;
+using static NEN.Lexer;
 Console.OutputEncoding = Encoding.UTF8;
 
 namespace NENTest
@@ -24,7 +25,7 @@ namespace NENTest
         public void LexerTest()
         {
             string fileName = "LexerTest";
-            (_, Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
+            Token[] tokens = Lexer.Tokenize($"Example sources\\{fileName}.nen");
             PrintTokens(tokens);
         }
 
@@ -32,9 +33,9 @@ namespace NENTest
         public void ParserTest()
         {
             string fileName = "ParserTest";
-            (string[] lines, Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
+            Token[] tokens = Lexer.Tokenize($"Example sources\\{fileName}.nen");
             // PrintTokens(tokens);
-            var parser = new Parser(fileName, lines, tokens);
+            var parser = new Parser(fileName, tokens);
             var module = parser.Parse();
             Console.WriteLine($"Parser result:\n{module}");
         }
@@ -43,9 +44,9 @@ namespace NENTest
         public void StaticAnalyzerTest()
         {
             string fileName = "ParserTest";
-            (string[] lines, Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
+            Token[] tokens = Lexer.Tokenize($"Example sources\\{fileName}.nen");
             // PrintTokens(tokens);
-            var parser = new Parser(fileName, lines, tokens);
+            var parser = new Parser(fileName, tokens);
             var modulePart = parser.Parse();
             Console.WriteLine($"Parser result:\n{modulePart}");
             var analyzer = new StaticAnalyzer(fileName, [modulePart], []);
@@ -60,9 +61,9 @@ namespace NENTest
             List<ModulePart> moduleParts = [];
             foreach (var fileName in Directory.GetFiles("Example sources\\AssemblyTest", "*.nen"))
             {
-                (string[] lines, Token[] tokens) = Lexer.Tokenize(fileName);
+                Token[] tokens = Lexer.Tokenize(fileName);
                 // PrintTokens(tokens);
-                var parser = new Parser(fileName, lines, tokens);
+                var parser = new Parser(fileName, tokens);
                 var modulePart = parser.Parse();
                 Console.WriteLine($"Kết quả Parser:\n{modulePart}");
                 moduleParts.Add(modulePart);
@@ -77,9 +78,10 @@ namespace NENTest
 
         static private void GeneralStaticAnalyzerTest<T>(string fileName, bool printTokens = false) where T : NENException
         {
-            (string[] lines, Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
+            var filePath = $"Example sources\\{fileName}.nen";
+            Token[] tokens = Lexer.Tokenize(filePath);
             // PrintTokens(tokens);
-            var parser = new Parser(fileName, lines, tokens);
+            var parser = new Parser(filePath, tokens);
             var modulePart = parser.Parse();
             if (printTokens)
             {
@@ -100,9 +102,10 @@ namespace NENTest
 
         static private void GeneralAssemblerTest<T>(string fileName) where T : NENException
         {
-            (string[] lines, Token[] tokens) = Lexer.Tokenize($"Example sources\\{fileName}.nen");
+            var filePath = $"Example sources\\{fileName}.nen";
+            Token[] tokens = Lexer.Tokenize(filePath);
             // PrintTokens(tokens);
-            var parser = new Parser(fileName, lines, tokens);
+            var parser = new Parser(filePath, tokens);
             var modulePart = parser.Parse();
             Console.WriteLine($"Parser result:\n{modulePart}");
             var analyzer = new StaticAnalyzer(fileName, [modulePart], []);
