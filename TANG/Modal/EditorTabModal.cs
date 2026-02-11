@@ -10,7 +10,11 @@ using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Media;
+using TANG;
 using System.Xml;
 
 namespace TANG.Modal
@@ -22,6 +26,28 @@ namespace TANG.Modal
         string path = string.Empty;
         string lastSavedText = string.Empty;
         bool isDirty;
+
+        public EditorTabItem()
+        {
+            Editor = new EditorControl
+            {
+                FontFamily = new FontFamily("Consolas"),
+                WordWrap = true,
+                FontSize = 14,
+                Margin = new Thickness(20, 0, 0, 0)
+            };
+            Editor.SetBinding(EditorControl.TextProperty, new Binding(nameof(Text))
+            {
+                Source = this,
+                Mode = BindingMode.TwoWay
+            });
+            Editor.SetBinding(EditorControl.FilePathProperty, new Binding(nameof(Path))
+            {
+                Source = this
+            });
+        }
+
+        public EditorControl Editor { get; }
 
         public required string Header
         {
