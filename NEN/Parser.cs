@@ -103,6 +103,7 @@ namespace NEN
                 ConsumeOrThrowIfNotEqual(TokenType.Keyword, "kế_thừa");
                 baseType = ParseType();
             }
+            var (blockStartLine, _) = GetPreviousStartPosition();
             List<ConstructorNode> constructors = [];
             List<MethodNode> methods = [];
             List<FieldDeclarationStatement> fields = [];
@@ -155,8 +156,11 @@ namespace NEN
                 );
             }
             if (!Current(out _)) OutOfTokenHelper("kết_thúc");
+            var (blockEndLine, _) = GetCurrentEndPosition();
             Consume();
             return new ClassNode { 
+                BlockStartLine = blockStartLine,
+                BlockEndLine = blockEndLine,
                 BaseTypeNode = baseType,
                 Namespaces = namespaces,
                 Name = classIdentifier!.Value, 
@@ -277,6 +281,7 @@ namespace NEN
                 if (Current(out rParen) && rParen!.Value != ")") ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ",");
             }
             ConsumeOrThrowIfNotEqual(TokenType.Punctuator, ")");
+            var (blockStartLine, _) = GetPreviousStartPosition();
             List<StatementNode> statements = [];
             while (Current(out var token) && token!.Value != "kết_thúc")
             {
@@ -285,8 +290,11 @@ namespace NEN
             }
             if (!Current(out _)) OutOfTokenHelper("kết_thúc");
             Consume();
+            var (blockEndLine, _) = GetPreviousEndPosition();
             return new ConstructorNode
             {
+                BlockStartLine = blockStartLine,
+                BlockEndLine = blockEndLine,
                 MethodAttributes = constructorAttributes,
                 Parameters = [..parameters],
                 Statements = [..statements],
@@ -332,6 +340,7 @@ namespace NEN
             ConsumeOrThrowIfNotEqual(TokenType.Operator, "->");
             var returnTypeIdentifier = ParseType();
             List<StatementNode> statements = [];
+            var (blockStartLine, _) = GetPreviousStartPosition();
             while (Current(out var token) && token!.Value != "kết_thúc")
             {
                 statements.Add(ParseStatement());
@@ -339,7 +348,10 @@ namespace NEN
             }
             if (!Current(out _)) OutOfTokenHelper("kết_thúc");
             Consume();
+            var (blockEndLine, _) = GetPreviousEndPosition();
             return new MethodNode { 
+                BlockStartLine = blockStartLine,
+                BlockEndLine = blockEndLine,
                 DeclaringTypeNode = new NamedType
                 {
                     Namespaces = namespaces,

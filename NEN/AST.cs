@@ -80,6 +80,8 @@ namespace NEN
 
         public class ClassNode : ASTNode
         {
+            public required int BlockStartLine { get; set; }
+            public required int BlockEndLine { get; set; }
             public TypeNode? BaseTypeNode { get; set; } = null;
             public required string[] Namespaces { set; get; }
             public required string Name { get; set; }
@@ -123,6 +125,7 @@ namespace NEN
                         EndColumn,
                         SymbolKind.Class
                     ); // Class name
+                    Helper.AddSpan(document, symbolSpans, BlockStartLine, 1, BlockEndLine, 1, SymbolKind.Block);
                 }
             }
 
@@ -139,6 +142,8 @@ namespace NEN
 
         public abstract class MethodBase : ASTNode
         {
+            public required int BlockStartLine { get; set; }
+            public required int BlockEndLine { get; set; }
             public required NamedType DeclaringTypeNode { get; set; }
             public MethodAttributes MethodAttributes { get; set; } = MethodAttributes.Private;
             public VariableNode[] Parameters { get; set; } = [];
@@ -153,6 +158,10 @@ namespace NEN
                 foreach (var statement in Statements)
                 {
                     statement.CollectSymbols(document, symbols, symbolSpans, collectPrivates, collectSpans);
+                }
+                if (collectSpans)
+                {
+                    Helper.AddSpan(document, symbolSpans, BlockStartLine, 1, BlockEndLine, 1, SymbolKind.Block);
                 }
             }
         }

@@ -1,6 +1,7 @@
 ﻿using ICSharpCode.AvalonEdit;
 using ICSharpCode.AvalonEdit.CodeCompletion;
 using ICSharpCode.AvalonEdit.Document;
+using ICSharpCode.AvalonEdit.Folding;
 using ICSharpCode.AvalonEdit.Highlighting;
 using ICSharpCode.AvalonEdit.Highlighting.Xshd;
 using ICSharpCode.AvalonEdit.Rendering;
@@ -43,6 +44,7 @@ namespace TANG
         DispatcherTimer analysisTimer;
         SymbolColorizer? symbolColorizer;
         TextMarkerService? textMarkerService;
+        FoldingManager? foldingManager;
         NEN.Symbols.Symbol[] symbolCompletions = [];
 
         public EditorControl()
@@ -64,7 +66,9 @@ namespace TANG
             textEditor.MouseHover += TextEditor_MouseHover;
 
             SearchPanel.Install(textEditor.TextArea);
+            foldingManager = FoldingManager.Install(textEditor.TextArea);
             LoadHighlighting();
+            ApplyFoldingTheme();
             analysisTimer = new DispatcherTimer
             {
                 Interval = TimeSpan.FromMilliseconds(350)
@@ -179,6 +183,7 @@ namespace TANG
             if (textEditor.Document == null)
             {
                 ClearSymbolColorizer();
+                ClearFoldings();
                 return;
             }
 
@@ -186,6 +191,7 @@ namespace TANG
             if (string.IsNullOrWhiteSpace(content))
             {
                 ClearSymbolColorizer();
+                ClearFoldings();
                 return;
             }
 
@@ -248,6 +254,7 @@ namespace TANG
                 var (symbols, spans) = module.CollectSymbols(FilePath!, textEditor.Document);
                 symbolCompletions = [.. symbols];
                 ApplySymbolSpans(spans);
+                UpdateFoldings(module);
                 textMarkerService?.Clear();
             }
             catch (AggregateException ex)
@@ -256,14 +263,20 @@ namespace TANG
                     var (symbols, spans) = module.CollectSymbols(FilePath!, textEditor.Document);
                     symbolCompletions = [.. symbols];
                     ApplySymbolSpans(spans);
+                    UpdateFoldings(module);
+                }
+                else
+                {
+                    ClearFoldings();
                 }
                 if (textMarkerService != null)
                 {
                     textMarkerService.Clear();
                     for (int i = 0; i < ex.InnerExceptions.Count; i++)
                     {
-                        if (ex.InnerExceptions[i] is not NENException) throw (ex.InnerExceptions[i] as Exception)!;
+                        if (ex.InnerExceptions[i] is not NENException) throw (ex.InnerExceptions[i])!;
                         var nenEx = ex.InnerExceptions[i] as NENException;
+                        if (FilePath != nenEx!.SourcePath) continue;
                         //ClearSymbolColorizer();
                         try
                         {
@@ -284,6 +297,75 @@ namespace TANG
                     }
                 }
             }
+        }
+
+        void UpdateFoldings(Module module)
+        {
+            if (foldingManager == null || textEditor.Document == null)
+            {
+                return;
+            }
+
+            var document = textEditor.Document;
+            var sourcePath = FilePath ?? "Trình soạn thảo";
+            var newFoldings = new List<NewFolding>();
+
+            foreach (var modulePart in module.ModuleParts)
+            {
+                if (!string.Equals(modulePart.SourceName, sourcePath, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                foreach (var classNode in modulePart.Classes)
+                {
+                    AddFolding(newFoldings, document, classNode.BlockStartLine, classNode.BlockEndLine);
+                    foreach (var constructor in classNode.Constructors ?? [])
+                    {
+                        AddFolding(newFoldings, document, constructor.BlockStartLine, constructor.BlockEndLine);
+                    }
+                    foreach (var method in classNode.Methods)
+                    {
+                        AddFolding(newFoldings, document, method.BlockStartLine, method.BlockEndLine);
+                    }
+                }
+            }
+
+            newFoldings.Sort((left, right) => left.StartOffset.CompareTo(right.StartOffset));
+            foldingManager.UpdateFoldings(newFoldings, document.TextLength);
+        }
+
+        static void AddFolding(List<NewFolding> foldings, TextDocument document, int startLine, int endLine)
+        {
+            if (startLine <= 0 || endLine <= startLine)
+            {
+                return;
+            }
+
+            if (startLine > document.LineCount || endLine > document.LineCount)
+            {
+                return;
+            }
+
+            var headerLine = document.GetLineByNumber(startLine);
+            var startOffset = headerLine.EndOffset;
+            var endOffset = document.GetLineByNumber(endLine).EndOffset;
+            if (endOffset <= startOffset)
+            {
+                return;
+            }
+
+            foldings.Add(new NewFolding(startOffset, endOffset));
+        }
+
+        void ClearFoldings()
+        {
+            if (foldingManager == null || textEditor.Document == null)
+            {
+                return;
+            }
+
+            foldingManager.UpdateFoldings([], textEditor.Document.TextLength);
         }
 
         bool TryLoadProjectMetadata(out DuAnNen? project, out string projectRoot)
@@ -377,6 +459,31 @@ namespace TANG
                 ApplyDarkThemeHighlighting(highlighting);
             }
             textEditor.SyntaxHighlighting = highlighting;
+        }
+
+        void ApplyFoldingTheme()
+        {
+            if (!IsSystemDarkTheme())
+            {
+                return;
+            }
+
+            var foldingMargin = textEditor.TextArea.LeftMargins.OfType<FoldingMargin>().FirstOrDefault();
+            if (foldingMargin == null)
+            {
+                return;
+            }
+
+            var markerBrush = new SolidColorBrush(Color.FromRgb(200, 200, 200));
+            markerBrush.Freeze();
+            var backgroundBrush = new SolidColorBrush(Color.FromRgb(45, 45, 48));
+            backgroundBrush.Freeze();
+            var selectedBackgroundBrush = new SolidColorBrush(Color.FromRgb(100, 100, 100));
+            selectedBackgroundBrush.Freeze();
+            foldingMargin.FoldingMarkerBrush = markerBrush;
+            foldingMargin.FoldingMarkerBackgroundBrush = backgroundBrush;
+            foldingMargin.SelectedFoldingMarkerBrush = markerBrush;
+            foldingMargin.SelectedFoldingMarkerBackgroundBrush = selectedBackgroundBrush;
         }
 
         static void ApplyDarkThemeHighlighting(IHighlightingDefinition highlighting)

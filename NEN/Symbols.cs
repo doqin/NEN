@@ -28,7 +28,8 @@ namespace NEN
             Method,
             Field,
             Parameter,
-            Local
+            Local,
+            Block
         }
 
         public readonly record struct SymbolSpan(int StartOffset, int EndOffset, SymbolKind Kind);

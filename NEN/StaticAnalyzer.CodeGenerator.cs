@@ -14,6 +14,8 @@ namespace NEN
             );
             var defaultConstructor = new ConstructorNode
             {
+                BlockStartLine = 0,
+                BlockEndLine = 0,
                 DeclaringTypeNode = (CreateTypeNodeFromType(
                     defaultConstructorBuilder!.DeclaringType!, 
                     c.StartLine, 
