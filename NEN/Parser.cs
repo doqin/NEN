@@ -1018,10 +1018,9 @@ namespace NEN
 
         private Token ConsumeOrThrow(TokenType expectedTokenTypes, string expected)
         {
-            var token = Consume();
-            if (token == null) OutOfTokenHelper(expected);
-            else if (!expectedTokenTypes.HasFlag(token.Type)) throw new ExpectedException(sourceName, expected, token.StartLine, token.StartColumn, token.EndLine, token.EndColumn);
-            return token!;
+            if (!Current(out var token)) OutOfTokenHelper(expected);
+            else if (!expectedTokenTypes.HasFlag(token!.Type)) throw new ExpectedException(sourceName, expected, token.StartLine, token.StartColumn, token.EndLine, token.EndColumn);
+            return Consume()!;
         }
 
         /// <summary>

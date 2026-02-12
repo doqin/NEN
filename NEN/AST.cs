@@ -1,6 +1,7 @@
 ﻿using ICSharpCode.AvalonEdit.Document;
 using Microsoft.VisualBasic;
 using NEN.Symbols;
+using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 using System.Reflection.Emit;
 
@@ -51,6 +52,7 @@ namespace NEN
                 List<SymbolSpan> symbolSpans = [];
                 foreach (var modulePart in ModuleParts)
                 {
+                    CollectExportedSymbols(document, modulePart, symbols);
                     if (modulePart.SourceName == sourceFile)
                     {
                         modulePart.CollectSymbols(document, symbols, symbolSpans, true, true);
@@ -61,6 +63,75 @@ namespace NEN
                     }
                 }
                 return ([.. symbols], [.. symbolSpans]);
+            }
+
+            private void CollectExportedSymbols(
+                TextDocument document,
+                ModulePart modulePart, 
+                HashSet<Symbol> symbols)
+            {
+                var exportedTypes = MetadataLoadContext!.GetAssemblies().Select(a => a.GetExportedTypes()).Aggregate((left, right) => [..left, ..right]);
+                foreach (var ns in modulePart.UsingNamespaces)
+                {
+                    var usingTypes = exportedTypes.Where(e => e.Namespace == string.Join(".", ns.Namespace));
+                    foreach (var type in usingTypes)
+                    {
+                        try
+                        {
+                            var typeSymbol = TypeInfoToTypeSymbol(type);
+                            symbols.Add(typeSymbol);
+                            foreach (var field in type.GetFields())
+                            {
+                                symbols.Add(new FieldSymbol 
+                                { 
+                                    DeclaringType = typeSymbol, 
+                                    Name = field.Name 
+                                });
+                            }
+                            foreach (var constructor in type.GetConstructors())
+                            {
+                                symbols.Add(new ConstructorSymbol
+                                {
+                                    DeclaringType = typeSymbol,
+                                    Name = constructor.Name,
+                                    Parameters = [
+                                        ..constructor.GetParameters()
+                                        .Select(p => TypeInfoToTypeSymbol(p.ParameterType))
+                                    ]
+                                });
+                            }
+                            foreach (var method in type.GetMethods())
+                            {
+                                symbols.Add(new MethodSymbol
+                                {
+                                    DeclaringType = typeSymbol,
+                                    Name = method.Name,
+                                    Parameters = [
+                                        ..method.GetParameters()
+                                        .Select(p => TypeInfoToTypeSymbol(p.ParameterType))
+                                    ]
+                                });
+                            }
+                        }
+                        catch { continue; }
+                    }
+                }
+            }
+
+            private TypeSymbol TypeInfoToTypeSymbol(Type type)
+            {
+                if (type.IsClass)
+                {
+                    return new ClassSymbol { Name = type.Name };
+                }
+                else if (type.IsAnsiClass)
+                {
+                    return new ANSISymbol { Name = type.Name };
+                }
+                else
+                {
+                    throw new NotImplementedException();
+                }
             }
         }
         public abstract class ASTNode
